@@ -27,6 +27,7 @@ function makeEl(tag) {
  * @param {string} file  Pfad zur HTML-Datei
  * @param {object} opts  storage: Startinhalt von localStorage (Objekt mit Strings)
  *                       confirm: Antwort auf confirm() (Standard true)
+ *                       globals: zusätzliche Globale, z. B. window/navigator für Browser-Szenarien
  */
 function load(file, opts = {}) {
   const html = fs.readFileSync(file, 'utf8');
@@ -58,6 +59,7 @@ function load(file, opts = {}) {
     requestAnimationFrame: fn => fn(),
     Blob: class { constructor(parts, o) { this.parts = parts; this.type = o?.type; } },
     URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} },
+    ...(opts.globals || {}),
   });
   new vm.Script(code, { filename: file }).runInContext(ctx);
   const run = src => vm.runInContext(src, ctx);

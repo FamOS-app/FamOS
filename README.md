@@ -11,7 +11,9 @@ Keine Kindernamen, Lehrkräfte, Stundenpläne, Zugänge oder Passwörter im Repo
 | Pfad | Zweck |
 |---|---|
 | `app/famos.html` | Die App. Einzige Quelle, startet neutral mit Onboarding. |
-| `tools/build.py` | Baut `dist/index.html` + `dist/manifest.webmanifest`, mit Personendaten-Check. |
+| `app/icons/` | Logo (`logo.svg`) und daraus erzeugte PNG-Icons. |
+| `tools/build.py` | Baut `dist/` (Seite, Manifest, Service Worker, Icons), mit Personendaten-Check. |
+| `tools/make_icons.js` | Erzeugt die PNG-Icons aus `app/icons/logo.svg` (lokal, braucht Playwright). Nur nach Logo-Änderungen nötig. |
 | `LICENSES/` | Lizenz der eingebetteten Schrift. |
 | `tests/` | Node-`vm`-Harness mit gestubbtem `document`/`localStorage`, ohne Abhängigkeiten. Nur fiktive Testnamen. |
 | `.github/workflows/ci.yml` | Tests, Build, Check, Veröffentlichung per GitHub Pages. |
@@ -50,10 +52,18 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 - CI läuft mit Leserechten; nur der Deploy-Job darf auf Pages schreiben.
 - Bekannte Grenze: Inline-Eventhandler erfordern `script-src 'unsafe-inline'`. Ohne Build-Schritt ist das der Kompromiss; Escaping und Validierung sind deshalb per Test abgesichert.
 
+## Als App installieren
+
+- Nach dem Onboarding fragt FamOS einmal pro Gerät von selbst; danach bleibt eine Hinweis-Karte, bis man sie wegklickt oder installiert.
+- Android/Chrome: echter Installations-Dialog (`beforeinstallprompt`). iPhone: Apple erlaubt Webseiten keinen Dialog, daher eine Schritt-für-Schritt-Anleitung.
+- In der installierten App erscheint kein Hinweis.
+- Service Worker (`sw.js`): Netz zuerst, bei Funkloch aus dem Cache. Updates kommen beim nächsten Start mit Netz.
+
 ## Design
 
 - Palette als CSS-Tokens in `:root`: Terracotta `#AE5238`, Mustard `#D39B32`, Deep Teal `#225D65` (Primärfarbe), Olive `#5C633E`, Warm Cream `#E3D8C6`.
 - Schrift: Andika (Druckschrift mit einstöckigem a, für Leseanfänger gemacht), eingebettet als WOFF2 (Latin, 400/700). Überschriften in Großbuchstaben.
+- Logo: Familien-Netz im Haus (vier verbundene Punkte in den Palettenfarben).
 - Tippflächen mindestens 44 px, Zoom erlaubt, sichtbarer Fokus, `prefers-reduced-motion` wird respektiert.
 
 ## Datenmodell

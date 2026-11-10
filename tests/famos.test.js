@@ -66,11 +66,24 @@ test('App: Startdaten sind neutral (keine Kinder, kein Haushalt, kein Stundenpla
   assert.doesNotMatch(a.html, /teacher:'/);
 });
 
-test('Build: genau index.html und manifest.webmanifest, Manifest als Datei', () => {
-  assert.deepEqual(fs.readdirSync(DIST).sort(), ['index.html', 'manifest.webmanifest']);
+test('Build: Seite, Manifest, Service Worker und PNG-Icons, sonst nichts', () => {
+  assert.deepEqual(fs.readdirSync(DIST).sort(), ['icons', 'index.html', 'manifest.webmanifest', 'sw.js']);
+  assert.deepEqual(fs.readdirSync(path.join(DIST, 'icons')).sort(),
+    ['apple-touch-icon.png', 'favicon-32.png', 'icon-192.png', 'icon-512.png', 'maskable-512.png']);
+  for (const f of fs.readdirSync(path.join(DIST, 'icons'))) {
+    assert.equal(fs.readFileSync(path.join(DIST, 'icons', f)).subarray(1, 4).toString(), 'PNG', f);
+  }
   const m = JSON.parse(fs.readFileSync(path.join(DIST, 'manifest.webmanifest'), 'utf8'));
   assert.equal(m.name, 'FamOS');
   assert.equal(m.start_url, '.');
+  assert.equal(m.display, 'standalone');
+  // Android verlangt PNG-Icons in 192 und 512 für den Installations-Dialog, dazu ein maskierbares
+  assert.deepEqual(m.icons.map(i => `${i.sizes}/${i.purpose}`), ['192x192/any', '512x512/any', '512x512/maskable']);
+  for (const i of m.icons) assert.ok(fs.existsSync(path.join(DIST, i.src)), i.src);
+  const sw = fs.readFileSync(path.join(DIST, 'sw.js'), 'utf8');
+  new vm.Script(sw);
+  assert.match(sw, /const V='famos-[0-9a-f]{10}'/);
+  for (const i of m.icons) assert.ok(sw.includes(`'./${i.src}'`));
   const html = fs.readFileSync(VORLAGE, 'utf8');
   assert.match(html, /<link rel="manifest" href="manifest.webmanifest">/);
   assert.match(html, /manifest-src 'self'/);
@@ -868,4 +881,72 @@ test('Einkauf: Export/Import enthält Liste und Schnellwahl', () => {
   const b = load(VORLAGE);
   assert.equal(b.run(`applyImport(${JSON.stringify(a.get('buildExport()'))})`), true);
   assert.deepEqual(b.get('S.einkauf'), a.get('S.einkauf'));
+});
+
+// ─── Als App installieren ─────────────────────────────────────
+function browser({ ua = '', standalone = false } = {}) {
+  const listeners = {};
+  const window = {
+    matchMedia: q => ({ matches: standalone && q.includes('standalone') }),
+    navigator: { standalone: false },
+    location: { protocol: 'file:' },
+    addEventListener: (ev, fn) => { (listeners[ev] ||= []).push(fn); },
+  };
+  return { listeners, globals: { window, navigator: { userAgent: ua, maxTouchPoints: ua.includes('iPhone') ? 5 : 0 } } };
+}
+const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile Safari/604.1';
+const ANDROID = 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36';
+function onboard(a) { a.run(`openKidModal(null);UI.form.name='Emma';saveKid();obFinish()`); a.flush(); }
+
+test('Installieren: nach dem Onboarding kommt die Aufforderung von selbst, einmal pro Gerät', () => {
+  const b = browser({ ua: IPHONE });
+  const a = load(VORLAGE, { globals: b.globals });
+  onboard(a);
+  assert.equal(a.get('UI.form.mode'), 'install');
+  assert.match(a.els.mc.innerHTML, /Zum Home-Bildschirm/);
+  assert.match(a.els.mc.innerHTML, /Teilen-Symbol/);
+  assert.match(a.app(), /install-hint/);
+  a.run('closeModal()');
+  const c = load(VORLAGE, { storage: a.store, globals: b.globals }); // Neustart: nicht nochmal ungefragt
+  c.flush();
+  assert.notEqual(c.get('UI.form.mode'), 'install');
+  assert.match(c.app(), /install-hint/); // die Karte bleibt, bis man sie wegklickt
+});
+
+test('Installieren: Android mit Installations-Dialog des Browsers', () => {
+  const b = browser({ ua: ANDROID });
+  const a = load(VORLAGE, { globals: b.globals });
+  onboard(a);
+  assert.match(a.els.mc.innerHTML, /App installieren/); // Anleitung, solange der Browser nichts anbietet
+  let prompted = 0;
+  const ev = { preventDefault() {}, prompt() { prompted++; }, userChoice: Promise.resolve({ outcome: 'accepted' }) };
+  b.listeners.beforeinstallprompt.forEach(fn => fn(ev));
+  assert.match(a.app(), />Installieren</);
+  a.run('openInstallModal()');
+  assert.match(a.els.mc.innerHTML, /Jetzt installieren/);
+  a.run('installNow()');
+  assert.equal(prompted, 1);
+  b.listeners.appinstalled.forEach(fn => fn());
+  assert.equal(a.get('S.installHintDone'), true);
+  assert.doesNotMatch(a.app(), /install-hint/);
+  assert.match(a.toast(), /installiert/);
+});
+
+test('Installieren: in der installierten App kein Hinweis', () => {
+  const b = browser({ ua: IPHONE, standalone: true });
+  const a = load(VORLAGE, { globals: b.globals });
+  onboard(a);
+  assert.notEqual(a.get('UI.form.mode'), 'install');
+  assert.doesNotMatch(a.app(), /install-hint/);
+});
+
+test('Installieren: „Nicht mehr zeigen“ wirkt dauerhaft', () => {
+  const a = load(VORLAGE, { globals: browser({ ua: IPHONE }).globals });
+  onboard(a);
+  a.run('dismissInstall()');
+  assert.equal(a.saved('ra_cfg3').installHintDone, true);
+  assert.doesNotMatch(a.app(), /install-hint/);
+  assert.equal(a.els.mb.classList.contains('open'), false);
+  a.run(`localStorage.removeItem('famos_install_asked');maybeAskInstall()`); a.flush();
+  assert.equal(a.els.mb.classList.contains('open'), false); // auch ohne Geräte-Merker: dauerhaft aus
 });
