@@ -45,17 +45,26 @@ def load_names():
     return [n.strip() for n in re.split(r'[,\n]', raw) if n.strip()]
 
 
+def fail(msg):
+    """Fehler ausgeben; in GitHub Actions zusätzlich als Annotation (ohne geheime Werte)."""
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        print('::error title=Build::' + msg)
+    sys.exit('FEHLER: ' + msg)
+
+
 def supabase_config():
     url = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
     key = os.environ.get('SUPABASE_PUBLISHABLE_KEY', '').strip()
     if not url and not key:
         return None
     if not re.fullmatch(r'https://[a-z0-9-]+\.supabase\.co', url):
-        sys.exit('FEHLER: SUPABASE_URL muss so aussehen: https://<projekt>.supabase.co')
+        fail('SUPABASE_URL muss so aussehen: https://<projekt>.supabase.co (eingetragen: %d Zeichen, beginnt mit "%s", endet mit "%s")'
+             % (len(url), url[:8], url[-12:]))
     if key.startswith('sb_secret_') or 'service_role' in key:
-        sys.exit('FEHLER: Das ist der geheime Schlüssel. Nur den Publishable Key (sb_publishable_…) verwenden!')
+        fail('Das ist der geheime Schlüssel. Nur den Publishable Key (sb_publishable_…) verwenden!')
     if not re.fullmatch(r'sb_publishable_[A-Za-z0-9_-]+', key):
-        sys.exit('FEHLER: SUPABASE_PUBLISHABLE_KEY muss mit sb_publishable_ beginnen')
+        fail('SUPABASE_PUBLISHABLE_KEY muss mit sb_publishable_ beginnen (eingetragen: %d Zeichen, beginnt mit "%s")'
+             % (len(key), key[:6]))
     return url, key
 
 
@@ -117,11 +126,11 @@ def main():
     if not names:
         msg = 'Personendaten-Check: keine Sperrliste (PERSONAL_NAMES / .personal-names)'
         if os.environ.get('REQUIRE_PERSONAL_NAMES') == '1':
-            sys.exit('FEHLER: ' + msg)
+            fail(msg)
         print('WARNUNG: ' + msg + ', Check übersprungen')
     hits = check_personal(open(src, encoding='utf-8').read(), names)
     if hits:
-        sys.exit(f'FEHLER: {hits} Personendaten-Treffer in {src}. Nichts gebaut.')
+        fail(f'{hits} Personendaten-Treffer in {src}. Nichts gebaut.')
     sb = supabase_config()
     build(src, out, sb)
     print(f'Gebaut: {out}/ (index.html, manifest.webmanifest, sw.js, {len(ICONS)} Icons)'
