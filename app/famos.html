@@ -190,6 +190,15 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.ess-rc{margin-top:8px;background:none;padding:6px 0;font-weight:700;font-size:.85rem;color:var(--pri);min-height:36px}
+.ess-open{background:none;padding:0;min-width:36px;min-height:36px}
+.ess-list .ai-info{cursor:pointer}
+.rc-persons{display:flex;align-items:center;gap:8px;margin:-6px 0 14px;font-weight:700;font-size:.95rem;flex-wrap:wrap}
+.rc-persons strong{min-width:24px;text-align:center;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.rc-step{width:40px;height:40px;border-radius:50%;border:1.5px solid var(--border);background:var(--bg);font-size:1.2rem;font-weight:700;line-height:1}
+.rc-base{color:var(--muted);font-size:.8rem;font-weight:600;margin-left:auto}
+.rc-ingr{margin:0 0 16px;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.95rem;line-height:1.4}
+.rc-steps{margin-bottom:12px}
 .lg-link{margin:4px 0 12px}
 .lg-link summary{cursor:pointer;font-weight:700;font-size:.88rem;color:var(--pri);padding:8px 0;min-height:44px;display:flex;align-items:center}
 .sync-badge{text-transform:none;letter-spacing:0;font-weight:700}
@@ -434,6 +443,7 @@ const DEF={
   taschengeld:{},
   essen:{
     meals:{fruehstueck:false,mittag:false,abend:true},
+    persons:4,
     dishes:[
       {id:'g1',em:'🍝',name:'Spaghetti Bolognese',meals:['mittag','abend'],tags:['fleisch'],ingr:['500 g Spaghetti','400 g Hackfleisch','1 Dose Tomaten','1 Zwiebel'],ratings:{}},
       {id:'g2',em:'🥞',name:'Pfannkuchen',meals:['mittag','abend'],tags:['veg','schnell'],ingr:['250 g Mehl','3 Eier','500 ml Milch'],ratings:{}},
@@ -527,12 +537,13 @@ function sanitizeEssen(e,kids){
     const ms=mealIds.filter(m=>sArr(d.meals,3).includes(m));
     const ratings={};Object.keys(sObj(d.ratings)).forEach(k=>{if(kidIds.has(k)&&(d.ratings[k]===1||d.ratings[k]===-1))ratings[k]=d.ratings[k];});
     return{id,em:sEm(d.em,'🍽️'),name,meals:ms.length?ms:['abend'],tags:tagIds.filter(t=>sArr(d.tags,10).includes(t)),
-      ingr:sArr(d.ingr,60).map(x=>sStr(x,80).trim()).filter(Boolean),ratings};}).filter(Boolean);
+      ingr:sArr(d.ingr,100).map(x=>sStr(x,80).trim()).filter(Boolean).slice(0,60),ratings,
+      portions:Math.round(sNum(d.portions,1,20))||4,steps:sArr(d.steps,100).map(x=>sStr(x,300).trim()).filter(Boolean).slice(0,30)};}).filter(Boolean);
   const plan={};
   Object.keys(sObj(e.plan)).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-120).forEach(ds=>{const p={};
     mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin};});
     if(Object.keys(p).length)plan[ds]=p;});
-  return{meals,dishes,plan};
+  return{meals,persons:Math.round(sNum(e.persons,1,20))||4,dishes,plan};
 }
 function sanitizeEinkauf(e){
   e=sObj(e);const ids=new Set();
@@ -956,7 +967,7 @@ function buildEssToday(){
   const td=today();
   return essTagChips()+activeMeals().map(m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
     return`<div class="tg-card"><div class="ess-meal">${m.em} ${m.l}</div>
-    ${d?`<button class="ess-dish" onclick="openEssPick('${td}','${m.id}')"><span class="ess-em">${esc(d.em)}</span><span class="ess-name">${esc(d.name)}</span></button>${d.ingr.length?`<div class="ess-ingr">${d.ingr.map(x=>esc(x)).join(' · ')}</div>`:''}`:`<div class="ess-none">Noch nichts geplant</div>`}
+    ${d?`<button class="ess-dish" onclick="openRecipe('${d.id}','${td}','${m.id}')"><span class="ess-em">${esc(d.em)}</span><span class="ess-name">${esc(d.name)}</span></button>${d.ingr.length?`<div class="ess-ingr">${d.ingr.map(x=>esc(x)).join(' · ')}</div>`:''}<button class="ess-rc" onclick="openRecipe('${d.id}','${td}','${m.id}')">📖 Rezept${d.steps.length?` · ${d.steps.length} Schritte`:''}</button>`:`<div class="ess-none">Noch nichts geplant</div>`}
     <div class="ess-acts"><button class="tg-act ein" onclick="rollToday('${m.id}')" ${sl?.pin?'disabled':''}>🎲 ${d?'Nochmal':'Würfeln'}</button>${d?`<button class="tg-act${sl.pin?' pinned':''}" aria-pressed="${sl.pin?'true':'false'}" onclick="togPin('${td}','${m.id}')">📌 ${sl.pin?'Festgelegt':'Festlegen'}</button>`:''}</div></div>`;}).join('');
 }
 function buildEssWeek(){
@@ -970,13 +981,55 @@ function buildEssDishes(kid){
   const list=S.essen.dishes.filter(d=>!UI.essTag||d.tags.includes(UI.essTag)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
   return essTagChips()+`<div class="ess-hint">${esc(kid?.icon||'')} ${esc(kid?.name||'')} bewertet gerade. Oben ein anderes Kind wählen.</div>
   <div class="al ess-list">${list.map(d=>{const r=d.ratings[kid?.id]||0,vals=Object.values(d.ratings),up=vals.filter(v=>v>0).length,down=vals.filter(v=>v<0).length;
-    return`<div class="ai"><div class="ai-em">${esc(d.em)}</div><div class="ai-info"><div class="ai-main">${esc(d.name)}</div><div class="ai-sub">${d.meals.map(m=>mealOf(m).em).join(' ')}${d.tags.length?' · '+d.tags.map(t=>TAGS.find(x=>x.id===t).em).join(' '):''}${up?` · 👍 ${up}`:''}${down?` · 👎 ${down}`:''}</div></div>
+    return`<div class="ai"><button class="ess-open" aria-label="Rezept ${esc(d.name)}" onclick="openRecipe('${d.id}')"><span class="ai-em">${esc(d.em)}</span></button><div class="ai-info" onclick="openRecipe('${d.id}')"><div class="ai-main">${esc(d.name)}</div><div class="ai-sub">${d.meals.map(m=>mealOf(m).em).join(' ')}${d.tags.length?' · '+d.tags.map(t=>TAGS.find(x=>x.id===t).em).join(' '):''}${up?` · 👍 ${up}`:''}${down?` · 👎 ${down}`:''}</div></div>
     <button class="ess-rate${r>0?' on':''}" aria-pressed="${r>0}" aria-label="Mag ich" onclick="rateDish('${d.id}',1)">👍</button><button class="ess-rate${r<0?' on':''}" aria-pressed="${r<0}" aria-label="Mag ich nicht" onclick="rateDish('${d.id}',-1)">👎</button><button class="ai-edit" aria-label="Bearbeiten" onclick="openDishModal('${d.id}')">✏️</button></div>`;}).join('')||'<div class="sp-empty">Kein Gericht mit diesem Filter.</div>'}</div>
   <button class="aa" onclick="openDishModal(null)">＋ Gericht hinzufügen</button>`;
 }
 
+// ─── Mengen: „500 g Mehl“ erkennen, umrechnen, zusammenzählen ───
+const UNITS={g:['g',1],gr:['g',1],gramm:['g',1],kg:['g',1000],mg:['g',.001],ml:['ml',1],l:['ml',1000],liter:['ml',1000],cl:['ml',10],dl:['ml',100],
+  el:['EL',1],tl:['TL',1],prise:['Prise',1],prisen:['Prise',1],dose:['Dose',1],dosen:['Dose',1],pck:['Pck.',1],packung:['Pck.',1],packungen:['Pck.',1],'päckchen':['Pck.',1],
+  bund:['Bund',1],'stück':['',1],stk:['',1],becher:['Becher',1],zehe:['Zehe',1],zehen:['Zehe',1],scheibe:['Scheibe',1],scheiben:['Scheibe',1],
+  tasse:['Tasse',1],tassen:['Tasse',1],glas:['Glas',1],'gläser':['Glas',1],flasche:['Flasche',1],flaschen:['Flasche',1]};
+const COUNTABLE=new Set(['','Dose','Pck.','Bund','Becher','Zehe','Scheibe','Glas','Flasche']);
+const FRAC={'½':.5,'¼':.25,'¾':.75,'⅓':1/3,'⅔':2/3};
+function parseIngr(line){
+  const t=String(line).trim(),m=t.match(/^(\d+(?:[.,]\d+)?|\d+\/\d+|[½¼¾⅓⅔])\s*([A-Za-zÄÖÜäöüß]+\.?)?\s+(.+)$/)||t.match(/^(\d+(?:[.,]\d+)?)([A-Za-zÄÖÜäöüß]+\.?)$/);
+  if(!m)return{q:null,u:'',name:t};
+  const raw=m[1];let q=FRAC[raw]??(raw.includes('/')?raw.split('/').reduce((a,b)=>a/b):parseFloat(raw.replace(',','.')));
+  const uw=(m[2]||'').toLowerCase().replace(/\.$/,''),unit=UNITS[uw];
+  if(!Number.isFinite(q)||q<=0)return{q:null,u:'',name:t};
+  if(unit)return{q:q*unit[1],u:unit[0],name:(m[3]||'').trim()||t};
+  return{q,u:'',name:((m[2]||'')+' '+(m[3]||'')).trim()};
+}
+function fmtNum(q){const r=q>=100?Math.round(q):Math.round(q*100)/100;return String(r).replace('.',',');}
+function fmtIngr(p){
+  if(p.q==null)return p.name;
+  let q=p.q,u=p.u;
+  if(u==='g'&&q>=1000){q/=1000;u='kg';}else if(u==='ml'&&q>=1000){q/=1000;u='l';}
+  return`${fmtNum(q)}${u?' '+u:''} ${p.name}`;
+}
+// Menge für die Personenzahl. Fürs Einkaufen (shop) wird Zählbares aufgerundet: keine halben Dosen kaufen
+function scaleIngr(p,f,shop){if(p.q==null)return p;let q=p.q*f;
+  if(shop&&COUNTABLE.has(p.u))q=Math.ceil(q-1e-9);else if(shop&&(p.u==='g'||p.u==='ml'))q=q>=50?Math.round(q/5)*5:Math.round(q);
+  return{...p,q};}
+function dishFactor(d,persons){return(persons||S.essen.persons||4)/(d.portions||4);}
+
+// Rezept ansehen: Zutaten für die eingestellte Personenzahl, Schritte nummeriert
+function openRecipe(id,ds,meal){const d=dishById(id);if(!d)return;UI.form={mode:'recipe',id,ds:ds||'',meal:meal||'',p:S.essen.persons||4};openModal();}
+function recipePersons(delta){UI.form.p=Math.min(20,Math.max(1,UI.form.p+delta));openModal();}
+function renderRecipeModal(){const f=UI.form,d=dishById(f.id);if(!d)return'';const fac=dishFactor(d,f.p);
+  return`<h3>${esc(d.em)} ${esc(d.name)}</h3>
+  <div class="rc-persons"><span>Für</span><button class="rc-step" aria-label="Weniger Personen" onclick="recipePersons(-1)">−</button><strong>${f.p}</strong><button class="rc-step" aria-label="Mehr Personen" onclick="recipePersons(1)">＋</button><span>${f.p===1?'Person':'Personen'}</span><span class="rc-base">Rezept für ${d.portions}</span></div>
+  <div class="as-lbl">Zutaten</div>
+  ${d.ingr.length?`<ul class="rc-ingr">${d.ingr.map(x=>`<li>${esc(fmtIngr(scaleIngr(parseIngr(x),fac)))}</li>`).join('')}</ul>`:'<div class="ins-why">Noch keine Zutaten eingetragen.</div>'}
+  <div class="as-lbl">Zubereitung</div>
+  ${d.steps.length?`<ol class="ins-steps rc-steps">${d.steps.map(t=>`<li><span>${esc(t)}</span></li>`).join('')}</ol>`:'<div class="ins-why">Noch keine Schritte eingetragen. Über „Bearbeiten“ ergänzen.</div>'}
+  <div class="m-btns">${f.ds?`<button class="m-cancel" onclick="openEssPick('${f.ds}','${f.meal}')">Anderes Gericht</button>`:''}<button class="m-cancel" onclick="openDishModal('${d.id}')">✏️ Bearbeiten</button><button class="m-save" onclick="closeModal()">Fertig</button></div>`;}
+function setPersons(delta){S.essen.persons=Math.min(20,Math.max(1,(S.essen.persons||4)+delta));saveCfg();renderAdmin();}
+
 // Gericht anlegen / bearbeiten
-function openDishModal(id){const ex=id?dishById(id):null;UI.form={mode:'dish',id:ex?id:null,em:ex?.em||'🍽️',name:ex?.name||'',meals:ex?ex.meals.slice():[activeMeals()[0]?.id||'abend'],tags:ex?ex.tags.slice():[],ingr:ex?ex.ingr.join('\n'):''};openModal();}
+function openDishModal(id){const ex=id?dishById(id):null;UI.form={mode:'dish',id:ex?id:null,em:ex?.em||'🍽️',name:ex?.name||'',meals:ex?ex.meals.slice():[activeMeals()[0]?.id||'abend'],tags:ex?ex.tags.slice():[],ingr:ex?ex.ingr.join('\n'):'',portions:ex?.portions||4,steps:ex?ex.steps.join('\n'):''};openModal();}
 function renderDishModal(){const f=UI.form,chip=(key,x)=>`<button class="ap${f[key].includes(x.id)?' on':''}" aria-pressed="${f[key].includes(x.id)}" onclick="dishTog('${key}','${x.id}',this)">${x.em} ${x.l}</button>`;
   return`<h3>${f.id?'Gericht bearbeiten':'Neues Gericht'}</h3>
   <div class="field"><label>Emoji</label><button class="em-btn" id="emD" onclick="epOpen(e=>{UI.form.em=e;document.getElementById('emD').textContent=e;})">${esc(f.em)}</button></div>
@@ -984,6 +1037,8 @@ function renderDishModal(){const f=UI.form,chip=(key,x)=>`<button class="ap${f[k
   <div class="field"><label>Passt zu</label><div class="ap-wrap">${MEALS.map(m=>chip('meals',m)).join('')}</div></div>
   <div class="field"><label>Eigenschaften</label><div class="ap-wrap">${TAGS.map(t=>chip('tags',t)).join('')}</div></div>
   <div class="field"><label>Zutaten (eine pro Zeile)</label><textarea rows="5" placeholder="500 g Nudeln&#10;1 Dose Tomaten" oninput="UI.form.ingr=this.value">${esc(f.ingr)}</textarea></div>
+  <div class="field"><label for="dPort">Rezept ergibt Portionen</label><input id="dPort" type="number" inputmode="numeric" min="1" max="20" value="${esc(f.portions)}" oninput="UI.form.portions=this.value" style="max-width:110px"></div>
+  <div class="field"><label>Zubereitung (ein Schritt pro Zeile, optional)</label><textarea rows="5" placeholder="Nudeln kochen&#10;Zwiebel anbraten&#10;Tomaten dazu, 15 Minuten köcheln" oninput="UI.form.steps=this.value">${esc(f.steps||'')}</textarea></div>
   <div class="m-btns">${f.id?`<button class="m-cancel" onclick="delDish()">Löschen</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveDish()">Speichern</button></div>`;}
 function dishTog(key,id,btn){const a=UI.form[key],i=a.indexOf(id);if(i>=0)a.splice(i,1);else a.push(id);if(btn){btn.classList.toggle('on');btn.setAttribute?.('aria-pressed',String(i<0));}}
 function saveDish(){
@@ -992,7 +1047,8 @@ function saveDish(){
   if(!f.meals.length){toast('Bitte mindestens eine Mahlzeit wählen.');return;}
   const ex=f.id?dishById(f.id):null;
   const d={id:ex?ex.id:uid(),em:f.em,name:name.slice(0,60),meals:MEALS.map(m=>m.id).filter(id=>f.meals.includes(id)),tags:TAGS.map(t=>t.id).filter(id=>f.tags.includes(id)),
-    ingr:String(f.ingr||'').split('\n').map(x=>x.trim().slice(0,80)).filter(Boolean).slice(0,60),ratings:ex?ex.ratings:{}};
+    ingr:String(f.ingr||'').split('\n').map(x=>x.trim().slice(0,80)).filter(Boolean).slice(0,60),ratings:ex?ex.ratings:{},
+    portions:Math.min(20,Math.max(1,Math.round(Number(f.portions))||4)),steps:String(f.steps||'').split('\n').map(x=>x.trim().slice(0,300)).filter(Boolean).slice(0,30)};
   if(ex)Object.assign(ex,d);else S.essen.dishes.push(d);
   saveCfg();closeModal();render();
 }
@@ -1013,6 +1069,7 @@ function essPickSet(id){const f=UI.form;if(id&&!dishById(id))return;setSlot(f.ds
 // Einstellungen: welche Mahlzeiten geplant werden
 function admEssen(){
   return`<div style="font-size:.8rem;color:var(--muted);font-weight:700;margin-bottom:13px;line-height:1.65">Welche Mahlzeiten plant ihr? Ausgeblendete Mahlzeiten behalten ihre Gerichte.</div>
+  <div class="tog-row"><div><div class="tog-l">👪 Wir kochen für</div><div class="tog-s">Rezepte und Einkaufsliste rechnen die Mengen um</div></div><div class="rc-persons" style="margin:0"><button class="rc-step" aria-label="Weniger" onclick="setPersons(-1)">−</button><strong>${S.essen.persons}</strong><button class="rc-step" aria-label="Mehr" onclick="setPersons(1)">＋</button></div></div>
   ${MEALS.map(m=>`<div class="tog-row"><div><div class="tog-l">${m.em} ${m.l}</div></div><button type="button" role="switch" aria-checked="${S.essen.meals[m.id]?'true':'false'}" class="tog${S.essen.meals[m.id]?' on':''}" onclick="togMeal('${m.id}')"></button></div>`).join('')}`;
 }
 function togMeal(id){const M=S.essen.meals;if(M[id]&&activeMeals().length<=1){toast('Mindestens eine Mahlzeit muss aktiv bleiben!');return;}M[id]=!M[id];saveCfg();renderAdmin();}
@@ -1041,8 +1098,11 @@ function ekClearDone(){const done=S.einkauf.items.filter(x=>x.done);if(!done.len
 function ekPlanLines(off){
   const td=today(),lines=new Map(),dishes=new Set();
   weekDates(off).filter(ds=>ds>=td).forEach(ds=>activeMeals().forEach(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);if(!d)return;dishes.add(d.id);
-    d.ingr.forEach(g=>{const k=ekKey(g),cur=lines.get(k);if(cur)cur.n++;else lines.set(k,{name:g,n:1});});}));
-  return{lines:[...lines.values()],dishes:dishes.size};
+    const fac=dishFactor(d);
+    d.ingr.forEach(g=>{const p=parseIngr(g);
+      if(p.q==null){const k=ekKey(p.name),cur=lines.get(k);if(cur)cur.n++;else lines.set(k,{p,n:1});return;}
+      const k=ekKey(p.name)+'|'+p.u,cur=lines.get(k),q=p.q*fac;if(cur)cur.p.q+=q;else lines.set(k,{p:{...p,q},n:1});});}));
+  return{lines:[...lines.values()].map(l=>({name:fmtIngr(scaleIngr(l.p,1,true)),n:l.n})),dishes:dishes.size};
 }
 function openEkPlanModal(){UI.form={mode:'ekPlan'};openModal();}
 function renderEkPlanModal(){
@@ -1080,7 +1140,7 @@ function renderEp(){document.getElementById('epCats').innerHTML=EC.map(c=>`<butt
 function epPick(e){if(_epCb)_epCb(e);epClose();}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 

@@ -77,6 +77,8 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 - **Heute:** pro Mahlzeit würfeln, nochmal würfeln, 📌 festlegen. **Woche:** diese/nächste Woche würfeln, 📌 bleibt, vergangene Tage bleiben unangetastet.
 - Gewichtung: 👍 eines Kindes ×1,6, 👎 ×0,4 (seltener, nie ausgeschlossen); in den letzten 3/7/14 Tagen geplant ×0,1/0,35/0,7; schon in derselben Woche ×0,15.
 - Welche Mahlzeiten geplant werden, steht unter Einstellungen → Essen. Plan-Einträge älter als 5 Wochen werden aufgeräumt.
+- **Mengen:** Zutaten bleiben Textzeilen; Menge und Einheit werden erkannt („500 g“, „1,5 kg“, „½ Bund“, „2 EL“, „1 Dose“). Jedes Gericht hat Portionen („Rezept für 4“), unter Einstellungen → Essen steht, für wie viele gekocht wird. Rezeptansicht rechnet genau um, die Einkaufsliste rundet Zählbares auf (keine halben Dosen) und rechnet gleiche Zutaten zusammen (g/kg, ml/l).
+- **Kochschritte:** ein Schritt pro Zeile; „📖 Rezept“ zeigt Zutaten und nummerierte Schritte, Personenzahl dort nur für die Ansicht änderbar.
 - Keine KI, keine laufenden Kosten.
 
 ## Modul Einkauf

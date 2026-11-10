@@ -847,10 +847,13 @@ test('Einkauf: Zutaten aus dem Wochenplan, zusammengefasst, nichts doppelt', () 
   assert.match(a.toast(), /übernommen, 1 standen schon drauf/);
   a.run('ekFromPlan(1)');
   assert.match(a.toast(), /Alles stand schon auf der Liste/);
-  // Mengen gleicher Zeilen werden gezählt
+  // gleiche Zutaten mit Menge werden zusammengerechnet, ohne Menge gezählt
   a.run(`setSlot('${dates[3]}','abend','g1',true);S.einkauf.items=[];ekFromPlan(1)`);
-  assert.equal(a.get(`S.einkauf.items.find(x=>x.name==='1 Zwiebel').n`), 2);
-  assert.match(a.app(), /×2/);
+  const names2 = a.get('S.einkauf.items.map(x=>x.name)');
+  assert.ok(names2.includes('2 Zwiebel'), names2);
+  assert.ok(names2.includes('1 kg Spaghetti'), names2);
+  assert.ok(names2.includes('800 g Hackfleisch'), names2);
+  assert.ok(names2.includes('2 Dose Tomaten'), names2);
 });
 function ekKeyOf(n) { return n.toLowerCase().replace(/\s+/g, ' ').trim(); }
 
@@ -954,4 +957,91 @@ test('Installieren: „Nicht mehr zeigen“ wirkt dauerhaft', () => {
   assert.equal(a.els.mb.classList.contains('open'), false);
   a.run(`localStorage.removeItem('famos_install_asked');maybeAskInstall()`); a.flush();
   assert.equal(a.els.mb.classList.contains('open'), false); // auch ohne Geräte-Merker: dauerhaft aus
+});
+
+// ─── Mengen und Kochschritte ──────────────────────────────────
+test('Mengen: Zutatenzeilen werden erkannt', () => {
+  const a = household();
+  const p = l => a.get(`parseIngr(${JSON.stringify(l)})`);
+  assert.deepEqual(p('500 g Mehl'), { q: 500, u: 'g', name: 'Mehl' });
+  assert.deepEqual(p('1,5 kg Kartoffeln'), { q: 1500, u: 'g', name: 'Kartoffeln' });
+  assert.deepEqual(p('250ml Sahne'), { q: 250, u: 'ml', name: 'Sahne' });
+  assert.deepEqual(p('1/2 l Milch'), { q: 500, u: 'ml', name: 'Milch' });
+  assert.deepEqual(p('½ Bund Petersilie'), { q: 0.5, u: 'Bund', name: 'Petersilie' });
+  assert.deepEqual(p('2 EL Öl'), { q: 2, u: 'EL', name: 'Öl' });
+  assert.deepEqual(p('3 Eier'), { q: 3, u: '', name: 'Eier' });
+  assert.deepEqual(p('2 Dosen Tomaten'), { q: 2, u: 'Dose', name: 'Tomaten' });
+  assert.deepEqual(p('1 Pck. Backpulver'), { q: 1, u: 'Pck.', name: 'Backpulver' });
+  assert.deepEqual(p('Salz'), { q: null, u: '', name: 'Salz' });
+  assert.deepEqual(p('Pizzateig'), { q: null, u: '', name: 'Pizzateig' });
+  const f = x => a.get(`fmtIngr(${JSON.stringify(x)})`);
+  assert.equal(f({ q: 1500, u: 'g', name: 'Mehl' }), '1,5 kg Mehl');
+  assert.equal(f({ q: 750, u: 'ml', name: 'Milch' }), '750 ml Milch');
+  assert.equal(f({ q: 2000, u: 'ml', name: 'Wasser' }), '2 l Wasser');
+  assert.equal(f({ q: 0.5, u: 'Bund', name: 'Dill' }), '0,5 Bund Dill');
+});
+
+test('Mengen: Umrechnen auf Personen, Zählbares wird aufgerundet', () => {
+  const a = household();
+  const sc = (l, fac, shop = true) => a.get(`fmtIngr(scaleIngr(parseIngr(${JSON.stringify(l)}),${fac},${shop}))`);
+  assert.equal(sc('500 g Spaghetti', 1.5), '750 g Spaghetti');
+  assert.equal(sc('1 Dose Tomaten', 1.5), '2 Dose Tomaten');
+  assert.equal(sc('3 Eier', 0.5), '2 Eier');
+  assert.equal(sc('2 EL Öl', 0.5), '1 EL Öl');
+  assert.equal(sc('800 g Mehl', 1.5), '1,2 kg Mehl');
+  assert.equal(sc('Salz', 2), 'Salz');
+  assert.equal(sc('1 Zwiebel', 1.5, false), '1,5 Zwiebel'); // im Rezept genau, beim Einkauf aufgerundet
+  assert.equal(sc('½ Bund Dill', 1, true), '1 Bund Dill');
+  // Einkauf aus dem Plan für 6 Personen bei Rezept für 4
+  a.run(`setPersonsTo=n=>{S.essen.persons=n;};setPersonsTo(6);setSlot(weekDates(1)[0],'abend','g1',true)`);
+  const lines = a.get('ekPlanLines(1).lines.map(l=>l.name)');
+  assert.ok(lines.includes('750 g Spaghetti'), lines);
+  assert.ok(lines.includes('600 g Hackfleisch'), lines);
+  assert.ok(lines.includes('2 Dose Tomaten'), lines);
+});
+
+test('Rezept: Portionen und Schritte speichern, Ansicht rechnet um', () => {
+  const a = household();
+  a.run(`openDishModal(null);UI.form.name='Linsensuppe';UI.form.meals=['abend'];UI.form.ingr='250 g Linsen\\n2 Karotten';UI.form.portions='2';UI.form.steps='Linsen waschen\\n\\n 20 Minuten kochen ';saveDish()`);
+  const d = a.get('S.essen.dishes.at(-1)');
+  assert.equal(d.portions, 2);
+  assert.deepEqual(d.steps, ['Linsen waschen', '20 Minuten kochen']);
+  a.run(`openRecipe('${d.id}')`);
+  const html = a.els.mc.innerHTML;
+  assert.match(html, /Rezept für 2/);
+  assert.match(html, /500 g Linsen/); // 4 Personen, Rezept für 2
+  assert.match(html, /<li><span>Linsen waschen<\/span><\/li>/);
+  a.run('recipePersons(-2)');
+  assert.match(a.els.mc.innerHTML, /250 g Linsen/);
+  assert.equal(a.get('S.essen.persons'), 4); // nur die Ansicht, nicht die Einstellung
+  // Heute: Rezept-Knopf mit Anzahl Schritte
+  a.run(`setView('essen');setSlot(today(),'abend','${d.id}',true);render()`);
+  assert.match(a.app(), /📖 Rezept · 2 Schritte/);
+});
+
+test('Rezept: Personenzahl in den Einstellungen, Grenzen 1 bis 20', () => {
+  const a = household();
+  a.run(`openAdmin();setATab('essen')`);
+  assert.match(a.adm(), /Wir kochen für/);
+  for (let i = 0; i < 30; i++) a.run('setPersons(1)');
+  assert.equal(a.get('S.essen.persons'), 20);
+  for (let i = 0; i < 30; i++) a.run('setPersons(-1)');
+  assert.equal(a.get('S.essen.persons'), 1);
+  assert.equal(a.saved('ra_cfg3').essen.persons, 1);
+});
+
+test('Rezept: Import begrenzt Schritte und Portionen, Schadcode wird Text', () => {
+  const evil = '<img src=x onerror=alert(1)>';
+  const a = load(VORLAGE);
+  const data = { cfg: { kids: [{ id: 'k1', name: 'Emma' }], household: { name: 'X' }, essen: { persons: 999, dishes: [
+    { id: 'd1', name: 'Suppe', meals: ['abend'], portions: -3, steps: [evil, 7, '', ...Array(40).fill('x')], ingr: [evil] },
+  ] } } };
+  assert.equal(a.run(`applyImport(${JSON.stringify(data)})`), true);
+  const E = a.get('S.essen');
+  assert.equal(E.persons, 20);
+  assert.equal(E.dishes[0].portions, 1);
+  assert.equal(E.dishes[0].steps.length, 30);
+  a.run(`openRecipe('d1')`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /<img/);
+  assert.match(a.els.mc.innerHTML, /&lt;img/);
 });
