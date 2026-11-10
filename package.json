@@ -1,0 +1,11 @@
+{
+  "name": "famos",
+  "private": true,
+  "description": "FamOS – Das Gehirn der Familie",
+  "scripts": {
+    "test": "node --test tests/famos.test.js tests/db.test.js"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.12"
+  }
+}

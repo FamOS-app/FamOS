@@ -32,8 +32,11 @@ jobs:
           node -e "const fs=require('fs');const h=fs.readFileSync('app/famos.html','utf8');fs.writeFileSync('/tmp/famos.js',h.match(/<script>([\s\S]*?)<\/script>/)[1])"
           node --check /tmp/famos.js
 
-      - name: Tests
-        run: node --test tests/famos.test.js
+      - name: Abhängigkeiten (nur für Tests)
+        run: npm ci --no-audit --no-fund
+
+      - name: Tests (App und Datenbank-Regeln)
+        run: npm test
 
       - name: Bauen mit Personendaten-Check
         env:

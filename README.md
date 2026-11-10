@@ -22,9 +22,10 @@ Keine Kindernamen, Lehrkräfte, Stundenpläne, Zugänge oder Passwörter im Repo
 ## Workflow
 
 1. Änderungen in `app/famos.html`.
-2. Lokal testen (baut `dist/` gleich mit):
+2. Lokal testen (baut `dist/` gleich mit, prüft auch die Datenbank-Regeln):
    ```bash
-   node --test tests/famos.test.js
+   npm ci
+   npm test
    ```
 3. Push auf `main`: GitHub Actions testet, baut, prüft auf Personendaten und veröffentlicht `dist/` per GitHub Pages. Schlägt ein Schritt fehl, wird nichts veröffentlicht.
 
@@ -84,6 +85,18 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 - „Zutaten aus dem Wochenplan“: diese Woche ab heute oder nächste Woche; gleiche Zeilen werden gezählt (×2), was schon offen auf der Liste steht, kommt nicht doppelt dazu. Mengen werden nicht verrechnet („500 g“ + „200 g“ bleiben zwei Zeilen).
 - Abhaken → „Im Wagen“; „Erledigte entfernen“ merkt sich die letzten 20 Einträge als Schnellwahl.
 - Bis zum Supabase-Sync liegt die Liste nur auf dem jeweiligen Gerät.
+
+## Supabase (in Arbeit)
+
+- Projekt in der Region Frankfurt, AVV abgeschlossen.
+- Schema: `supabase/migrations/001_init.sql`, einmal im SQL-Editor des Projekts ausführen.
+  - `households` + `members`: Haushalte mit Einladungscode (8 Zeichen), Rollen Besitzer/Erwachsene.
+  - `docs`: Einstellungen, Tagesstand, Taschengeld als Dokumente mit Versionsnummer (Konflikte werden erkannt).
+  - `shopping_items`: Einkaufsliste zeilenweise, damit mehrere Handys gleichzeitig eintragen können.
+  - Row Level Security auf allen Tabellen: nur Mitglieder sehen und ändern Daten ihres Haushalts; ohne Login kein Zugriff.
+  - Anlegen/Beitreten/Code erneuern nur über Funktionen; Code ändern nur der Besitzer.
+- `tests/db.test.js` prüft Schema und Regeln in einer echten Postgres-Instanz (PGlite), auch in CI.
+- App-Konfiguration kommt aus GitHub-Variablen `SUPABASE_URL` und `SUPABASE_PUBLISHABLE_KEY` (nicht geheim, Schutz über RLS). Der secret/service_role key gehört nirgends hin.
 
 ## Roadmap
 
