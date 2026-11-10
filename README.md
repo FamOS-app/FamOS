@@ -103,7 +103,9 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 ### Konto & Sync in der App
 
 - Anmeldung per **6-stelligem Code aus der E-Mail** (kein Passwort, kein Link: ein Link würde auf dem iPhone in Safari statt in der installierten App landen).
-- Lokal zuerst: Die App arbeitet immer mit `localStorage`. Mit Anmeldung werden Änderungen nach ~1 s hochgeladen und alle 5 s (Einkauf) bzw. 15 s (Rest) abgeholt, außerdem beim Öffnen der App.
+- Lokal zuerst: Die App arbeitet immer mit `localStorage`. Mit Anmeldung werden Änderungen nach ~1 s hochgeladen.
+- **Sofort-Übertragung:** Dauerverbindung zu Supabase Realtime (WebSocket, nur `wss://<projekt>.supabase.co`). Eine Meldung löst nur das Abholen aus, die Daten kommen weiter über REST mit RLS. Fremde Haushalte lehnt der Server beim Verbinden ab.
+- Sicherheitsnetz: Steht die Dauerverbindung, fragt die App zusätzlich alle 30 s nach; ohne sie alle 5 s (Einkauf) bzw. 15 s (Rest). Abgerissene Verbindungen werden mit wachsendem Abstand (bis 60 s) neu aufgebaut.
 - Gleichzeitige Änderungen: Haken des Tages, Taschengeld-Wochenstatus und Buchungen werden zusammengeführt; Einkaufsliste läuft zeilenweise ohne Verlust; bei den Einstellungen gewinnt der Cloud-Stand (mit Hinweis).
 - Gerätebezogen bleibt: Installations-Hinweis, Anmeldung.
 - Abmelden lässt die Daten auf dem Gerät. Besitzer/in kann den Haushalt in der Cloud löschen (DSGVO: Löschung), Mitglieder können austreten.
@@ -112,4 +114,4 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 
 ## Roadmap
 
-Echtzeit per WebSocket statt Abfrage-Intervall, eigener E-Mail-Versand (EU), optional Rezept-Import per Link, Kochschritte und Mengen.
+Eigener E-Mail-Versand (EU) für Code statt Link, optional Rezept-Import per Link.

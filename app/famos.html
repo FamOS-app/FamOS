@@ -1306,8 +1306,8 @@ function setSession(d){
 async function ensureToken(){if(AUTH&&Date.now()>AUTH.expires_at-60000)await refreshToken();}
 async function refreshToken(){
   if(!AUTH)return false;
-  try{setSession(await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:AUTH.refresh_token},auth:false}));return true;}
-  catch(e){if(e.status&&e.status<500){AUTH=null;saveAuth();SYNC.status='out';saveSync();toast('Bitte neu anmelden. Deine Daten bleiben auf dem Gerät.');}return false;}
+  try{setSession(await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:AUTH.refresh_token},auth:false}));rtToken();return true;}
+  catch(e){if(e.status&&e.status<500){AUTH=null;saveAuth();rtStop();SYNC.status='out';saveSync();toast('Bitte neu anmelden. Deine Daten bleiben auf dem Gerät.');}return false;}
 }
 function authError(e){
   if(e.status===429||/rate limit/i.test(e.message))return'Gerade zu viele Anmelde-Mails. Bitte in einer Stunde nochmal versuchen.';
@@ -1412,11 +1412,11 @@ async function connectHousehold(h,role,{upload=false,replace=false}={}){
   }else{SYNC_KEYS.forEach(k=>{SYNC.dirty[k]=true;});
     S.einkauf.items.forEach(it=>SYNC.queue.push({op:'up',item:{...it}}));}
   saveSync();await syncNow(true);
-  UI.kid=S.kids[0]?.id||null;UI.rt=firstActiveRt();UI.ob=null;refreshAll();
+  UI.kid=S.kids[0]?.id||null;UI.rt=firstActiveRt();UI.ob=null;refreshAll();rtStop();rtStart();
 }
 async function logout(){if(!confirm('Abmelden? Die Daten bleiben auf diesem Gerät, werden aber nicht mehr abgeglichen.'))return;
   try{await sb('/auth/v1/logout',{method:'POST'});}catch(e){}
-  AUTH=null;saveAuth();SYNC=emptySync();saveSync();refreshAll();toast('Abgemeldet');}
+  AUTH=null;saveAuth();rtStop();SYNC=emptySync();saveSync();refreshAll();toast('Abgemeldet');}
 async function rotateInvite(){if(!confirm('Neuen Einladungscode erzeugen? Der alte funktioniert dann nicht mehr.'))return;
   try{const c=await sb('/rest/v1/rpc/rotate_invite',{method:'POST',body:{p_household:SYNC.hid}});SYNC.invite=String(c);saveSync();renderAdmin();toast('Neuer Code erzeugt');}
   catch(e){toast('Ging nicht: '+e.message);}}
@@ -1424,7 +1424,7 @@ async function leaveHousehold(){const owner=SYNC.role==='owner';
   if(!confirm(owner?'Den Haushalt mit allen Daten aus der Cloud löschen? Alle Mitglieder verlieren den Abgleich. Die Daten auf diesem Gerät bleiben.':'Haushalt verlassen? Die Daten auf diesem Gerät bleiben, werden aber nicht mehr abgeglichen.'))return;
   try{if(owner)await sb(`/rest/v1/households?id=eq.${SYNC.hid}`,{method:'DELETE'});
     else await sb(`/rest/v1/members?household_id=eq.${SYNC.hid}&user_id=eq.${AUTH.user.id}`,{method:'DELETE'});
-    SYNC=emptySync();saveSync();refreshAll();toast(owner?'Haushalt in der Cloud gelöscht':'Haushalt verlassen');}
+    rtStop();SYNC=emptySync();saveSync();refreshAll();toast(owner?'Haushalt in der Cloud gelöscht':'Haushalt verlassen');}
   catch(e){toast('Ging nicht: '+e.message);}}
 function copyInvite(){const c=fmtInvite(SYNC.invite);try{navigator.clipboard.writeText(c).then(()=>toast('Code kopiert'),()=>toast(c));}catch(e){toast(c);}}
 function fmtInvite(c){return String(c||'').replace(/^(.{4})(.{4})$/,'$1 $2');}
@@ -1496,6 +1496,38 @@ async function pullItems(){
   S.einkauf=sanitizeEinkauf({items,recent:S.einkauf.recent});lsSet('ra_cfg3',JSON.stringify(S));
   return JSON.stringify(S.einkauf.items)!==before;
 }
+// ─── Sofort-Übertragung (Supabase Realtime, Phoenix-Protokoll) ───
+// Die Meldung löst nur ein Abholen aus; Daten kommen weiter über die REST-Schnittstelle mit RLS.
+const RT={ws:null,ref:0,joinRef:null,joined:false,hb:null,timer:null,retry:0,poke:null};
+function rtTopic(){return'realtime:famos-'+SYNC.hid;}
+function rtUrl(){return SB_URL.replace(/^https:/,'wss:')+'/realtime/v1/websocket?apikey='+encodeURIComponent(SB_KEY)+'&vsn=1.0.0';}
+function rtSend(m,join){const ws=RT.ws;if(!ws||ws.readyState!==1)return;m.ref=String(++RT.ref);
+  if(join){RT.joinRef=m.ref;m.join_ref=m.ref;}else if(m.topic!=='phoenix')m.join_ref=RT.joinRef;
+  try{ws.send(JSON.stringify(m));}catch(e){}}
+function rtStart(){
+  if(!SYNC_ON||!AUTH||!SYNC.hid||RT.ws||typeof WebSocket==='undefined'||!online())return;
+  clearTimeout(RT.timer);let ws;try{ws=new WebSocket(rtUrl());}catch(e){return;}
+  RT.ws=ws;RT.joined=false;
+  ws.onopen=()=>{
+    rtSend({topic:rtTopic(),event:'phx_join',payload:{access_token:AUTH.access_token,config:{broadcast:{self:false},presence:{key:''},private:false,
+      postgres_changes:[{event:'*',schema:'public',table:'docs',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'shopping_items',filter:'household_id=eq.'+SYNC.hid}]}}},true);
+    clearInterval(RT.hb);RT.hb=setInterval(()=>rtSend({topic:'phoenix',event:'heartbeat',payload:{}}),25000);
+  };
+  ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
+    if(m.topic!==rtTopic())return;
+    if(m.event==='phx_reply'&&m.ref===RT.joinRef){RT.joined=m.payload?.status==='ok';if(RT.joined){RT.retry=0;rtPoke();}}
+    else if(m.event==='postgres_changes')rtPoke();
+    else if((m.event==='system'&&m.payload?.status==='error')||m.event==='phx_error'||m.event==='phx_close'){RT.joined=false;try{ws.close();}catch(e){}}
+  };
+  ws.onclose=()=>{clearInterval(RT.hb);RT.ws=null;RT.joined=false;
+    if(!AUTH||!SYNC.hid)return;RT.timer=setTimeout(rtStart,Math.min(60000,1000*2**RT.retry++));};
+  ws.onerror=()=>{try{ws.close();}catch(e){}};
+}
+function rtStop(){clearTimeout(RT.timer);clearInterval(RT.hb);clearTimeout(RT.poke);const ws=RT.ws;RT.ws=null;RT.joined=false;RT.retry=0;
+  if(ws){ws.onclose=null;try{ws.close();}catch(e){}}}
+function rtPoke(){clearTimeout(RT.poke);RT.poke=setTimeout(()=>syncNow(true),250);}
+function rtToken(){if(RT.joined&&AUTH)rtSend({topic:rtTopic(),event:'access_token',payload:{access_token:AUTH.access_token}});}
+
 // ─── Ein Abgleich-Durchlauf ───
 async function syncNow(force){
   if(!SYNC_ON||!AUTH||!SYNC.hid||_syncBusy)return;
@@ -1510,7 +1542,7 @@ async function syncNow(force){
     SYNC.status='ok';SYNC.err='';SYNC.at=now;
   }catch(e){
     SYNC.status=!e.status?'offline':e.status===401?'out':'err';SYNC.err=e.message||'';
-    if(e.status===403||/row-level|permission/i.test(e.message)){SYNC=emptySync();toast('Kein Zugriff mehr auf den Haushalt. Abgleich beendet.');changed=true;}
+    if(e.status===403||/row-level|permission/i.test(e.message)){rtStop();SYNC=emptySync();toast('Kein Zugriff mehr auf den Haushalt. Abgleich beendet.');changed=true;}
   }finally{_syncBusy=false;saveSync();}
   if(changed)softRender();else if(force)render();
 }
@@ -1529,6 +1561,7 @@ function admKonto(){
   const pend=Object.keys(SYNC.dirty).length+SYNC.queue.length,at=SYNC.at?new Date(SYNC.at).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'–';
   return`<div class="tg-card"><div class="as-lbl">Abgleich</div>
     <div class="sync-row"><span>${syncBadge().replace(' · ','')}</span><span class="sync-at">zuletzt ${at}${pend?` · ${pend} offen`:''}</span></div>
+    <div class="sync-at" style="margin-bottom:10px">${RT.joined?'⚡ Sofort-Übertragung aktiv':'Abgleich alle paar Sekunden (Sofort-Übertragung verbindet sich …)'}</div>
     ${SYNC.status==='err'?`<div class="sync-err">${esc(SYNC.err)}</div>`:''}
     <button class="aa" onclick="syncNow(true)">↻ Jetzt abgleichen</button></div>
   <div class="tg-card"><div class="as-lbl">Haushalt in der Cloud</div>
@@ -1592,7 +1625,7 @@ function togTgAktiv(kidId){if(!S.taschengeld)S.taschengeld={};if(!S.taschengeld[
 (()=>{const m={name:'FamOS',short_name:'FamOS',start_url:'.',display:'standalone',background_color:'#F4EDE1',theme_color:'#F4EDE1',icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23F4EDE1'/%3E%3Ctext x='256' y='340' font-size='280' text-anchor='middle'%3E%E2%98%80%EF%B8%8F%3C/text%3E%3C/svg%3E",sizes:'512x512',type:'image/svg+xml'}]};const l=document.createElement('link');l.rel='manifest';l.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/manifest+json'}));document.head.appendChild(l);})();
 
 // ═══ INIT ═════════════════════════════════════
-document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dayGuard())render();syncNow(true);});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dayGuard())render();syncNow(true);if(typeof rtStart==='function')rtStart();});
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(document.getElementById('epBg').classList.contains('open'))epClose();else closeModal();});
 UI.kid=S.kids[0]?.id;
 UI.rt=firstActiveRt();
@@ -1605,9 +1638,9 @@ if(W&&typeof navigator!=='undefined'&&navigator.serviceWorker&&W.location?.proto
 render();
 if(SYNC_ON){
   if(readAuthHash())finishHashLogin();
-  else if(AUTH&&SYNC.hid)syncNow(true);
-  setInterval(()=>{if(typeof document==='undefined'||!document.hidden)syncNow(false);},5000);
-  W?.addEventListener?.('online',()=>syncNow(true));
+  else if(AUTH&&SYNC.hid){syncNow(true);rtStart();}
+  setInterval(()=>{if(typeof document!=='undefined'&&document.hidden)return;if(RT.joined&&Date.now()-SYNC.at<30000)return;syncNow(false);},5000);
+  W?.addEventListener?.('online',()=>{syncNow(true);rtStart();});
 }
 maybeAskInstall();
 </script>

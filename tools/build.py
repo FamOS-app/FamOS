@@ -84,7 +84,7 @@ def build(src, out, sb=None):
             assert s.count(ph) == 1, ph
             s = s.replace(ph, val)
         assert s.count("worker-src 'self';") == 1
-        s = s.replace("worker-src 'self';", "worker-src 'self'; connect-src " + url + ";")
+        s = s.replace("worker-src 'self';", "worker-src 'self'; connect-src " + url + " " + url.replace("https://", "wss://", 1) + ";")
 
     # Laufzeit-Manifest (Blob) durch echte Datei ersetzen: nötig für "Zum Home-Bildschirm" mit Offline-Start
     pat = re.compile(r"^\(\(\)=>\{const m=\{name:'FamOS'.*\n", re.M)

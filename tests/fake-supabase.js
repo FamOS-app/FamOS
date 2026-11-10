@@ -16,6 +16,37 @@ class FakeSupabase {
     this.households = []; this.members = []; this.docs = []; this.items = [];
     this.offline = false; this.rateLimited = false; this.log = [];
     this.fetch = this.fetch.bind(this);
+    this.sockets = []; this.realtimeDown = false;
+    const server = this;
+    // Nachbau des Supabase-Realtime-Endpunkts (Phoenix-Protokoll, JSON)
+    this.WebSocket = class {
+      constructor(url) {
+        this.url = url; this.readyState = 0; this.sent = []; this.topic = null; this.hid = null;
+        const u = new URL(url);
+        if (u.protocol !== 'wss:' || u.pathname !== '/realtime/v1/websocket' || u.searchParams.get('apikey') !== KEY || server.realtimeDown) {
+          queueMicrotask(() => { this.readyState = 3; this.onclose?.(); }); return;
+        }
+        server.sockets.push(this);
+        queueMicrotask(() => { this.readyState = 1; this.onopen?.(); });
+      }
+      send(raw) {
+        const m = JSON.parse(raw); this.sent.push(m);
+        if (m.event === 'phx_join') {
+          const uid = server.tokens[m.payload.access_token];
+          const f = m.payload.config.postgres_changes.map(c => c.filter.replace('household_id=eq.', ''));
+          const ok = uid && f.every(h => server.isMember(uid, h));
+          if (ok) { this.topic = m.topic; this.hid = f[0]; }
+          this.deliver({ topic: m.topic, event: 'phx_reply', ref: m.ref, payload: ok ? { status: 'ok', response: {} } : { status: 'error', response: { reason: 'unauthorized' } } });
+        }
+        if (m.event === 'access_token') this.token = m.payload.access_token;
+      }
+      deliver(m) { queueMicrotask(() => this.onmessage?.({ data: JSON.stringify(m) })); }
+      close() { this.readyState = 3; server.sockets = server.sockets.filter(s => s !== this); queueMicrotask(() => this.onclose?.()); }
+      drop() { this.close(); } // Verbindung reißt ab (Funkloch)
+    };
+  }
+  notify(hid, table, type) {
+    for (const s of this.sockets) if (s.hid === hid && s.topic) s.deliver({ topic: s.topic, event: 'postgres_changes', payload: { data: { table, type, schema: 'public' }, ids: [1] } });
   }
   code(email) { return this.codes[email]; }
   link(email, type = 'signup') { return `https://testprojekt.supabase.co/auth/v1/verify?token=${this.hashes[email]}&type=${type}&redirect_to=https://example.github.io/FamOS/`; }
@@ -113,11 +144,11 @@ class FakeSupabase {
         if (!this.isMember(uid, data.household_id)) return denied();
         if (this.docs.some(r => r.household_id === data.household_id && r.key === data.key)) return res(409, { code: '23505', message: 'duplicate key' });
         const row = { household_id: data.household_id, key: data.key, data: data.data, version: 1 };
-        this.docs.push(row); return res(201, [row]);
+        this.docs.push(row); this.notify(row.household_id, 'docs', 'INSERT'); return res(201, [row]);
       }
       if (method === 'PATCH') {
         const rows = mine(this.docs).filter(match);
-        rows.forEach(r => { r.data = data.data; r.version++; });
+        rows.forEach(r => { r.data = data.data; r.version++; this.notify(r.household_id, 'docs', 'UPDATE'); });
         return res(200, rows.map(r => ({ ...r })));
       }
     }
@@ -128,9 +159,10 @@ class FakeSupabase {
         if (!this.isMember(uid, data.household_id)) return denied();
         const ex = this.items.find(r => r.household_id === data.household_id && r.id === data.id);
         if (ex) Object.assign(ex, data); else this.items.push({ ...data, created: ++seq });
+        this.notify(data.household_id, 'shopping_items', ex ? 'UPDATE' : 'INSERT');
         return res(201);
       }
-      if (method === 'DELETE') { this.items = this.items.filter(r => !(r.household_id === hid && r.id === eq('id') && this.isMember(uid, hid))); return res(204); }
+      if (method === 'DELETE') { this.items = this.items.filter(r => !(r.household_id === hid && r.id === eq('id') && this.isMember(uid, hid))); this.notify(hid, 'shopping_items', 'DELETE'); return res(204); }
     }
     return res(404, { message: `unbekannt: ${method} ${path}` });
   }

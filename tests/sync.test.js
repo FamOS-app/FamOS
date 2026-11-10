@@ -33,17 +33,17 @@ async function login(a, server, email) {
   await a.run('loginVerify()');
 }
 /** Gerät A: Haushalt lokal einrichten, anmelden, in der Cloud anlegen */
-async function founder(server) {
-  const a = device(server);
+async function founder(server, opts, email = 'a@example.org') {
+  const a = device(server, opts);
   a.run(`openKidModal(null);UI.form.name='Emma';saveKid();openKidModal(null);UI.form.name='Ben';saveKid();ob().name='Familie Test';obFinish()`);
   a.flush();
-  await login(a, server, 'a@example.org');
+  await login(a, server, email);
   assert.equal(a.get('UI.form.step'), 'household');
   await a.run('createHousehold()');
   return a;
 }
-async function partner(server, a) {
-  const b = device(server);
+async function partner(server, a, opts) {
+  const b = device(server, opts);
   await login(b, server, 'b@example.org');
   b.run(`UI.form.joinCode=${JSON.stringify(a.get('SYNC.invite').toLowerCase().replace(/^(....)/, '$1 '))}`);
   await b.run('joinHousehold()');
@@ -56,7 +56,7 @@ test('Sync: ohne Konfiguration keine Konto-Funktionen, mit Konfiguration CSP nur
   assert.equal(plain.get('SYNC_ON'), false);
   assert.doesNotMatch(plain.app(), /Anmelden/);
   const html = fs.readFileSync(APP, 'utf8');
-  assert.match(html, /connect-src https:\/\/testprojekt\.supabase\.co;/);
+  assert.match(html, /connect-src https:\/\/testprojekt\.supabase\.co wss:\/\/testprojekt\.supabase\.co;/);
   const a = device(new FakeSupabase());
   assert.equal(a.get('SYNC_ON'), true);
   assert.match(a.app(), /Schon ein FamOS-Konto\? Anmelden/);
@@ -269,4 +269,70 @@ test('Sync: Haushalt aus den Einstellungen anlegen zeigt danach sofort den Einla
   // zweimal tippen legt keinen zweiten Haushalt an
   await a.run('createHousehold()');
   assert.equal(server.households.length, 1);
+});
+
+// ─── Sofort-Übertragung ───────────────────────────────────────
+const live = server => ({ globals: { WebSocket: server.WebSocket } });
+async function settle(...ds) { for (let i = 0; i < 6; i++) { await new Promise(r => setImmediate(r)); ds.forEach(d => d.flush()); } }
+
+test('Live: Änderung erscheint auf dem anderen Handy ohne Abfrage', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server, live(server));
+  const b = await partner(server, a, live(server));
+  await settle(a, b);
+  assert.equal(a.get('RT.joined'), true);
+  assert.equal(b.get('RT.joined'), true);
+  const sock = server.sockets.find(x => x.hid === a.get('SYNC.hid'));
+  assert.match(sock.url, /^wss:\/\/testprojekt\.supabase\.co\/realtime\/v1\/websocket\?apikey=sb_publishable_test&vsn=1\.0\.0$/);
+  const fetchesB = () => server.log.length;
+  a.run(`UI.ekNew='Milch';ekAddInput()`);
+  await settle(a, b); // A lädt hoch, Server meldet, B holt ab
+  assert.deepEqual(b.get('S.einkauf.items.map(x=>x.name)'), ['Milch']);
+  a.run(`openKidModal(null);UI.form.name='Mia';saveKid()`);
+  await settle(a, b);
+  assert.deepEqual(b.get('S.kids.map(k=>k.name)'), ['Emma', 'Ben', 'Mia']);
+  b.run(`openAdmin();setATab('konto')`);
+  assert.match(b.adm(), /Sofort-Übertragung aktiv/);
+  assert.ok(fetchesB() > 0);
+});
+
+test('Live: fremder Haushalt wird beim Verbinden abgelehnt', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server, live(server));
+  const fremd = await founder(server, live(server), 'fremd@example.org');
+  await settle(a, fremd);
+  fremd.run(`rtStop();SYNC.hid=${JSON.stringify(a.get('SYNC.hid'))};rtStart()`);
+  await settle(fremd);
+  assert.equal(fremd.get('RT.joined'), false);
+});
+
+test('Live: abgerissene Verbindung baut sich neu auf, ohne Realtime bleibt die Abfrage', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server, live(server));
+  await settle(a);
+  server.sockets[0].drop();
+  await settle(a);
+  assert.equal(a.get('RT.joined'), true);
+  assert.equal(server.sockets.length, 1);
+  // Realtime gesperrt: App bleibt bedienbar und gleicht per Abfrage ab
+  server.realtimeDown = true;
+  server.sockets[0].drop();
+  await settle(a);
+  assert.equal(a.get('RT.joined'), false);
+  a.run(`UI.ekNew='Brot';ekAddInput()`);
+  await a.run('syncNow(true)');
+  assert.deepEqual(server.items.map(x => x.name), ['Brot']);
+});
+
+test('Live: Abmelden schließt die Verbindung, erneuerte Sitzung geht an die Verbindung', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server, live(server));
+  await settle(a);
+  server.expireTokens();
+  await a.run('refreshToken()');
+  assert.ok(server.sockets[0].sent.some(m => m.event === 'access_token'));
+  await a.run('logout()');
+  await settle(a);
+  assert.equal(server.sockets.length, 0);
+  assert.equal(a.get('RT.ws'), null);
 });

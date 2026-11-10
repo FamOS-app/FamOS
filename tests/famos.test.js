@@ -47,7 +47,11 @@ for (const file of [APP, VORLAGE]) {
     assert.doesNotMatch(html, /<link[^>]+stylesheet/);
     assert.doesNotMatch(html, /googleapis|gstatic|google-analytics|gtag/i);
     const js = extractScript(html);
-    assert.doesNotMatch(js, /\balert\(|\beval\(|document\.write|XMLHttpRequest|new WebSocket/);
+    assert.doesNotMatch(js, /\balert\(|\beval\(|document\.write|XMLHttpRequest/);
+    // Dauerverbindung nur an einer Stelle, nur zur Projektadresse (wss)
+    assert.equal((js.match(/new WebSocket\(/g) || []).length, 1);
+    assert.match(js, /new WebSocket\(rtUrl\(\)\)/);
+    assert.match(js, /function rtUrl\(\)\{return SB_URL\.replace\(\/\^https:\/,'wss:'\)/);
     // Netzwerk nur an einer Stelle und nur zur konfigurierten Supabase-Adresse
     assert.equal((js.match(/\bfetch\(/g) || []).length, 1);
     assert.match(js, /await fetch\(SB_URL\+path,/);

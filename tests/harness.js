@@ -57,6 +57,7 @@ function load(file, opts = {}) {
     setTimeout: fn => { timers.push(fn); return timers.length; },
     clearTimeout: () => {},
     setInterval: () => 0, // Sync-Intervall: Tests rufen syncNow() selbst auf
+    clearInterval: () => {},
     requestAnimationFrame: fn => fn(),
     Blob: class { constructor(parts, o) { this.parts = parts; this.type = o?.type; } },
     URL: class extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} },
