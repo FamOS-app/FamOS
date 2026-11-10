@@ -145,7 +145,7 @@ test('Module: aus- und einschalten, mindestens eins bleibt an', () => {
   assert.equal(a.get('S.modules.taschengeld'), false);
   a.run('render()');
   assert.doesNotMatch(a.app(), /setView\('taschengeld'\)/);
-  a.run(`togModule('stundenplan')`);
+  a.run(`togModule('stundenplan');togModule('essen')`);
   a.run('render()');
   assert.doesNotMatch(a.app(), /bot-nav/); // nur ein Modul: keine Navigation
   a.run(`togModule('routine')`);
@@ -506,7 +506,8 @@ test('Migration: alter Stand ohne household/modules/_mv wird ergänzt, Daten ble
   const a = load(VORLAGE, { storage: { ra_cfg3: JSON.stringify(old) } });
   const S = a.get('S');
   assert.deepEqual(S.household, { name: 'Unsere Familie', adults: [] });
-  assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true });
+  assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true, essen: true });
+  assert.ok(S.essen.dishes.length >= 5); // ältere Stände bekommen Beispielgerichte
   assert.equal(S._mv, 4);
   assert.deepEqual(S.stundenplan.k1.mo, [{ em: '📖', lbl: 'Lesen', time: '', teacher: '' }]);
   assert.deepEqual(S.stundenplan.k1.sa, []);
@@ -554,4 +555,193 @@ test('Eingaben: Sonderzeichen in Namen werden als Text dargestellt', () => {
   assert.match(a.app(), /Tom &amp; &lt;Jerry&gt; &quot;Q&quot;/);
   a.run(`openKidModal(S.kids[0].id)`);
   assert.match(a.els.mc.innerHTML, /value="Tom &amp; &lt;Jerry&gt; &quot;Q&quot;"/);
+});
+
+// ─── Essen ────────────────────────────────────────────────────
+/** Haushalt mit Essen-Ansicht; Math.random fest, damit Würfeln reproduzierbar ist */
+function essApp(rand = 0) {
+  const a = household();
+  a.run(`Math.random=()=>${rand};setView('essen')`);
+  return a;
+}
+const td = a => a.get('today()');
+
+test('Essen: Modul mit Beispielgerichten, nur Abend ist anfangs aktiv', () => {
+  const a = essApp();
+  assert.match(a.app(), /setView\('essen'\)/);
+  assert.deepEqual(a.get('activeMeals().map(m=>m.id)'), ['abend']);
+  assert.ok(a.get('S.essen.dishes').length >= 5);
+  assert.match(a.app(), /Noch nichts geplant/);
+  assert.doesNotMatch(a.app(), /Frühstück/);
+});
+
+test('Essen: Gericht anlegen mit Zutaten, Pflichtfelder werden geprüft', () => {
+  const a = essApp();
+  const n = a.get('S.essen.dishes.length');
+  a.run(`openDishModal(null);UI.form.name='  ';saveDish()`);
+  assert.match(a.toast(), /Namen/);
+  a.run(`UI.form.name='Linsensuppe';UI.form.meals=[];saveDish()`);
+  assert.match(a.toast(), /Mahlzeit/);
+  a.run(`UI.form.meals=['abend','mittag'];UI.form.tags=['veg'];UI.form.ingr='250 g Linsen\\n\\n  2 Karotten  \\n';saveDish()`);
+  const d = a.get('S.essen.dishes').at(-1);
+  assert.equal(a.get('S.essen.dishes.length'), n + 1);
+  assert.deepEqual([d.name, d.meals, d.tags, d.ingr], ['Linsensuppe', ['mittag', 'abend'], ['veg'], ['250 g Linsen', '2 Karotten']]);
+  a.run(`openDishModal('${d.id}');UI.form.name='Rote Linsensuppe';saveDish()`);
+  assert.equal(a.get(`dishById('${d.id}').name`), 'Rote Linsensuppe');
+  assert.equal(a.get('S.essen.dishes.length'), n + 1);
+  assert.equal(a.saved('ra_cfg3').essen.dishes.at(-1).name, 'Rote Linsensuppe');
+});
+
+test('Essen: Heute würfeln, nochmal würfeln wechselt, Festlegen sperrt', () => {
+  const a = essApp();
+  a.run(`rollToday('abend')`);
+  const first = a.get(`planSlot(today(),'abend')`);
+  assert.equal(first.pin, false);
+  assert.match(a.app(), /Nochmal/);
+  a.run(`rollToday('abend')`);
+  assert.notEqual(a.get(`planSlot(today(),'abend').id`), first.id);
+  a.run(`togPin(today(),'abend')`);
+  const pinned = a.get(`planSlot(today(),'abend').id`);
+  a.run(`rollToday('abend')`);
+  assert.equal(a.get(`planSlot(today(),'abend').id`), pinned);
+  assert.match(a.app(), /Festgelegt/);
+});
+
+test('Essen: Filter wirkt beim Würfeln, ohne Treffer gibt es einen Hinweis', () => {
+  const a = essApp();
+  a.run(`setEssTag('fisch');rollToday('abend')`);
+  assert.ok(a.get(`dishById(planSlot(today(),'abend').id).tags`).includes('fisch'));
+  a.run(`S.essen.dishes.forEach(d=>d.tags=d.tags.filter(t=>t!=='we'));setEssTag('we');S.essen.plan={};rollToday('abend')`);
+  assert.equal(a.get(`planSlot(today(),'abend')`), null);
+  assert.match(a.toast(), /Kein passendes Gericht/);
+});
+
+test('Essen: Gewichtung nach Bewertung, 👎 macht seltener statt auszuschließen', () => {
+  const a = essApp();
+  const [k1, k2] = a.get('S.kids').map(k => k.id);
+  const w = () => a.get(`dishWeight(dishById('g1'),'abend',today(),null)`);
+  assert.equal(w(), 1);
+  a.run(`UI.kid='${k1}';rateDish('g1',1)`);
+  assert.equal(w(), 1.6);
+  a.run(`UI.kid='${k2}';rateDish('g1',-1)`);
+  assert.ok(Math.abs(w() - 0.64) < 1e-9);
+  a.run(`rateDish('g1',-1)`); // nochmal tippen nimmt die Bewertung zurück
+  assert.equal(w(), 1.6);
+  a.run(`UI.kid='${k1}';rateDish('g1',-1);UI.kid='${k2}';rateDish('g1',-1)`);
+  assert.ok(w() > 0);
+  assert.equal(a.get(`dishWeight(dishById('g6'),'abend',today(),null)`), 0); // Müsli passt nicht zum Abend
+  a.run(`setEssTab('gerichte')`);
+  assert.match(a.app(), /👎 2/);
+});
+
+test('Essen: kürzlich gegessen kommt seltener dran', () => {
+  const a = essApp();
+  const w = () => a.get(`dishWeight(dishById('g1'),'abend',today(),null)`);
+  a.run(`setSlot(addDays(today(),-2),'abend','g1',false)`);
+  assert.ok(Math.abs(w() - 0.1) < 1e-9);
+  a.run(`S.essen.plan={};setSlot(addDays(today(),-6),'abend','g1',false)`);
+  assert.ok(Math.abs(w() - 0.35) < 1e-9);
+  a.run(`S.essen.plan={};setSlot(addDays(today(),-20),'abend','g1',false)`);
+  assert.equal(w(), 1);
+});
+
+test('Essen: Woche würfeln füllt nur aktive Mahlzeiten, 📌 bleibt, Vergangenes bleibt unangetastet', () => {
+  const a = essApp(0.5);
+  a.run(`togMeal('mittag');setEssTab('woche');setEssWeek(1)`);
+  const dates = a.get('weekDates(1)');
+  a.run(`setSlot('${dates[2]}','abend','g3',true)`);
+  a.run('rollWeek()');
+  const plan = a.get('S.essen.plan');
+  for (const ds of dates) {
+    assert.ok(plan[ds]?.abend && plan[ds]?.mittag, ds);
+    assert.equal(plan[ds].fruehstueck, undefined);
+  }
+  assert.deepEqual(plan[dates[2]].abend, { id: 'g3', pin: true });
+  assert.match(a.toast(), /13 Mahlzeiten gewürfelt/);
+  // keine Wiederholung am Folgetag, solange genug Gerichte da sind
+  for (let i = 1; i < 7; i++) assert.notEqual(plan[dates[i]].abend.id, plan[dates[i - 1]].abend.id);
+  // vergangene Tage dieser Woche werden nicht neu gewürfelt
+  const past = a.get('weekDates(0)').filter(ds => ds < td(a));
+  if (past.length) {
+    a.run(`setSlot('${past[0]}','abend','g2',false);setEssWeek(0);rollWeek()`);
+    assert.equal(a.get(`S.essen.plan['${past[0]}'].abend.id`), 'g2');
+  }
+});
+
+test('Essen: Gericht von Hand wählen legt fest, Leeren entfernt', () => {
+  const a = essApp();
+  a.run(`openEssPick(today(),'abend')`);
+  assert.match(a.els.mc.innerHTML, /Spaghetti Bolognese/);
+  assert.doesNotMatch(a.els.mc.innerHTML, /Müsli/);
+  a.run(`essPickSet('g2')`);
+  assert.deepEqual(a.get(`planSlot(today(),'abend')`), { id: 'g2', pin: true });
+  a.run(`openEssPick(today(),'abend');essPickSet('gibtsnicht')`);
+  assert.equal(a.get(`planSlot(today(),'abend').id`), 'g2');
+  a.run(`essPickSet(null)`);
+  assert.equal(a.get(`planSlot(today(),'abend')`), null);
+});
+
+test('Essen: Gericht löschen räumt den Plan auf', () => {
+  const a = essApp();
+  a.run(`setSlot(today(),'abend','g1',true);openDishModal('g1');delDish()`);
+  assert.equal(a.get(`dishById('g1')`), null);
+  assert.deepEqual(a.get('S.essen.plan'), {});
+});
+
+test('Essen: Mahlzeiten schalten, mindestens eine bleibt an', () => {
+  const a = essApp();
+  a.run(`togMeal('abend')`);
+  assert.equal(a.get('S.essen.meals.abend'), true);
+  assert.match(a.toast(), /Mindestens eine Mahlzeit/);
+  a.run(`togMeal('fruehstueck');togMeal('abend');render()`);
+  assert.deepEqual(a.get('activeMeals().map(m=>m.id)'), ['fruehstueck']);
+  assert.match(a.app(), /Frühstück/);
+  a.run(`setATab('essen')`);
+  assert.match(a.adm(), /role="switch" aria-checked="true" class="tog on" onclick="togMeal\('fruehstueck'\)"/);
+});
+
+test('Essen: alter Plan wird nach 5 Wochen aufgeräumt', () => {
+  const a = essApp();
+  a.run(`setSlot(addDays(today(),-40),'abend','g1',false);setSlot(addDays(today(),-10),'abend','g2',false);rollToday('abend')`);
+  const keys = Object.keys(a.get('S.essen.plan'));
+  assert.equal(keys.length, 2);
+  assert.ok(!keys.includes(a.get('addDays(today(),-40)')));
+});
+
+test('Essen: Import validiert Gerichte, Plan und Bewertungen', () => {
+  const evil = '<img src=x onerror=alert(1)>';
+  const a = load(VORLAGE);
+  const data = { cfg: { kids: [{ id: 'k1', name: 'Emma' }], household: { name: 'X' }, essen: {
+    meals: { abend: false, mittag: false, fruehstueck: false, snack: true },
+    dishes: [
+      { id: 'd1', em: evil, name: evil, meals: ['abend', 'snack'], tags: ['veg', 'gift'], ingr: [evil, 7, ''], ratings: { k1: 1, k9: -1, __proto__: 1 } },
+      { id: 'd2', name: 'Ohne Mahlzeit', meals: [], ratings: { k1: 5 } },
+      { id: 'd1', name: 'Doppelt' }, { id: "x'y", name: 'Böse ID' }, { name: 'Ohne ID' },
+    ],
+    plan: { '2026-11-10': { abend: { id: 'd1', pin: 'ja' }, mittag: { id: 'weg' } }, 'kaputt': { abend: { id: 'd1' } }, '__proto__': {} },
+  } } };
+  assert.equal(a.run(`applyImport(${JSON.stringify(data)})`), true);
+  const E = a.get('S.essen');
+  assert.deepEqual(E.meals, { fruehstueck: false, mittag: false, abend: true });
+  assert.deepEqual(E.dishes.map(d => d.id), ['d1', 'd2']);
+  assert.deepEqual(E.dishes[0].meals, ['abend']);
+  assert.deepEqual(E.dishes[0].tags, ['veg']);
+  assert.deepEqual(E.dishes[0].ratings, { k1: 1 });
+  assert.equal(E.dishes[0].ingr.length, 1);
+  assert.deepEqual(E.dishes[1].meals, ['abend']);
+  assert.deepEqual(E.dishes[1].ratings, {});
+  assert.deepEqual(E.plan, { '2026-11-10': { abend: { id: 'd1', pin: true } } });
+  const out = [];
+  for (const t of ['heute', 'woche', 'gerichte']) { a.run(`setView('essen');setEssTab('${t}')`); out.push(a.app()); }
+  a.run(`openDishModal('d1')`); out.push(a.els.mc.innerHTML);
+  a.run(`openEssPick('2026-11-10','abend')`); out.push(a.els.mc.innerHTML);
+  for (const html of out) assert.doesNotMatch(html, /<img/i);
+});
+
+test('Essen: Export/Import enthält Gerichte, Bewertungen und Plan', () => {
+  const a = essApp();
+  a.run(`rateDish('g2',1);rollToday('abend');togPin(today(),'abend')`);
+  const b = load(VORLAGE);
+  assert.equal(b.run(`applyImport(${JSON.stringify(a.get('buildExport()'))})`), true);
+  assert.deepEqual(b.get('S.essen'), a.get('S.essen'));
 });

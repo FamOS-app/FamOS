@@ -1,6 +1,6 @@
 # FamOS
 
-**Das Gehirn der Familie.** Familien-App als Single-File-PWA (Vanilla HTML/CSS/JS, kein Build-Schritt, kein Framework). Module: Routine, Stundenplan, Taschengeld.
+**Das Gehirn der Familie.** Familien-App als Single-File-PWA (Vanilla HTML/CSS/JS, kein Build-Schritt, kein Framework). Module: Routine, Stundenplan, Taschengeld, Essen.
 
 ## Grundregel: Im Code steht nur Rahmen, kein Inhalt
 
@@ -57,8 +57,16 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 
 ## Datenmodell
 
-Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`, `routines`, `wahlPool`, `stundenplan[kidId][tag]`, `taschengeld[kidId]`, `modules`, `pin`, `_mv` (aktuell 4).
+Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`, `routines`, `wahlPool`, `stundenplan[kidId][tag]`, `taschengeld[kidId]`, `essen {meals, dishes[], plan[datum][mahlzeit]}`, `modules`, `pin`, `_mv` (aktuell 4).
+
+## Modul Essen
+
+- Gerichte mit Emoji, Mahlzeiten (Frühstück/Mittag/Abend), Eigenschaften und Zutaten. Kochschritte folgen später.
+- **Heute:** pro Mahlzeit würfeln, nochmal würfeln, 📌 festlegen. **Woche:** diese/nächste Woche würfeln, 📌 bleibt, vergangene Tage bleiben unangetastet.
+- Gewichtung: 👍 eines Kindes ×1,6, 👎 ×0,4 (seltener, nie ausgeschlossen); in den letzten 3/7/14 Tagen geplant ×0,1/0,35/0,7; schon in derselben Woche ×0,15.
+- Welche Mahlzeiten geplant werden, steht unter Einstellungen → Essen. Plan-Einträge älter als 5 Wochen werden aufgeräumt.
+- Keine KI, keine laufenden Kosten.
 
 ## Roadmap
 
-Supabase (EU/Frankfurt, AVV): Auth per Magic Link, Haushalte mit Einladungscode, Row Level Security. Danach Essensplaner und Einkaufsliste mit Live-Sync.
+Supabase (EU/Frankfurt, AVV): Auth per Magic Link, Haushalte mit Einladungscode, Row Level Security. Danach Einkaufsliste aus dem Wochenplan (Live-Sync), optional Rezept-Import per Link.
