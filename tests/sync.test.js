@@ -15,6 +15,11 @@ execFileSync('python3', [path.join(ROOT, 'tools', 'build.py'), path.join(ROOT, '
   env: { ...process.env, SUPABASE_URL: 'https://testprojekt.supabase.co/rest/v1/', SUPABASE_PUBLISHABLE_KEY: KEY }, stdio: 'pipe',
 });
 const APP = path.join(OUT, 'index.html');
+// eigener Build ohne Sync (nicht dist/: das baut famos.test.js parallel neu)
+const PLAIN = fs.mkdtempSync(path.join(os.tmpdir(), 'famos-plain-'));
+execFileSync('python3', [path.join(ROOT, 'tools', 'build.py'), path.join(ROOT, 'app', 'famos.html'), PLAIN], {
+  env: { ...process.env, SUPABASE_URL: '', SUPABASE_PUBLISHABLE_KEY: '' }, stdio: 'pipe',
+});
 
 /** Ein Gerät; confirm() beantwortet Rückfragen mit Ja */
 function device(server, opts = {}) {
@@ -47,7 +52,7 @@ async function partner(server, a) {
 const sync = d => d.run('syncNow(true)');
 
 test('Sync: ohne Konfiguration keine Konto-Funktionen, mit Konfiguration CSP nur zur Projektadresse', () => {
-  const plain = load(path.join(ROOT, 'dist', 'index.html'));
+  const plain = load(path.join(PLAIN, 'index.html'));
   assert.equal(plain.get('SYNC_ON'), false);
   assert.doesNotMatch(plain.app(), /Anmelden/);
   const html = fs.readFileSync(APP, 'utf8');
@@ -248,4 +253,20 @@ test('Sync: Anmelden mit kopiertem Link aus der Mail (ohne Code), fremde Links w
   b.run(`openLogin();UI.form.email='a@example.org';UI.form.step='code';UI.form.link='https://testprojekt.supabase.co/auth/v1/verify?token=pkhverbraucht123&type=magiclink'`);
   await b.run('loginVerify()');
   assert.match(b.get('UI.form.err'), /abgelaufen oder wurde schon benutzt/);
+});
+
+test('Sync: Haushalt aus den Einstellungen anlegen zeigt danach sofort den Einladungscode', async () => {
+  const server = new FakeSupabase();
+  const a = device(server);
+  a.run(`openKidModal(null);UI.form.name='Emma';saveKid();obFinish()`); a.flush();
+  a.run(`closeModal();openAdmin();setATab('konto')`);
+  assert.match(a.adm(), /Noch nicht angemeldet/);
+  await login(a, server, 'a@example.org');
+  assert.match(a.adm(), /noch mit keinem Haushalt verbunden/);
+  await a.run('createHousehold()');
+  assert.doesNotMatch(a.adm(), /noch mit keinem Haushalt verbunden/);
+  assert.match(a.adm(), new RegExp(a.get('SYNC.invite').slice(0, 4) + ' ' + a.get('SYNC.invite').slice(4)));
+  // zweimal tippen legt keinen zweiten Haushalt an
+  await a.run('createHousehold()');
+  assert.equal(server.households.length, 1);
 });
