@@ -391,7 +391,7 @@ test('Taschengeld: Woche sparen, umentscheiden auf ausgezahlt', () => {
   assert.equal(a.get(`SAVINGS['${kid}']`), 2.5);
   a.run(`setTgStatus('ausgezahlt')`);
   assert.equal(a.get(`SAVINGS['${kid}']`), 0);
-  assert.equal(a.get('TX').length, 2);
+  assert.equal(a.get('TX').length, 0); // Umentscheiden hinterlässt keine Buchungen
   assert.equal(a.get(`TGD['${kid}:'+weekKey()]`), 'ausgezahlt');
 });
 
@@ -1066,4 +1066,34 @@ test('Aussehen: zwei Farbwelten, pro Gerät gespeichert, Kinderfarben passend be
   assert.equal(b.get('getLook()'), 'petrol');
   // Look wandert nicht mit dem Backup (gerätebezogen)
   assert.equal(JSON.stringify(a.get('buildExport()')).includes('famos_look'), false);
+});
+
+test('Taschengeld: Fehlklick mit Korrektur hinterlässt keine Buchungen, andere bleiben', () => {
+  const { a, kid } = tgApp();
+  a.run(`bookSavings('${kid}',5,'Oma')`);
+  for (let i = 0; i < 3; i++) a.run(`setTgStatus('gespart');setTgStatus('gespart')`);
+  a.run(`setTgStatus('gespart')`);
+  assert.deepEqual(a.get('TX.map(x=>x.note)'), ['Oma', `Wochengeld gespart (KW ${a.get('getKW()')})`]);
+  assert.equal(a.get(`SAVINGS['${kid}']`), 7.5);
+  // Geld ist inzwischen ausgegeben: Zurücknehmen löscht trotzdem nur die Wochenbuchung
+  a.run(`openTgMoveModal('aus');UI.form.betrag='7';saveTgMove();setTgStatus('gespart')`);
+  assert.equal(a.get(`SAVINGS['${kid}']`), 0);
+  assert.equal(a.get('TX').some(x => x.note.startsWith('Wochengeld')), false);
+});
+
+test('Taschengeld: alte Fehlklick-Paare werden beim Laden aufgeräumt, Kontostand bleibt', () => {
+  const kw = 'KW 46', t = n => 1700000000000 + n;
+  const tx = [
+    { t: t(1), kid: 'k1', amt: 1.5, note: `Wochengeld gespart (${kw})` },
+    { t: t(2), kid: 'k1', amt: -1.5, note: `Sparen zurückgenommen (${kw})` },
+    { t: t(3), kid: 'k1', amt: 1.5, note: `Wochengeld gespart (${kw})` },
+    { t: t(4), kid: 'k1', amt: -1.5, note: `Sparen zurückgenommen (${kw})` },
+    { t: t(5), kid: 'k1', amt: 1.5, note: `Wochengeld gespart (${kw})` },
+    { t: t(6), kid: 'k2', amt: -1.5, note: `Sparen zurückgenommen (${kw})` }, // ohne Gegenstück: bleibt
+    { t: t(7), kid: 'k1', amt: 2, note: 'Wochengeld gespart (KW 45)' },
+    { t: t(8), kid: 'k1', amt: -1, note: 'Sparen zurückgenommen (KW 45)' }, // anderer Betrag: bleibt
+  ];
+  const a = load(VORLAGE, { storage: { ra_tx: JSON.stringify(tx), ra_savings: JSON.stringify({ k1: 10.5 }) } });
+  assert.deepEqual(a.get('TX.map(x=>x.t)'), [t(5), t(6), t(7), t(8)]);
+  assert.equal(a.get('SAVINGS.k1'), 10.5);
 });

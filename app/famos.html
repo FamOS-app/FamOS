@@ -668,7 +668,19 @@ function sanitizeEinkauf(e){
 function sanitizeDay(d){d=sObj(d);return{date:sStr(d.date,10),chk:sObj(d.chk),brot:sObj(d.brot),wahl:sObj(d.wahl)};}
 function sanitizeTgd(t){const o={};Object.keys(sObj(t)).slice(-600).forEach(k=>{if(/^[A-Za-z0-9_-]{1,40}:\d{4}W\d{2}$/.test(k)&&(t[k]==='ausgezahlt'||t[k]==='gespart'))o[k]=t[k];});return o;}
 function sanitizeSavings(v){const o={};Object.keys(sObj(v)).slice(0,24).forEach(k=>{if(sId(k))o[k]=sNum(v[k],0,1e6);});return o;}
-function sanitizeTx(a){return sArr(Array.isArray(a)?a.slice(-200):[],200).map(x=>{const kid=sId(x?.kid),amt=sNum(x?.amt,-1e6,1e6),t=Number(x?.t);if(!kid||!amt||!Number.isFinite(t))return null;return{t,kid,amt,note:sStr(x.note,LIM.note)};}).filter(Boolean);}
+function sanitizeTx(a){return compactTx(sArr(Array.isArray(a)?a.slice(-200):[],200).map(x=>{const kid=sId(x?.kid),amt=sNum(x?.amt,-1e6,1e6),t=Number(x?.t);if(!kid||!amt||!Number.isFinite(t))return null;return{t,kid,amt,note:sStr(x.note,LIM.note)};}).filter(Boolean));}
+// Fehlklick-Paare aus älteren Versionen entfernen: „Wochengeld gespart (KW n)“ + später „Sparen zurückgenommen (KW n)“
+// mit gleichem Betrag heben sich auf. Der Kontostand ändert sich dadurch nicht.
+function compactTx(tx){
+  const drop=new Set(),open={};
+  tx.forEach((x,i)=>{
+    const g=/^Wochengeld gespart \(KW (\d+)\)$/.exec(x.note),z=/^Sparen zurückgenommen \(KW (\d+)\)$/.exec(x.note);
+    if(g&&x.amt>0)(open[x.kid+'|'+g[1]]||=[]).push(i);
+    else if(z&&x.amt<0){const st=open[x.kid+'|'+z[1]];const j=st&&st.length?st[st.length-1]:-1;
+      if(j>=0&&round2(tx[j].amt+x.amt)===0){st.pop();drop.add(i);drop.add(j);}}
+  });
+  return drop.size?tx.filter((_,i)=>!drop.has(i)):tx;
+}
 
 function ensureHousehold(c){
   if(c&&c.household===undefined&&Array.isArray(c.kids)&&c.kids.length){c.household={name:'Unsere Familie',adults:[]};return true;}
@@ -1369,7 +1381,10 @@ function _setTgStatus(status){
   const wk=weekKey(),key=UI.kid+':'+wk,prev=TGD[key]||null;
   if(prev===status)status=null;
   const betrag=S.taschengeld?.[UI.kid]?.betrag||0,kw=getKW();
-  if(prev==='gespart'){const back=Math.min(betrag,SAVINGS[UI.kid]||0);bookSavings(UI.kid,-back,`Sparen zurückgenommen (KW ${kw})`);}
+  // Zurücknehmen löscht die Buchung dieser Woche, statt eine Gegenbuchung anzulegen
+  if(prev==='gespart'){const note=`Wochengeld gespart (KW ${kw})`;let i=-1;for(let j=TX.length-1;j>=0;j--)if(TX[j].kid===UI.kid&&TX[j].note===note&&TX[j].amt>0){i=j;break;}
+    if(i>=0){SAVINGS[UI.kid]=Math.max(0,round2((SAVINGS[UI.kid]||0)-TX[i].amt));TX.splice(i,1);saveSavings();saveTx();}
+    else{const back=Math.min(betrag,SAVINGS[UI.kid]||0);bookSavings(UI.kid,-back,`Sparen zurückgenommen (KW ${kw})`);}}
   if(status==='gespart')bookSavings(UI.kid,betrag,`Wochengeld gespart (KW ${kw})`);
   if(status)TGD[key]=status;else delete TGD[key];
   saveTgd();render();}
