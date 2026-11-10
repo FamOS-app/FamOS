@@ -11,7 +11,8 @@ const { FakeSupabase, KEY } = require('./fake-supabase');
 const ROOT = path.join(__dirname, '..');
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'famos-sync-'));
 execFileSync('python3', [path.join(ROOT, 'tools', 'build.py'), path.join(ROOT, 'app', 'famos.html'), OUT], {
-  env: { ...process.env, SUPABASE_URL: 'https://testprojekt.supabase.co', SUPABASE_PUBLISHABLE_KEY: KEY }, stdio: 'pipe',
+  // so wie Supabase die Adresse auf der Data-API-Seite anzeigt; der Build kürzt den Pfad
+  env: { ...process.env, SUPABASE_URL: 'https://testprojekt.supabase.co/rest/v1/', SUPABASE_PUBLISHABLE_KEY: KEY }, stdio: 'pipe',
 });
 const APP = path.join(OUT, 'index.html');
 

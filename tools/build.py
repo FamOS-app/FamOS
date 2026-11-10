@@ -54,6 +54,8 @@ def fail(msg):
 
 def supabase_config():
     url = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
+    # Supabase zeigt die Adresse teils mit API-Pfad an (…/rest/v1): auf die Projektadresse kürzen
+    url = re.sub(r'/(rest|auth|realtime|storage)/v1$', '', url).rstrip('/')
     key = os.environ.get('SUPABASE_PUBLISHABLE_KEY', '').strip()
     if not url and not key:
         return None
