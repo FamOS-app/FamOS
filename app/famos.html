@@ -190,6 +190,16 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.sync-badge{text-transform:none;letter-spacing:0;font-weight:700}
+.sync-wide{width:100%;margin:6px 0 4px;line-height:1.35}
+.sync-wide small{font-weight:600;opacity:.85}
+.sync-or{text-align:center;font-size:.8rem;color:var(--muted);font-weight:700;margin:8px 0}
+.sync-err{background:color-mix(in srgb,var(--acc-a) 12%,var(--card));color:var(--acc-a);border-radius:10px;padding:10px 12px;font-size:.88rem;font-weight:700;margin-bottom:12px}
+.sync-privacy{font-size:.78rem;color:var(--muted);font-weight:600;line-height:1.55;margin:4px 0 12px}
+.sync-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;font-size:.9rem}
+.sync-at{color:var(--muted);font-size:.8rem;font-weight:600}
+.sync-code{font-size:1.6rem;font-weight:700;letter-spacing:.18em;text-align:center;padding:12px;background:var(--bg);border:1.5px dashed var(--border);border-radius:var(--r);font-variant-numeric:tabular-nums}
+.sync-danger{color:var(--acc-a);border-color:color-mix(in srgb,var(--acc-a) 40%,var(--border))}
 .install-close{background:none;color:var(--subtle);font-size:.95rem;padding:4px 6px}
 
 /* ── DONE OVERLAY ────────────────────────── */
@@ -440,6 +450,11 @@ const DEF={
 };
 // <<SEED-END>>
 
+// ═══ SYNC-KONFIGURATION ═══════════════════════
+// Platzhalter ersetzt tools/build.py aus den GitHub-Variablen. Nicht eingesetzt = App läuft nur lokal.
+const SB_URL='__SUPABASE_URL__',SB_KEY='__SUPABASE_KEY__';
+const SYNC_ON=/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SB_URL)&&/^sb_publishable_[A-Za-z0-9_-]+$/.test(SB_KEY);
+
 // ═══ MODULE-REGISTER ══════════════════════════
 // Neuer Bereich = ein Eintrag hier + Build-Funktion im View-Switch von buildApp()
 const MEALS=[{id:'fruehstueck',em:'🥐',l:'Frühstück'},{id:'mittag',em:'🌤️',l:'Mittag'},{id:'abend',em:'🌙',l:'Abend'}];
@@ -552,17 +567,17 @@ function loadCfg(){
   }
   return sanitizeCfg(clone(DEF));
 }
-function saveCfg(){return lsSet('ra_cfg3',JSON.stringify(S));}
+function saveCfg(){const ok=lsSet('ra_cfg3',JSON.stringify(S));markDirty('cfg');return ok;}
 function loadDay(){const d=sanitizeDay(lsGet('ra_day3'));return d.date===today()?d:{date:today(),chk:{},brot:{},wahl:{}};}
-function saveDay(){lsSet('ra_day3',JSON.stringify(D));}
+function saveDay(){lsSet('ra_day3',JSON.stringify(D));markDirty('day');}
 // Tageswechsel bei offen gelassener App (Tablet an der Wand): alter Tagesstand wird verworfen
 function dayGuard(){if(D.date===today())return false;D=loadDay();return true;}
 function loadTgd(){return sanitizeTgd(lsGet('ra_tgd'));}
-function saveTgd(){lsSet('ra_tgd',JSON.stringify(TGD));}
+function saveTgd(){lsSet('ra_tgd',JSON.stringify(TGD));markDirty('tgd');}
 function loadSavings(){return sanitizeSavings(lsGet('ra_savings'));}
-function saveSavings(){lsSet('ra_savings',JSON.stringify(SAVINGS));}
+function saveSavings(){lsSet('ra_savings',JSON.stringify(SAVINGS));markDirty('savings');}
 function loadTx(){return sanitizeTx(lsGet('ra_tx'));}
-function saveTx(){if(TX.length>200)TX=TX.slice(-200);lsSet('ra_tx',JSON.stringify(TX));}
+function saveTx(){if(TX.length>200)TX=TX.slice(-200);lsSet('ra_tx',JSON.stringify(TX));markDirty('tx');}
 let _toastT=null;
 function toast(msg){const el=document.getElementById('toast');if(!el)return;el.textContent=msg;el.classList.add('show');clearTimeout(_toastT);_toastT=setTimeout(()=>el.classList.remove('show'),3200);}
 function round2(n){return Math.round(n*100)/100;}
@@ -621,6 +636,7 @@ function buildOnboarding(){
     <button class="aa" onclick="openAdultModal()">＋ Mama, Papa, … hinzufügen</button>
   </div>
   <button class="m-save" style="width:100%;${ready?'':'opacity:.45'}" onclick="obFinish()">Haushalt anlegen</button>
+  ${SYNC_ON?`<button class="aa" style="margin-top:12px" onclick="openLogin()">☁️ Schon ein FamOS-Konto? Anmelden</button>`:''}
   <div style="text-align:center;margin-top:14px;font-size:.78rem;font-weight:700;color:var(--muted);line-height:1.7">Schon ein Backup? <button onclick="importData()" style="background:none;color:var(--text);font-weight:800;font-size:.78rem;text-decoration:underline;padding:0">Importieren</button></div>
   <div style="margin-top:22px;font-size:.7rem;font-weight:700;color:var(--subtle);line-height:1.6;text-align:center">Deine Eingaben bleiben nur auf diesem Gerät gespeichert. Kein Tracking, keine Cookies, keine Verbindung zu fremden Servern.</div>
   </div>`;
@@ -629,7 +645,8 @@ function obFinish(){
   if(!S.kids.length){toast('Bitte lege mindestens ein Kind an.');return;}
   const o=ob();
   S.household={name:(o.name||'').trim()||'Unser Haushalt',adults:o.adults.slice()};
-  UI.ob=null;UI.kid=S.kids[0].id;saveCfg();render();maybeAskInstall();
+  UI.ob=null;UI.kid=S.kids[0].id;saveCfg();render();
+  if(AUTH&&!SYNC.hid)createHousehold();else maybeAskInstall();
 }
 function obDelKid(id){S.kids=S.kids.filter(k=>k.id!==id);if(UI.kid===id)UI.kid=S.kids[0]?.id||null;saveCfg();render();}
 function obDelAdult(id){const o=ob();o.adults=o.adults.filter(a=>a.id!==id);render();}
@@ -670,7 +687,7 @@ function buildApp(){
 
   return`<div class="wrap${showNav?'':' no-nav'}">
   <div class="hdr">
-    <div><div class="hdr-title">${viewTitle}</div><div class="hdr-date">${dateStr}</div></div>
+    <div><div class="hdr-title">${viewTitle}</div><div class="hdr-date">${dateStr}${syncBadge()}</div></div>
     <button class="gear-btn" aria-label="Einstellungen" onclick="openAdmin()">⚙️</button>
   </div>
   ${canInstallHint()?`<div class="install-hint"><div style="font-size:1.4rem">📲</div><div class="install-hint-txt"><strong>Als App speichern</strong><br>Ohne Browserleiste, auch offline.</div><button class="m-save install-go" onclick="installNow()">${_bip?'Installieren':'So geht’s'}</button><button class="install-close" aria-label="Hinweis schließen" onclick="dismissInstall()">✕</button></div>`:''}
@@ -757,8 +774,8 @@ function buildTgHist(kidId){
 
 // ═══ ADMIN VIEW ═══════════════════════════════
 function renderAdmin(){
-  const tabs={kinder:admKinder,module:admModule,routinen:admRoutinen,stundenplan:admSp,haushalt:admHaushalt,taschengeld:admTg,essen:admEssen};
-  const aTabs=[{id:'kinder',l:'Haushalt'},{id:'module',l:'Module'}];
+  const tabs={konto:admKonto,kinder:admKinder,module:admModule,routinen:admRoutinen,stundenplan:admSp,haushalt:admHaushalt,taschengeld:admTg,essen:admEssen};
+  const aTabs=[{id:'kinder',l:'Haushalt'},...(SYNC_ON?[{id:'konto',l:'Konto & Sync'}]:[]),{id:'module',l:'Module'}];
   if(modOn('routine'))aTabs.push({id:'routinen',l:'Routinen'},{id:'haushalt',l:'Hausarbeit'});
   if(modOn('stundenplan'))aTabs.push({id:'stundenplan',l:'Stundenplan'});
   if(modOn('taschengeld'))aTabs.push({id:'taschengeld',l:'Taschengeld'});
@@ -1007,17 +1024,17 @@ function ekAdd(name,n){
   name=String(name||'').replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,80);if(!name)return false;
   if(ekFind(name)){toast(`${name} steht schon auf der Liste.`);return false;}
   if(S.einkauf.items.length>=300){toast('Die Liste ist voll. Bitte erst Erledigtes entfernen.');return false;}
-  S.einkauf.items.push({id:uid(),name,n:n||1,done:false});return true;
+  const it={id:uid(),name,n:n||1,done:false};S.einkauf.items.push(it);ekOp('up',it);return true;
 }
 function ekAddInput(){const el=document.getElementById('ekNew'),v=UI.ekNew||el?.value||'';
   if(ekAdd(v)){UI.ekNew='';saveCfg();render();setTimeout(()=>document.getElementById('ekNew')?.focus(),0);}}
 function ekQuick(i){const name=S.einkauf.recent[i];if(name&&ekAdd(name)){saveCfg();render();}}
-function ekToggle(id){const x=S.einkauf.items.find(i=>i.id===id);if(!x)return;x.done=!x.done;saveCfg();render();}
-function ekDel(id){S.einkauf.items=S.einkauf.items.filter(i=>i.id!==id);saveCfg();render();}
+function ekToggle(id){const x=S.einkauf.items.find(i=>i.id===id);if(!x)return;x.done=!x.done;ekOp('up',x);saveCfg();render();}
+function ekDel(id){S.einkauf.items=S.einkauf.items.filter(i=>i.id!==id);ekOp('del',{id});saveCfg();render();}
 function ekRemember(name){const R=S.einkauf.recent,k=ekKey(name),i=R.findIndex(r=>ekKey(r)===k);if(i>=0)R.splice(i,1);R.unshift(name);if(R.length>20)R.length=20;}
 function ekClearDone(){const done=S.einkauf.items.filter(x=>x.done);if(!done.length)return;
   done.slice().reverse().forEach(x=>ekRemember(x.name));
-  S.einkauf.items=ekOpen();saveCfg();render();toast(`${done.length} erledigt und entfernt`);}
+  done.forEach(x=>ekOp('del',x));S.einkauf.items=ekOpen();saveCfg();render();toast(`${done.length} erledigt und entfernt`);}
 // Zutaten aus dem Wochenplan; diese Woche erst ab heute
 function ekPlanLines(off){
   const td=today(),lines=new Map(),dishes=new Set();
@@ -1035,7 +1052,7 @@ function renderEkPlanModal(){
 }
 function ekFromPlan(off){
   const r=ekPlanLines(off);let added=0,had=0;
-  r.lines.forEach(l=>{if(ekFind(l.name)){had++;return;}if(S.einkauf.items.length>=300)return;S.einkauf.items.push({id:uid(),name:l.name.slice(0,80),n:Math.min(99,l.n),done:false});added++;});
+  r.lines.forEach(l=>{if(ekFind(l.name)){had++;return;}if(S.einkauf.items.length>=300)return;const it={id:uid(),name:l.name.slice(0,80),n:Math.min(99,l.n),done:false};S.einkauf.items.push(it);ekOp('up',it);added++;});
   saveCfg();closeModal();render();
   toast(added?`${added} ${added===1?'Zutat':'Zutaten'} übernommen${had?`, ${had} standen schon drauf`:''}`:'Alles stand schon auf der Liste.');
 }
@@ -1061,8 +1078,8 @@ function renderEp(){document.getElementById('epCats').innerHTML=EC.map(c=>`<butt
 function epPick(e){if(_epCb)_epCb(e);epClose();}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
-function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 
 // Task modal
@@ -1193,6 +1210,259 @@ function launchConfetti(){const el=document.getElementById('cf');el.innerHTML=''
 function resetDay(){if(!confirm('Alle Haken von heute zurücksetzen, für alle Kinder?'))return;D={date:today(),chk:{},brot:{},wahl:{}};saveDay();render();toast('Heutige Haken zurückgesetzt');}
 function dismissInstall(){S.installHintDone=true;saveCfg();closeModal();render();}
 
+// ═══ KONTO & SYNC (Supabase) ══════════════════
+// Lokal zuerst: Die App arbeitet immer mit localStorage. Mit Anmeldung werden Änderungen zum
+// Haushalt in Supabase geschoben und regelmäßig abgeholt. Zugriff regeln die RLS-Regeln der Datenbank.
+const SYNC_KEYS=['cfg','day','tgd','savings','tx'];
+let AUTH=loadAuth(),SYNC=loadSync();
+let _syncBusy=false,_pushT=null,_lastDocPull=0,_conflictToast=0;
+function loadAuth(){const a=lsGet('famos_auth');return a&&typeof a.access_token==='string'&&typeof a.refresh_token==='string'&&sId(String(a.user?.id||'').replace(/-/g,''))?a:null;}
+function saveAuth(){if(AUTH)lsSet('famos_auth',JSON.stringify(AUTH));else{try{localStorage.removeItem('famos_auth');}catch(e){}}}
+function emptySync(){return{hid:null,hname:'',role:'',invite:'',ver:{},last:{},dirty:{},queue:[],status:'',err:'',at:0};}
+function loadSync(){const s=lsGet('famos_sync');if(!s||typeof s!=='object')return emptySync();const e=emptySync();
+  return{...e,...s,ver:sObj(s.ver),last:sObj(s.last),dirty:sObj(s.dirty),queue:Array.isArray(s.queue)?s.queue.slice(-500):[]};}
+function saveSync(){lsSet('famos_sync',JSON.stringify(SYNC));}
+function online(){return typeof navigator==='undefined'||navigator.onLine!==false;}
+
+// ─── HTTP gegen Supabase ───
+async function sb(path,{method='GET',body,headers={},auth=true,retry=true}={}){
+  if(!SYNC_ON)throw new Error('Sync nicht eingerichtet');
+  if(auth){await ensureToken();if(!AUTH)throw Object.assign(new Error('Bitte neu anmelden.'),{status:401});}
+  const h={apikey:SB_KEY,'Content-Type':'application/json',...headers};
+  if(auth)h.Authorization='Bearer '+AUTH.access_token;
+  const r=await fetch(SB_URL+path,{method,headers:h,body:body===undefined?undefined:JSON.stringify(body)});
+  const txt=await r.text();let data=null;try{data=txt?JSON.parse(txt):null;}catch(e){}
+  if(r.status===401&&auth&&retry){if(await refreshToken())return sb(path,{method,body,headers,auth,retry:false});}
+  if(!r.ok){const e=new Error(data?.message||data?.msg||data?.error_description||data?.error||('Fehler '+r.status));e.status=r.status;e.code=data?.code||data?.error_code||'';throw e;}
+  return data;
+}
+function setSession(d){
+  if(!d?.access_token||!d?.refresh_token||!d?.user?.id)throw new Error('Anmeldung fehlgeschlagen');
+  AUTH={access_token:d.access_token,refresh_token:d.refresh_token,expires_at:Date.now()+(Number(d.expires_in)||3600)*1000,user:{id:d.user.id,email:sStr(d.user.email,120)}};
+  saveAuth();
+}
+async function ensureToken(){if(AUTH&&Date.now()>AUTH.expires_at-60000)await refreshToken();}
+async function refreshToken(){
+  if(!AUTH)return false;
+  try{setSession(await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:AUTH.refresh_token},auth:false}));return true;}
+  catch(e){if(e.status&&e.status<500){AUTH=null;saveAuth();SYNC.status='out';saveSync();toast('Bitte neu anmelden. Deine Daten bleiben auf dem Gerät.');}return false;}
+}
+function authError(e){
+  if(e.status===429||/rate limit/i.test(e.message))return'Gerade zu viele Anmelde-Mails. Bitte in einer Stunde nochmal versuchen.';
+  if(/expired|invalid/i.test(e.message)&&e.status<500)return'Der Code stimmt nicht oder ist abgelaufen.';
+  if(!e.status)return'Keine Verbindung. Bist du online?';
+  return'Das hat nicht geklappt ('+e.message+').';
+}
+
+// ─── Anmelden per Code aus der E-Mail ───
+function openLogin(){UI.form={mode:'login',step:AUTH?'household':'email',email:'',code:'',joinCode:'',busy:false,err:''};openModal();}
+function renderLoginModal(){const f=UI.form,err=f.err?`<div class="sync-err" role="alert">${esc(f.err)}</div>`:'';
+  if(f.step==='email')return`<h3>☁️ Anmelden</h3>
+  <div class="ins-why">Mit Konto teilt ihr Routinen, Wochenplan, Einkaufsliste und Taschengeld zwischen euren Handys. Du bekommst einen Code per E-Mail, ein Passwort gibt es nicht.</div>
+  <div class="field"><label for="lgMail">E-Mail-Adresse</label><input id="lgMail" type="email" inputmode="email" autocomplete="email" maxlength="120" value="${esc(f.email)}" oninput="UI.form.email=this.value" onkeydown="if(event.key==='Enter')loginSend()"></div>
+  ${err}${privacyNote()}
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginSend()" ${f.busy?'disabled':''}>${f.busy?'Sende …':'Code schicken'}</button></div>`;
+  if(f.step==='code')return`<h3>☁️ Code eingeben</h3>
+  <div class="ins-why">Wir haben einen Code an <strong>${esc(f.email)}</strong> geschickt. Schau auch im Spam-Ordner.</div>
+  <div class="field"><label for="lgCode">Code aus der E-Mail</label><input id="lgCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" value="${esc(f.code)}" style="font-size:1.4rem;letter-spacing:.25em" oninput="UI.form.code=this.value" onkeydown="if(event.key==='Enter')loginVerify()"></div>
+  ${err}<button class="quick-all" onclick="UI.form.step='email';UI.form.err='';openModal()">Andere E-Mail oder neuen Code</button>
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginVerify()" ${f.busy?'disabled':''}>${f.busy?'Prüfe …':'Anmelden'}</button></div>`;
+  return`<h3>☁️ Haushalt verbinden</h3>
+  <div class="ins-why">Angemeldet als <strong>${esc(AUTH?.user.email||'')}</strong>.</div>
+  ${S.household?`<button class="m-save sync-wide" onclick="createHousehold()" ${f.busy?'disabled':''}>Neuen Haushalt in der Cloud anlegen<br><small>mit den Daten von diesem Gerät</small></button><div class="sync-or">oder</div>`:''}
+  <div class="field"><label for="lgJoin">Einladungscode eines bestehenden Haushalts</label><input id="lgJoin" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="z.B. ABCD EFGH" value="${esc(f.joinCode)}" style="font-size:1.2rem;letter-spacing:.15em" oninput="UI.form.joinCode=this.value" onkeydown="if(event.key==='Enter')joinHousehold()"></div>
+  ${err}${S.household?'':'<div class="ins-why">Noch kein Haushalt? Dann zuerst hier einrichten, er wird danach automatisch in der Cloud angelegt.</div>'}
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">${S.household?'Später':'Erst einrichten'}</button><button class="m-save" onclick="joinHousehold()" ${f.busy?'disabled':''}>Beitreten</button></div>`;
+}
+function privacyNote(){return`<div class="sync-privacy">Gespeichert wird in einer Datenbank von Supabase in Frankfurt (EU). Sehen kann die Daten nur, wer zu eurem Haushalt gehört. Die E-Mail-Adresse dient nur der Anmeldung. Abmelden und Haushalt löschen geht jederzeit in den Einstellungen.</div>`;}
+function loginBusy(b,err){UI.form.busy=b;UI.form.err=err||'';openModal();}
+async function loginSend(){const f=UI.form,email=String(f.email||'').trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){loginBusy(false,'Bitte eine gültige E-Mail-Adresse eingeben.');return;}
+  f.email=email;loginBusy(true);
+  try{await sb('/auth/v1/otp',{method:'POST',body:{email,create_user:true},auth:false});f.step='code';f.code='';loginBusy(false);setTimeout(()=>document.getElementById('lgCode')?.focus(),50);}
+  catch(e){loginBusy(false,authError(e));}
+}
+async function loginVerify(){const f=UI.form,token=String(f.code||'').replace(/\D/g,'');
+  if(token.length<6){loginBusy(false,'Der Code hat mindestens 6 Ziffern.');return;}
+  loginBusy(true);
+  try{let d;try{d=await sb('/auth/v1/verify',{method:'POST',body:{type:'email',email:f.email,token},auth:false});}
+      catch(e){if(e.status>=500||!e.status)throw e;d=await sb('/auth/v1/verify',{method:'POST',body:{type:'signup',email:f.email,token},auth:false});}
+    setSession(d);await afterLogin();}
+  catch(e){loginBusy(false,authError(e));}
+}
+// Nach dem Anmelden: vorhandenen Haushalt verbinden oder anbieten, einen anzulegen bzw. beizutreten
+async function afterLogin(){
+  const rows=await sb(`/rest/v1/members?select=household_id,role,households(id,name,invite_code)&user_id=eq.${AUTH.user.id}`);
+  const m=(rows||[]).find(r=>r.households);
+  if(m){await connectHousehold(m.households,m.role);closeModal();toast('Angemeldet und verbunden');return;}
+  UI.form={mode:'login',step:'household',email:'',code:'',joinCode:'',busy:false,err:''};openModal();
+}
+async function createHousehold(){
+  if(!AUTH||!S.household)return;
+  if(UI.form?.mode==='login')loginBusy(true);
+  try{const r=await sb('/rest/v1/rpc/create_household',{method:'POST',body:{p_name:S.household.name}});const h=Array.isArray(r)?r[0]:r;
+    await connectHousehold(h,'owner',{upload:true});closeModal();toast('Haushalt in der Cloud angelegt');}
+  catch(e){if(UI.form?.mode==='login')loginBusy(false,authError(e));else toast('Cloud-Haushalt konnte nicht angelegt werden: '+e.message);}
+}
+async function joinHousehold(){const code=String(UI.form.joinCode||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(code.length!==8){loginBusy(false,'Der Einladungscode hat 8 Zeichen.');return;}
+  if(S.household&&!confirm('Beitreten ersetzt die Daten auf diesem Gerät durch die des Haushalts. Fortfahren?'))return;
+  loginBusy(true);
+  try{const r=await sb('/rest/v1/rpc/join_household',{method:'POST',body:{p_code:code}});const h=Array.isArray(r)?r[0]:r;
+    await connectHousehold(h,'adult',{replace:true});closeModal();toast('Haushalt beigetreten');}
+  catch(e){loginBusy(false,/ungültig/i.test(e.message)?'Diesen Code gibt es nicht (mehr). Bitte neu geben lassen.':authError(e));}
+}
+// Verbinden: Server hat schon Daten → übernehmen; Server leer → eigene Daten hochladen
+async function connectHousehold(h,role,{upload=false,replace=false}={}){
+  SYNC={...emptySync(),hid:h.id,hname:sStr(h.name,40),role:role||'adult',invite:sStr(h.invite_code,12),status:'ok'};saveSync();
+  const docs=await sb(`/rest/v1/docs?select=key,version,data&household_id=eq.${h.id}`);
+  if(!upload&&docs?.length){
+    if(!replace&&S.household&&!confirm('In der Cloud gibt es schon Daten für diesen Haushalt. Sie ersetzen die Daten auf diesem Gerät. Fortfahren?')){
+      SYNC=emptySync();saveSync();throw new Error('abgebrochen');}
+    docs.forEach(d=>applyRemote(d.key,d.data,d.version));
+    S.einkauf.items=[];
+  }else{SYNC_KEYS.forEach(k=>{SYNC.dirty[k]=true;});
+    S.einkauf.items.forEach(it=>SYNC.queue.push({op:'up',item:{...it}}));}
+  saveSync();await syncNow(true);
+  UI.kid=S.kids[0]?.id||null;UI.rt=firstActiveRt();UI.ob=null;render();
+}
+async function logout(){if(!confirm('Abmelden? Die Daten bleiben auf diesem Gerät, werden aber nicht mehr abgeglichen.'))return;
+  try{await sb('/auth/v1/logout',{method:'POST'});}catch(e){}
+  AUTH=null;saveAuth();SYNC=emptySync();saveSync();renderAdmin();render();toast('Abgemeldet');}
+async function rotateInvite(){if(!confirm('Neuen Einladungscode erzeugen? Der alte funktioniert dann nicht mehr.'))return;
+  try{const c=await sb('/rest/v1/rpc/rotate_invite',{method:'POST',body:{p_household:SYNC.hid}});SYNC.invite=String(c);saveSync();renderAdmin();toast('Neuer Code erzeugt');}
+  catch(e){toast('Ging nicht: '+e.message);}}
+async function leaveHousehold(){const owner=SYNC.role==='owner';
+  if(!confirm(owner?'Den Haushalt mit allen Daten aus der Cloud löschen? Alle Mitglieder verlieren den Abgleich. Die Daten auf diesem Gerät bleiben.':'Haushalt verlassen? Die Daten auf diesem Gerät bleiben, werden aber nicht mehr abgeglichen.'))return;
+  try{if(owner)await sb(`/rest/v1/households?id=eq.${SYNC.hid}`,{method:'DELETE'});
+    else await sb(`/rest/v1/members?household_id=eq.${SYNC.hid}&user_id=eq.${AUTH.user.id}`,{method:'DELETE'});
+    SYNC=emptySync();saveSync();renderAdmin();render();toast(owner?'Haushalt in der Cloud gelöscht':'Haushalt verlassen');}
+  catch(e){toast('Ging nicht: '+e.message);}}
+function copyInvite(){const c=fmtInvite(SYNC.invite);try{navigator.clipboard.writeText(c).then(()=>toast('Code kopiert'),()=>toast(c));}catch(e){toast(c);}}
+function fmtInvite(c){return String(c||'').replace(/^(.{4})(.{4})$/,'$1 $2');}
+
+// ─── Dokumente: was geht in welchen Bereich ───
+function docOf(k){
+  if(k==='cfg'){const c=JSON.parse(JSON.stringify(S));delete c.installHintDone;c.einkauf={recent:S.einkauf.recent};return c;}
+  return k==='day'?D:k==='tgd'?TGD:k==='savings'?SAVINGS:TX;
+}
+function applyRemote(k,data,version){
+  if(k==='cfg'){const c=sanitizeCfg({...data,installHintDone:S.installHintDone,einkauf:{items:S.einkauf.items,recent:data?.einkauf?.recent}});if(c){S=c;lsSet('ra_cfg3',JSON.stringify(S));}}
+  else if(k==='day'){const d=sanitizeDay(data);if(d.date===today()){D=d;lsSet('ra_day3',JSON.stringify(D));}}
+  else if(k==='tgd'){TGD=sanitizeTgd(data);lsSet('ra_tgd',JSON.stringify(TGD));}
+  else if(k==='savings'){SAVINGS=sanitizeSavings(data);lsSet('ra_savings',JSON.stringify(SAVINGS));}
+  else if(k==='tx'){TX=sanitizeTx(data);lsSet('ra_tx',JSON.stringify(TX));}
+  SYNC.ver[k]=version;SYNC.last[k]=JSON.stringify(docOf(k));delete SYNC.dirty[k];
+}
+// Gleichzeitige Änderung auf zwei Geräten: zusammenführen, wo es eindeutig geht, sonst gilt der Cloud-Stand
+function deepMerge(a,b){if(!a||typeof a!=='object'||Array.isArray(a)||!b||typeof b!=='object'||Array.isArray(b))return b;const o={...a};Object.keys(b).forEach(k=>{o[k]=deepMerge(a[k],b[k]);});return o;}
+function mergeDoc(k,local,remote){
+  if(k==='day')return remote?.date===local.date?deepMerge(remote,local):local;
+  if(k==='tgd')return{...sObj(remote),...local};
+  if(k==='tx'){const seen=new Set(),all=[...sArr(remote,400),...local].filter(x=>{const id=[x?.t,x?.kid,x?.amt,x?.note].join('|');if(seen.has(id))return false;seen.add(id);return true;});return all.sort((a,b)=>a.t-b.t).slice(-200);}
+  return null; // cfg, savings: Cloud gewinnt
+}
+function markDirty(k){if(!SYNC?.hid)return;SYNC.dirty[k]=true;saveSync();schedulePush();}
+function schedulePush(){clearTimeout(_pushT);_pushT=setTimeout(()=>syncNow(false),800);}
+async function pushDoc(k){
+  for(let i=0;i<3;i++){
+    const local=docOf(k),json=JSON.stringify(local);
+    if(json===SYNC.last[k]){delete SYNC.dirty[k];return;}
+    const v=SYNC.ver[k];let rows;
+    if(v==null){
+      try{rows=await sb('/rest/v1/docs',{method:'POST',headers:{Prefer:'return=representation'},body:{household_id:SYNC.hid,key:k,data:local}});}
+      catch(e){if(e.status!==409&&e.code!=='23505')throw e;rows=[];}
+    }else rows=await sb(`/rest/v1/docs?household_id=eq.${SYNC.hid}&key=eq.${k}&version=eq.${v}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:{data:local}});
+    if(rows?.length){SYNC.ver[k]=rows[0].version;SYNC.last[k]=json;delete SYNC.dirty[k];return;}
+    // Konflikt: jemand war schneller
+    const [r]=await sb(`/rest/v1/docs?select=version,data&household_id=eq.${SYNC.hid}&key=eq.${k}`);
+    if(!r){SYNC.ver[k]=null;continue;}
+    const merged=mergeDoc(k,local,r.data);
+    applyRemote(k,merged??r.data,r.version);
+    if(merged==null){if(Date.now()-_conflictToast>10000){_conflictToast=Date.now();toast('Auf einem anderen Gerät wurde gerade etwas geändert. Der neue Stand ist übernommen.');}return;}
+    SYNC.dirty[k]=true;SYNC.last[k]='';
+  }
+}
+async function pullDocs(){
+  const vs=await sb(`/rest/v1/docs?select=key,version&household_id=eq.${SYNC.hid}`)||[];
+  const changed=vs.filter(x=>SYNC.ver[x.key]!==x.version).map(x=>x.key).filter(k=>SYNC_KEYS.includes(k));
+  if(!changed.length)return false;
+  const rows=await sb(`/rest/v1/docs?select=key,version,data&household_id=eq.${SYNC.hid}&key=in.(${changed.join(',')})`)||[];
+  rows.forEach(r=>{if(SYNC.dirty[r.key]){const m=mergeDoc(r.key,docOf(r.key),r.data);applyRemote(r.key,m??r.data,r.version);if(m!=null){SYNC.dirty[r.key]=true;SYNC.last[r.key]='';}}
+    else applyRemote(r.key,r.data,r.version);});
+  return rows.length>0;
+}
+// ─── Einkaufsliste: Operationen in Warteschlange, Server-Liste plus offene Operationen ───
+function ekOp(op,item){if(!SYNC?.hid)return;SYNC.queue.push(op==='del'?{op,id:item.id}:{op,item:{id:item.id,name:item.name,n:item.n,done:!!item.done}});if(SYNC.queue.length>500)SYNC.queue=SYNC.queue.slice(-500);saveSync();schedulePush();}
+async function flushQueue(){
+  while(SYNC.queue.length){const q=SYNC.queue[0];
+    if(q.op==='up')await sb('/rest/v1/shopping_items?on_conflict=household_id,id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:{household_id:SYNC.hid,...q.item}});
+    else await sb(`/rest/v1/shopping_items?household_id=eq.${SYNC.hid}&id=eq.${encodeURIComponent(q.id)}`,{method:'DELETE'});
+    SYNC.queue.shift();saveSync();}
+}
+async function pullItems(){
+  const rows=await sb(`/rest/v1/shopping_items?select=id,name,n,done&household_id=eq.${SYNC.hid}&order=created_at.asc`)||[];
+  let items=rows.map(r=>({id:r.id,name:r.name,n:r.n,done:!!r.done}));
+  SYNC.queue.forEach(q=>{if(q.op==='del')items=items.filter(x=>x.id!==q.id);else{const i=items.findIndex(x=>x.id===q.item.id);if(i>=0)items[i]={...q.item};else items.push({...q.item});}});
+  const before=JSON.stringify(S.einkauf.items);
+  S.einkauf=sanitizeEinkauf({items,recent:S.einkauf.recent});lsSet('ra_cfg3',JSON.stringify(S));
+  return JSON.stringify(S.einkauf.items)!==before;
+}
+// ─── Ein Abgleich-Durchlauf ───
+async function syncNow(force){
+  if(!SYNC_ON||!AUTH||!SYNC.hid||_syncBusy)return;
+  if(!online()){SYNC.status='offline';return;}
+  _syncBusy=true;let changed=false;
+  try{
+    for(const k of SYNC_KEYS)if(SYNC.dirty[k])await pushDoc(k);
+    await flushQueue();
+    const now=Date.now();
+    if(force||now-_lastDocPull>15000||UI.view==='einkauf'){_lastDocPull=now;if(await pullDocs())changed=true;}
+    if(await pullItems())changed=true;
+    SYNC.status='ok';SYNC.err='';SYNC.at=now;
+  }catch(e){
+    SYNC.status=!e.status?'offline':e.status===401?'out':'err';SYNC.err=e.message||'';
+    if(e.status===403||/row-level|permission/i.test(e.message)){SYNC=emptySync();toast('Kein Zugriff mehr auf den Haushalt. Abgleich beendet.');changed=true;}
+  }finally{_syncBusy=false;saveSync();}
+  if(changed)softRender();else if(force)render();
+}
+// Nicht mitten ins Tippen hinein neu zeichnen
+function softRender(){
+  const a=typeof document!=='undefined'&&document.activeElement,typing=a&&/^(INPUT|TEXTAREA)$/.test(a.tagName||'');
+  if(document.getElementById('mb').classList.contains('open')||typing){UI.needRender=true;return;}
+  render();if(document.getElementById('adm').classList.contains('open'))renderAdmin();
+}
+function syncBadge(){if(!SYNC_ON||!SYNC.hid)return'';const st=SYNC.status,pend=Object.keys(SYNC.dirty).length+SYNC.queue.length;
+  const [ic,l]=st==='offline'?['📴','offline']:st==='err'?['⚠️','Abgleich hakt']:st==='out'?['🔑','neu anmelden']:pend?['⏳','gleicht ab']:['☁️','synchron'];
+  return` · <span class="sync-badge" title="${l}">${ic} ${l}</span>`;}
+function admKonto(){
+  if(!AUTH)return`<div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Noch nicht angemeldet. Mit Konto gleicht FamOS eure Handys ab: Routinen, Wochenplan, Einkaufsliste, Taschengeld.</div>${privacyNote()}<button class="m-save sync-wide" onclick="openLogin()">☁️ Anmelden</button></div>`;
+  if(!SYNC.hid)return`<div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Angemeldet als <strong>${esc(AUTH.user.email)}</strong>, aber noch mit keinem Haushalt verbunden.</div><button class="m-save sync-wide" onclick="openLogin()">Haushalt verbinden</button><button class="reset-btn" onclick="logout()">Abmelden</button></div>`;
+  const pend=Object.keys(SYNC.dirty).length+SYNC.queue.length,at=SYNC.at?new Date(SYNC.at).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'–';
+  return`<div class="tg-card"><div class="as-lbl">Abgleich</div>
+    <div class="sync-row"><span>${syncBadge().replace(' · ','')}</span><span class="sync-at">zuletzt ${at}${pend?` · ${pend} offen`:''}</span></div>
+    ${SYNC.status==='err'?`<div class="sync-err">${esc(SYNC.err)}</div>`:''}
+    <button class="aa" onclick="syncNow(true)">↻ Jetzt abgleichen</button></div>
+  <div class="tg-card"><div class="as-lbl">Haushalt in der Cloud</div>
+    <div class="ai-main" style="margin-bottom:10px">${esc(SYNC.hname)}</div>
+    <div class="ins-why">Weitere Erwachsene laden FamOS, melden sich an und geben diesen Code ein:</div>
+    <div class="sync-code">${esc(fmtInvite(SYNC.invite))}</div>
+    <div style="display:flex;gap:8px;margin-top:10px"><button class="aa" style="margin:0" onclick="copyInvite()">Code kopieren</button>${SYNC.role==='owner'?`<button class="aa" style="margin:0" onclick="rotateInvite()">Neuer Code</button>`:''}</div></div>
+  <div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Angemeldet als <strong>${esc(AUTH.user.email)}</strong>${SYNC.role==='owner'?' · Besitzer/in':''}</div>
+    <button class="reset-btn" onclick="logout()">Abmelden</button>
+    <button class="reset-btn sync-danger" onclick="leaveHousehold()">${SYNC.role==='owner'?'Haushalt in der Cloud löschen':'Haushalt verlassen'}</button></div>`;
+}
+// Falls doch ein Link aus der Mail im Browser geöffnet wurde (#access_token=…)
+function readAuthHash(){
+  const h=W?.location?.hash||'';if(!/access_token=|error_description=/.test(h))return false;
+  const p=new URLSearchParams(h.slice(1));
+  try{W.history?.replaceState?.(null,'',W.location.pathname+W.location.search);}catch(e){}
+  if(p.get('error_description')){toast('Anmeldung fehlgeschlagen: '+p.get('error_description'));return false;}
+  AUTH={access_token:p.get('access_token'),refresh_token:p.get('refresh_token')||'',expires_at:Date.now()+(Number(p.get('expires_in'))||3600)*1000,user:{id:'',email:''}};
+  return true;
+}
+async function finishHashLogin(){try{const u=await sb('/auth/v1/user');AUTH.user={id:u.id,email:sStr(u.email,120)};saveAuth();await afterLogin();}catch(e){AUTH=null;saveAuth();toast('Anmeldung fehlgeschlagen. Bitte mit Code anmelden.');}}
+
 // ═══ APP INSTALLIEREN ═════════════════════════
 // Android/Chrome: echter Installations-Dialog (beforeinstallprompt). iPhone: Apple erlaubt das nicht, daher Anleitung.
 const W=typeof window!=='undefined'?window:null;
@@ -1234,7 +1504,7 @@ function togTgAktiv(kidId){if(!S.taschengeld)S.taschengeld={};if(!S.taschengeld[
 (()=>{const m={name:'FamOS',short_name:'FamOS',start_url:'.',display:'standalone',background_color:'#F4EDE1',theme_color:'#F4EDE1',icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23F4EDE1'/%3E%3Ctext x='256' y='340' font-size='280' text-anchor='middle'%3E%E2%98%80%EF%B8%8F%3C/text%3E%3C/svg%3E",sizes:'512x512',type:'image/svg+xml'}]};const l=document.createElement('link');l.rel='manifest';l.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/manifest+json'}));document.head.appendChild(l);})();
 
 // ═══ INIT ═════════════════════════════════════
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&dayGuard())render();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dayGuard())render();syncNow(true);});
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(document.getElementById('epBg').classList.contains('open'))epClose();else closeModal();});
 UI.kid=S.kids[0]?.id;
 UI.rt=firstActiveRt();
@@ -1245,6 +1515,12 @@ W?.addEventListener?.('appinstalled',()=>{_bip=null;S.installHintDone=true;saveC
 // Offline-Start und schnelle Updates; nur auf der echten Adresse (https), nicht beim lokalen Öffnen
 if(W&&typeof navigator!=='undefined'&&navigator.serviceWorker&&W.location?.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 render();
+if(SYNC_ON){
+  if(readAuthHash())finishHashLogin();
+  else if(AUTH&&SYNC.hid)syncNow(true);
+  setInterval(()=>{if(typeof document==='undefined'||!document.hidden)syncNow(false);},5000);
+  W?.addEventListener?.('online',()=>syncNow(true));
+}
 maybeAskInstall();
 </script>
 </body>

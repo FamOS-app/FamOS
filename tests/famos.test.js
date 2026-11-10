@@ -46,7 +46,12 @@ for (const file of [APP, VORLAGE]) {
     assert.match(html, /font-src data:;/);
     assert.doesNotMatch(html, /<link[^>]+stylesheet/);
     assert.doesNotMatch(html, /googleapis|gstatic|google-analytics|gtag/i);
-    assert.doesNotMatch(extractScript(html), /\balert\(|\beval\(|document\.write|fetch\(|XMLHttpRequest/);
+    const js = extractScript(html);
+    assert.doesNotMatch(js, /\balert\(|\beval\(|document\.write|XMLHttpRequest|new WebSocket/);
+    // Netzwerk nur an einer Stelle und nur zur konfigurierten Supabase-Adresse
+    assert.equal((js.match(/\bfetch\(/g) || []).length, 1);
+    assert.match(js, /await fetch\(SB_URL\+path,/);
+    assert.doesNotMatch(html, /connect-src/); // ohne Konfiguration: gar kein Netzwerk erlaubt
   });
 
   test(`${name}: startet ohne Fehler und rendert`, () => {

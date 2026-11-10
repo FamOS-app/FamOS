@@ -12,6 +12,10 @@ in der App vorkommt. Die Sperrliste steht NIE im Code. Quelle, in dieser Reihenf
   2. Datei .personal-names im Repo-Root (lokal, per .gitignore ausgeschlossen)
 Namen durch Komma oder Zeilenumbruch getrennt. Mit REQUIRE_PERSONAL_NAMES=1
 ist eine fehlende Liste ein Fehler (so läuft es in CI).
+
+Sync (optional): SUPABASE_URL und SUPABASE_PUBLISHABLE_KEY aus der Umgebung (in CI aus den
+GitHub-Variablen). Beide werden geprüft, eingesetzt und die CSP erlaubt dann genau diese Adresse.
+Fehlen sie, läuft die gebaute App nur lokal.
 """
 import hashlib, json, os, re, shutil, sys
 
@@ -41,13 +45,35 @@ def load_names():
     return [n.strip() for n in re.split(r'[,\n]', raw) if n.strip()]
 
 
+def supabase_config():
+    url = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
+    key = os.environ.get('SUPABASE_PUBLISHABLE_KEY', '').strip()
+    if not url and not key:
+        return None
+    if not re.fullmatch(r'https://[a-z0-9-]+\.supabase\.co', url):
+        sys.exit('FEHLER: SUPABASE_URL muss so aussehen: https://<projekt>.supabase.co')
+    if key.startswith('sb_secret_') or 'service_role' in key:
+        sys.exit('FEHLER: Das ist der geheime Schlüssel. Nur den Publishable Key (sb_publishable_…) verwenden!')
+    if not re.fullmatch(r'sb_publishable_[A-Za-z0-9_-]+', key):
+        sys.exit('FEHLER: SUPABASE_PUBLISHABLE_KEY muss mit sb_publishable_ beginnen')
+    return url, key
+
+
 def check_personal(text, names):
     """Gibt die Anzahl der Treffer zurück, ohne die Namen selbst auszugeben."""
     return sum(text.count(n) for n in names)
 
 
-def build(src, out):
+def build(src, out, sb=None):
     s = open(src, encoding='utf-8').read()
+
+    if sb:
+        url, key = sb
+        for ph, val in (("'__SUPABASE_URL__'", repr(url)), ("'__SUPABASE_KEY__'", repr(key))):
+            assert s.count(ph) == 1, ph
+            s = s.replace(ph, val)
+        assert s.count("worker-src 'self';") == 1
+        s = s.replace("worker-src 'self';", "worker-src 'self'; connect-src " + url + ";")
 
     # Laufzeit-Manifest (Blob) durch echte Datei ersetzen: nötig für "Zum Home-Bildschirm" mit Offline-Start
     pat = re.compile(r"^\(\(\)=>\{const m=\{name:'FamOS'.*\n", re.M)
@@ -96,9 +122,11 @@ def main():
     hits = check_personal(open(src, encoding='utf-8').read(), names)
     if hits:
         sys.exit(f'FEHLER: {hits} Personendaten-Treffer in {src}. Nichts gebaut.')
-    build(src, out)
+    sb = supabase_config()
+    build(src, out, sb)
     print(f'Gebaut: {out}/ (index.html, manifest.webmanifest, sw.js, {len(ICONS)} Icons)'
-          + (f' · Personendaten-Check: {len(names)} Namen, keine Treffer' if names else ''))
+          + (f' · Personendaten-Check: {len(names)} Namen, keine Treffer' if names else '')
+          + (' · Sync: ' + sb[0] if sb else ' · ohne Sync'))
 
 
 if __name__ == '__main__':

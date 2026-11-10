@@ -56,6 +56,7 @@ function load(file, opts = {}) {
     alert: msg => { throw new Error('alert() darf nicht mehr vorkommen: ' + msg); },
     setTimeout: fn => { timers.push(fn); return timers.length; },
     clearTimeout: () => {},
+    setInterval: () => 0, // Sync-Intervall: Tests rufen syncNow() selbst auf
     requestAnimationFrame: fn => fn(),
     Blob: class { constructor(parts, o) { this.parts = parts; this.type = o?.type; } },
     URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} },

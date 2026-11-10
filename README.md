@@ -86,7 +86,7 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 - Abhaken → „Im Wagen“; „Erledigte entfernen“ merkt sich die letzten 20 Einträge als Schnellwahl.
 - Bis zum Supabase-Sync liegt die Liste nur auf dem jeweiligen Gerät.
 
-## Supabase (in Arbeit)
+## Supabase
 
 - Projekt in der Region Frankfurt, AVV abgeschlossen.
 - Schema: `supabase/migrations/001_init.sql`, einmal im SQL-Editor des Projekts ausführen.
@@ -98,6 +98,16 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 - `tests/db.test.js` prüft Schema und Regeln in einer echten Postgres-Instanz (PGlite), auch in CI.
 - App-Konfiguration kommt aus GitHub-Variablen `SUPABASE_URL` und `SUPABASE_PUBLISHABLE_KEY` (nicht geheim, Schutz über RLS). Der secret/service_role key gehört nirgends hin.
 
+### Konto & Sync in der App
+
+- Anmeldung per **6-stelligem Code aus der E-Mail** (kein Passwort, kein Link: ein Link würde auf dem iPhone in Safari statt in der installierten App landen).
+- Lokal zuerst: Die App arbeitet immer mit `localStorage`. Mit Anmeldung werden Änderungen nach ~1 s hochgeladen und alle 5 s (Einkauf) bzw. 15 s (Rest) abgeholt, außerdem beim Öffnen der App.
+- Gleichzeitige Änderungen: Haken des Tages, Taschengeld-Wochenstatus und Buchungen werden zusammengeführt; Einkaufsliste läuft zeilenweise ohne Verlust; bei den Einstellungen gewinnt der Cloud-Stand (mit Hinweis).
+- Gerätebezogen bleibt: Installations-Hinweis, Anmeldung.
+- Abmelden lässt die Daten auf dem Gerät. Besitzer/in kann den Haushalt in der Cloud löschen (DSGVO: Löschung), Mitglieder können austreten.
+- Ohne `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` baut die App ohne Sync; die CSP erlaubt dann keinerlei Netzwerkzugriff. Mit Konfiguration genau die eine Projektadresse.
+- Tests: `tests/sync.test.js` (zwei Geräte gegen nachgebauten Server `tests/fake-supabase.js`), `tests/db.test.js` (echte SQL-Regeln).
+
 ## Roadmap
 
-Supabase (EU/Frankfurt, AVV): Auth per Magic Link, Haushalte mit Einladungscode, Row Level Security. Damit gemeinsame Einkaufsliste mit Live-Sync, optional Rezept-Import per Link.
+Echtzeit per WebSocket statt Abfrage-Intervall, eigener E-Mail-Versand (EU), optional Rezept-Import per Link, Kochschritte und Mengen.
