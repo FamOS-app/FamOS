@@ -59,7 +59,8 @@ function load(file, opts = {}) {
     setInterval: () => 0, // Sync-Intervall: Tests rufen syncNow() selbst auf
     requestAnimationFrame: fn => fn(),
     Blob: class { constructor(parts, o) { this.parts = parts; this.type = o?.type; } },
-    URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} },
+    URL: class extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} },
+    URLSearchParams,
     ...(opts.globals || {}),
   });
   new vm.Script(code, { filename: file }).runInContext(ctx);

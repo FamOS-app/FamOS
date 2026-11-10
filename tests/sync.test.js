@@ -227,3 +227,25 @@ test('Sync: Anmeldung auf einem Gerät mit bestehendem Cloud-Haushalt verbindet 
   assert.deepEqual(a2.get('S.kids.map(k=>k.name)'), ['Emma', 'Ben']);
   assert.match(a2.toast(), /Angemeldet und verbunden/);
 });
+
+test('Sync: Anmelden mit kopiertem Link aus der Mail (ohne Code), fremde Links werden abgelehnt', async () => {
+  const server = new FakeSupabase();
+  const a = device(server);
+  a.run(`openLogin();UI.form.email='a@example.org'`);
+  await a.run('loginSend()');
+  assert.match(a.els.mc.innerHTML, /Kein Code, nur ein Link/);
+  for (const bad of ['https://evil.example/auth/v1/verify?token=abcdefghijkl&type=signup', 'kein link', 'https://testprojekt.supabase.co/auth/v1/verify?token=<x>&type=signup']) {
+    a.run(`UI.form.code='';UI.form.link=${JSON.stringify(bad)}`);
+    await a.run('loginVerify()');
+    assert.match(a.get('UI.form.err'), /kein FamOS-Anmeldelink/, bad);
+  }
+  a.run(`UI.form.link=${JSON.stringify(server.link('a@example.org'))}`);
+  await a.run('loginVerify()');
+  assert.equal(a.get('AUTH.user.email'), 'a@example.org');
+  assert.equal(a.get('UI.form.step'), 'household');
+  // derselbe Link ein zweites Mal: verbraucht
+  const b = device(server);
+  b.run(`openLogin();UI.form.email='a@example.org';UI.form.step='code';UI.form.link='https://testprojekt.supabase.co/auth/v1/verify?token=pkhverbraucht123&type=magiclink'`);
+  await b.run('loginVerify()');
+  assert.match(b.get('UI.form.err'), /abgelaufen oder wurde schon benutzt/);
+});

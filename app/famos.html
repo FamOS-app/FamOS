@@ -190,6 +190,8 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.lg-link{margin:4px 0 12px}
+.lg-link summary{cursor:pointer;font-weight:700;font-size:.88rem;color:var(--pri);padding:8px 0;min-height:44px;display:flex;align-items:center}
 .sync-badge{text-transform:none;letter-spacing:0;font-weight:700}
 .sync-wide{width:100%;margin:6px 0 4px;line-height:1.35}
 .sync-wide small{font-weight:600;opacity:.85}
@@ -1263,8 +1265,12 @@ function renderLoginModal(){const f=UI.form,err=f.err?`<div class="sync-err" rol
   ${err}${privacyNote()}
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginSend()" ${f.busy?'disabled':''}>${f.busy?'Sende …':'Code schicken'}</button></div>`;
   if(f.step==='code')return`<h3>☁️ Code eingeben</h3>
-  <div class="ins-why">Wir haben einen Code an <strong>${esc(f.email)}</strong> geschickt. Schau auch im Spam-Ordner.</div>
+  <div class="ins-why">Wir haben eine E-Mail an <strong>${esc(f.email)}</strong> geschickt. Schau auch im Spam-Ordner.</div>
   <div class="field"><label for="lgCode">Code aus der E-Mail</label><input id="lgCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" value="${esc(f.code)}" style="font-size:1.4rem;letter-spacing:.25em" oninput="UI.form.code=this.value" onkeydown="if(event.key==='Enter')loginVerify()"></div>
+  <details class="lg-link"${f.link?' open':''}><summary>Kein Code, nur ein Link in der Mail?</summary>
+    <div class="ins-why">Den Link <strong>nicht antippen</strong>, sondern lange drücken → „Link kopieren“ und hier einfügen:</div>
+    <div class="field"><label for="lgLink">Link aus der E-Mail</label><input id="lgLink" type="url" autocomplete="off" value="${esc(f.link||'')}" placeholder="https://…supabase.co/auth/v1/verify?…" oninput="UI.form.link=this.value" onkeydown="if(event.key==='Enter')loginVerify()"></div>
+  </details>
   ${err}<button class="quick-all" onclick="UI.form.step='email';UI.form.err='';openModal()">Andere E-Mail oder neuen Code</button>
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginVerify()" ${f.busy?'disabled':''}>${f.busy?'Prüfe …':'Anmelden'}</button></div>`;
   return`<h3>☁️ Haushalt verbinden</h3>
@@ -1282,13 +1288,31 @@ async function loginSend(){const f=UI.form,email=String(f.email||'').trim();
   try{await sb('/auth/v1/otp',{method:'POST',body:{email,create_user:true},auth:false});f.step='code';f.code='';loginBusy(false);setTimeout(()=>document.getElementById('lgCode')?.focus(),50);}
   catch(e){loginBusy(false,authError(e));}
 }
-async function loginVerify(){const f=UI.form,token=String(f.code||'').replace(/\D/g,'');
-  if(token.length<6){loginBusy(false,'Der Code hat mindestens 6 Ziffern.');return;}
+// Supabase-Link aus der Mail (…/auth/v1/verify?token=…&type=…): Token-Hash direkt einlösen, ohne den Link zu öffnen
+function parseMailLink(raw){
+  let u;try{u=new URL(String(raw||'').trim());}catch(e){return null;}
+  if(u.origin!==SB_URL||u.pathname!=='/auth/v1/verify')return null;
+  const token=u.searchParams.get('token')||'',type=u.searchParams.get('type')||'magiclink';
+  if(!/^[A-Za-z0-9_-]{10,200}$/.test(token)||!/^(magiclink|signup|email|invite)$/.test(type))return null;
+  return{token,type};
+}
+async function loginVerify(){const f=UI.form;
+  if(String(f.link||'').trim()&&!String(f.code||'').trim())return loginWithLink();
+  const token=String(f.code||'').replace(/\D/g,'');
+  if(token.length<6){loginBusy(false,'Der Code hat mindestens 6 Ziffern. Kam nur ein Link? Dann unten „Kein Code, nur ein Link“ öffnen.');return;}
   loginBusy(true);
   try{let d;try{d=await sb('/auth/v1/verify',{method:'POST',body:{type:'email',email:f.email,token},auth:false});}
       catch(e){if(e.status>=500||!e.status)throw e;d=await sb('/auth/v1/verify',{method:'POST',body:{type:'signup',email:f.email,token},auth:false});}
     setSession(d);await afterLogin();}
   catch(e){loginBusy(false,authError(e));}
+}
+async function loginWithLink(){const f=UI.form,l=parseMailLink(f.link);
+  if(!l){loginBusy(false,'Das ist kein FamOS-Anmeldelink. Bitte den Link aus der Supabase-Mail kopieren.');return;}
+  loginBusy(true);
+  try{let d;try{d=await sb('/auth/v1/verify',{method:'POST',body:{type:l.type,token_hash:l.token},auth:false});}
+      catch(e){if(e.status>=500||!e.status||l.type==='email')throw e;d=await sb('/auth/v1/verify',{method:'POST',body:{type:'email',token_hash:l.token},auth:false});}
+    setSession(d);f.link='';await afterLogin();}
+  catch(e){loginBusy(false,/expired|invalid/i.test(e.message)&&e.status<500?'Der Link ist abgelaufen oder wurde schon benutzt. Bitte „Andere E-Mail oder neuen Code“ und neu anfordern.':authError(e));}
 }
 // Nach dem Anmelden: vorhandenen Haushalt verbinden oder anbieten, einen anzulegen bzw. beizutreten
 async function afterLogin(){

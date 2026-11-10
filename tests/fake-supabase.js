@@ -10,6 +10,7 @@ class FakeSupabase {
   constructor() {
     this.users = {};      // email → {id,email}
     this.codes = {};      // email → code
+    this.hashes = {};     // email → Token-Hash im Mail-Link
     this.tokens = {};     // access → userId
     this.refresh = {};    // refresh → userId
     this.households = []; this.members = []; this.docs = []; this.items = [];
@@ -17,6 +18,7 @@ class FakeSupabase {
     this.fetch = this.fetch.bind(this);
   }
   code(email) { return this.codes[email]; }
+  link(email, type = 'signup') { return `https://testprojekt.supabase.co/auth/v1/verify?token=${this.hashes[email]}&type=${type}&redirect_to=https://example.github.io/FamOS/`; }
   expireTokens() { this.tokens = {}; }
   revokeRefresh() { this.refresh = {}; }
   isMember(uid, hid) { return this.members.some(m => m.user_id === uid && m.household_id === hid); }
@@ -39,9 +41,16 @@ class FakeSupabase {
       if (this.rateLimited) return res(429, { code: 429, error_code: 'over_email_send_rate_limit', msg: 'email rate limit exceeded' });
       this.users[data.email] ||= { id: uuid(), email: data.email };
       this.codes[data.email] = String(100000 + (seq * 7919) % 900000);
+      this.hashes[data.email] = 'pkh' + Math.random().toString(36).slice(2) + 'abcdef0123';
       return res(200, {});
     }
     if (path === '/auth/v1/verify') {
+      if (data.token_hash) {
+        const email = Object.keys(this.hashes).find(e => this.hashes[e] === data.token_hash);
+        if (!email || !['magiclink', 'signup', 'email'].includes(data.type)) return res(403, { error_code: 'otp_expired', msg: 'Email link is invalid or has expired' });
+        delete this.hashes[email];
+        return res(200, this.session(email));
+      }
       if (data.type !== 'email' && data.type !== 'signup') return res(400, { msg: 'bad type' });
       if (!this.codes[data.email] || this.codes[data.email] !== data.token) return res(403, { error_code: 'otp_expired', msg: 'Token has expired or is invalid' });
       delete this.codes[data.email];
