@@ -21,6 +21,9 @@ grant usage on schema public to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated;
 alter default privileges in schema public grant all on functions to anon, authenticated;
 create publication supabase_realtime;
+-- wie bei Supabase: Erweiterungen liegen im Schema extensions, nicht im Suchpfad
+create schema extensions;
+create extension pgcrypto schema extensions;
 `;
 
 const U = {
@@ -35,6 +38,8 @@ async function setup() {
   const db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(SUPABASE_STUB);
   for (const [k, id] of Object.entries(U)) await db.query('insert into auth.users values ($1, $2)', [id, k + '@example.org']);
+  // wie der Supabase SQL-Editor: extensions im Suchpfad beim Anlegen; zur Laufzeit gilt der Suchpfad der Funktion
+  await db.exec('set search_path to public, extensions;');
   for (const f of fs.readdirSync(MIG).filter(f => f.endsWith('.sql')).sort()) {
     await db.exec(fs.readFileSync(path.join(MIG, f), 'utf8'));
   }

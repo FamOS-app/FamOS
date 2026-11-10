@@ -89,7 +89,7 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 ## Supabase
 
 - Projekt in der Region Frankfurt, AVV abgeschlossen.
-- Schema: `supabase/migrations/001_init.sql`, einmal im SQL-Editor des Projekts ausführen.
+- Schema: alle Dateien in `supabase/migrations/` der Reihe nach einmal im SQL-Editor ausführen (001, 002, …).
   - `households` + `members`: Haushalte mit Einladungscode (8 Zeichen), Rollen Besitzer/Erwachsene.
   - `docs`: Einstellungen, Tagesstand, Taschengeld als Dokumente mit Versionsnummer (Konflikte werden erkannt).
   - `shopping_items`: Einkaufsliste zeilenweise, damit mehrere Handys gleichzeitig eintragen können.
