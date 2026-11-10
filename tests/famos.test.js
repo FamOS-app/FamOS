@@ -38,10 +38,13 @@ for (const file of [APP, VORLAGE]) {
     assert.match(html, /http-equiv="Content-Security-Policy"/);
     assert.match(html, /default-src 'none'/);
     assert.doesNotMatch(html, /user-scalable=no/);
-    // Einzige externe Quelle: Bunny Fonts
+    // Keine externe Quelle, auch keine Schrift: Andika ist eingebettet
     const hosts = [...html.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)].map(m => m[1])
       .filter(h => h !== 'www.w3.org'); // SVG-Namespace in Data-URLs, kein Request
-    assert.deepEqual([...new Set(hosts)], ['fonts.bunny.net']);
+    assert.deepEqual([...new Set(hosts)], []);
+    assert.equal((html.match(/@font-face\{font-family:'Andika'/g) || []).length, 2);
+    assert.match(html, /font-src data:;/);
+    assert.doesNotMatch(html, /<link[^>]+stylesheet/);
     assert.doesNotMatch(html, /googleapis|gstatic|google-analytics|gtag/i);
     assert.doesNotMatch(extractScript(html), /\balert\(|\beval\(|document\.write|fetch\(|XMLHttpRequest/);
   });
@@ -145,7 +148,7 @@ test('Module: aus- und einschalten, mindestens eins bleibt an', () => {
   assert.equal(a.get('S.modules.taschengeld'), false);
   a.run('render()');
   assert.doesNotMatch(a.app(), /setView\('taschengeld'\)/);
-  a.run(`togModule('stundenplan');togModule('essen')`);
+  a.run(`togModule('stundenplan');togModule('essen');togModule('einkauf')`);
   a.run('render()');
   assert.doesNotMatch(a.app(), /bot-nav/); // nur ein Modul: keine Navigation
   a.run(`togModule('routine')`);
@@ -506,7 +509,8 @@ test('Migration: alter Stand ohne household/modules/_mv wird ergänzt, Daten ble
   const a = load(VORLAGE, { storage: { ra_cfg3: JSON.stringify(old) } });
   const S = a.get('S');
   assert.deepEqual(S.household, { name: 'Unsere Familie', adults: [] });
-  assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true, essen: true });
+  assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true, essen: true, einkauf: true });
+  assert.deepEqual(S.einkauf, { items: [], recent: [] });
   assert.ok(S.essen.dishes.length >= 5); // ältere Stände bekommen Beispielgerichte
   assert.equal(S._mv, 4);
   assert.deepEqual(S.stundenplan.k1.mo, [{ em: '📖', lbl: 'Lesen', time: '', teacher: '' }]);
@@ -744,4 +748,124 @@ test('Essen: Export/Import enthält Gerichte, Bewertungen und Plan', () => {
   const b = load(VORLAGE);
   assert.equal(b.run(`applyImport(${JSON.stringify(a.get('buildExport()'))})`), true);
   assert.deepEqual(b.get('S.essen'), a.get('S.essen'));
+});
+
+// ─── Einkauf ──────────────────────────────────────────────────
+function ekApp() { const a = household(); a.run(`setView('einkauf')`); return a; }
+const add = (a, v) => a.run(`UI.ekNew=${JSON.stringify(v)};ekAddInput()`);
+const names = a => a.get('S.einkauf.items').map(x => x.name);
+
+test('Einkauf: eigene Ansicht ohne Kinder-Tabs, leere Liste mit Hinweis', () => {
+  const a = ekApp();
+  assert.doesNotMatch(a.app(), /kid-tabs/);
+  assert.match(a.app(), /Die Liste ist leer/);
+  assert.match(a.app(), /Zutaten aus dem Wochenplan/);
+  a.run(`togModule('essen');render()`);
+  assert.doesNotMatch(a.app(), /Zutaten aus dem Wochenplan/);
+});
+
+test('Einkauf: eintragen, Doppeltes abfangen, Feld leert sich', () => {
+  const a = ekApp();
+  add(a, '  Milch ');
+  add(a, 'Brot');
+  add(a, 'milch');
+  assert.match(a.toast(), /milch steht schon auf der Liste/);
+  assert.equal(a.get('UI.ekNew'), 'milch'); // abgelehnte Eingabe bleibt stehen
+  add(a, '   ');
+  assert.deepEqual(names(a), ['Milch', 'Brot']);
+  add(a, 'Äpfel');
+  assert.equal(a.get('UI.ekNew'), '');
+  assert.equal(a.saved('ra_cfg3').einkauf.items.length, 3);
+  assert.match(a.app(), /Einkaufen · 3/);
+});
+
+test('Einkauf: abhaken, Erledigte entfernen, Schnellwahl bringt sie zurück', () => {
+  const a = ekApp();
+  ['Milch', 'Brot', 'Käse'].forEach(v => add(a, v));
+  const id = n => a.get(`S.einkauf.items.find(x=>x.name==='${n}').id`);
+  a.run(`ekToggle('${id('Milch')}');ekToggle('${id('Käse')}')`);
+  assert.match(a.app(), /Im Wagen · 2/);
+  assert.match(a.app(), /Einkaufen · 1/);
+  a.run(`ekToggle('${id('Käse')}')`); // zurück auf die Liste
+  assert.match(a.app(), /Im Wagen · 1/);
+  a.run('ekClearDone()');
+  assert.deepEqual(names(a), ['Brot', 'Käse']);
+  assert.deepEqual(a.get('S.einkauf.recent'), ['Milch']);
+  assert.match(a.app(), /＋ Milch/);
+  a.run('ekQuick(0)');
+  assert.deepEqual(names(a), ['Brot', 'Käse', 'Milch']);
+  assert.doesNotMatch(a.app(), /＋ Milch/); // steht drauf: kein Chip
+  a.run(`ekDel('${id('Brot')}')`);
+  assert.deepEqual(names(a), ['Käse', 'Milch']);
+});
+
+test('Einkauf: Schnellwahl merkt sich höchstens 20, das Neueste zuerst, ohne Dubletten', () => {
+  const a = ekApp();
+  for (let i = 0; i < 25; i++) add(a, 'Ding ' + i);
+  a.run(`S.einkauf.items.forEach(x=>x.done=true);ekClearDone()`);
+  add(a, 'Ding 3');
+  a.run(`S.einkauf.items.forEach(x=>x.done=true);ekClearDone()`);
+  const R = a.get('S.einkauf.recent');
+  assert.equal(R.length, 20);
+  assert.equal(R[0], 'Ding 3');
+  assert.equal(new Set(R).size, 20);
+});
+
+test('Einkauf: Zutaten aus dem Wochenplan, zusammengefasst, nichts doppelt', () => {
+  const a = ekApp();
+  a.run(`togMeal('mittag')`);
+  const dates = a.get('weekDates(1)');
+  a.run(`setSlot('${dates[0]}','abend','g1',true);setSlot('${dates[1]}','mittag','g2',true);setSlot('${dates[2]}','abend','g4',true)`);
+  add(a, '3 Eier'); // steht schon drauf
+  const r = a.get('ekPlanLines(1)');
+  assert.equal(r.dishes, 3);
+  assert.equal(r.lines.find(l => l.name === 'Milch').n, 1);
+  a.run('openEkPlanModal()');
+  assert.match(a.els.mc.innerHTML, /\d+ Zutaten aus 3 Gerichten/);
+  a.run('ekFromPlan(1)');
+  const items = a.get('S.einkauf.items');
+  assert.ok(items.some(x => x.name === '500 g Spaghetti'));
+  assert.equal(items.filter(x => ekKeyOf(x.name) === '3 eier').length, 1);
+  assert.match(a.toast(), /übernommen, 1 standen schon drauf/);
+  a.run('ekFromPlan(1)');
+  assert.match(a.toast(), /Alles stand schon auf der Liste/);
+  // Mengen gleicher Zeilen werden gezählt
+  a.run(`setSlot('${dates[3]}','abend','g1',true);S.einkauf.items=[];ekFromPlan(1)`);
+  assert.equal(a.get(`S.einkauf.items.find(x=>x.name==='1 Zwiebel').n`), 2);
+  assert.match(a.app(), /×2/);
+});
+function ekKeyOf(n) { return n.toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+test('Einkauf: diese Woche zählt erst ab heute, ausgeschaltete Mahlzeiten zählen nicht', () => {
+  const a = ekApp();
+  const t = a.get('today()');
+  a.run(`setSlot(addDays(today(),-1),'abend','g1',true);setSlot(today(),'abend','g3',true);setSlot(today(),'mittag','g2',true)`);
+  const r = a.get('ekPlanLines(0)');
+  assert.equal(r.dishes, 1); // nur Pizza heute Abend; gestern vorbei, Mittag aus
+  assert.ok(t);
+});
+
+test('Einkauf: Import validiert die Liste', () => {
+  const evil = '<img src=x onerror=alert(1)>';
+  const a = load(VORLAGE);
+  const data = { cfg: { kids: [{ id: 'k1', name: 'Emma' }], household: { name: 'X' }, einkauf: {
+    items: [{ id: 'i1', name: evil, n: 500, done: 'ja' }, { id: 'i1', name: 'Doppelt' }, { id: "x'y", name: 'Böse' }, { id: 'i2', name: '' }, { id: 'i3', name: 'Brot', n: -4 }],
+    recent: [evil, 'Milch', 'milch', 7, ''],
+  } } };
+  assert.equal(a.run(`applyImport(${JSON.stringify(data)})`), true);
+  const E = a.get('S.einkauf');
+  assert.deepEqual(E.items.map(x => [x.id, x.n, x.done]), [['i1', 99, true], ['i3', 1, false]]);
+  assert.deepEqual(E.recent, [evil, 'Milch']);
+  a.run(`setView('einkauf')`);
+  assert.doesNotMatch(a.app(), /<img/);
+  assert.match(a.app(), /&lt;img/);
+});
+
+test('Einkauf: Export/Import enthält Liste und Schnellwahl', () => {
+  const a = ekApp();
+  ['Milch', 'Brot'].forEach(v => add(a, v));
+  a.run(`ekToggle(S.einkauf.items[0].id);ekClearDone()`);
+  const b = load(VORLAGE);
+  assert.equal(b.run(`applyImport(${JSON.stringify(a.get('buildExport()'))})`), true);
+  assert.deepEqual(b.get('S.einkauf'), a.get('S.einkauf'));
 });
