@@ -1097,3 +1097,16 @@ test('Taschengeld: alte Fehlklick-Paare werden beim Laden aufgeräumt, Kontostan
   assert.deepEqual(a.get('TX.map(x=>x.t)'), [t(5), t(6), t(7), t(8)]);
   assert.equal(a.get('SAVINGS.k1'), 10.5);
 });
+
+test('Taschengeld: Aufräumen klappt auch, wenn „zurückgenommen“ vor „gespart“ einsortiert ist (Uhren zweier Handys)', () => {
+  const t = n => 1700000000000 + n;
+  const tx = [
+    { t: t(1), kid: 'k2', amt: -1.5, note: 'Sparen zurückgenommen (KW 46)' },
+    { t: t(2), kid: 'k2', amt: 1.5, note: 'Wochengeld gespart (KW 46)' },
+    { t: t(3), kid: 'k2', amt: 1.5, note: 'Wochengeld gespart (KW 46)' },
+    { t: t(4), kid: 'k2', amt: -1.5, note: 'Sparen zurückgenommen (KW 46)' },
+    { t: t(5), kid: 'k2', amt: 1.5, note: 'Wochengeld gespart (KW 46)' },
+  ];
+  const a = load(VORLAGE, { storage: { ra_tx: JSON.stringify(tx) } });
+  assert.deepEqual(a.get('TX.map(x=>x.t)'), [t(5)]);
+});

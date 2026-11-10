@@ -669,16 +669,19 @@ function sanitizeDay(d){d=sObj(d);return{date:sStr(d.date,10),chk:sObj(d.chk),br
 function sanitizeTgd(t){const o={};Object.keys(sObj(t)).slice(-600).forEach(k=>{if(/^[A-Za-z0-9_-]{1,40}:\d{4}W\d{2}$/.test(k)&&(t[k]==='ausgezahlt'||t[k]==='gespart'))o[k]=t[k];});return o;}
 function sanitizeSavings(v){const o={};Object.keys(sObj(v)).slice(0,24).forEach(k=>{if(sId(k))o[k]=sNum(v[k],0,1e6);});return o;}
 function sanitizeTx(a){return compactTx(sArr(Array.isArray(a)?a.slice(-200):[],200).map(x=>{const kid=sId(x?.kid),amt=sNum(x?.amt,-1e6,1e6),t=Number(x?.t);if(!kid||!amt||!Number.isFinite(t))return null;return{t,kid,amt,note:sStr(x.note,LIM.note)};}).filter(Boolean));}
-// Fehlklick-Paare aus älteren Versionen entfernen: „Wochengeld gespart (KW n)“ + später „Sparen zurückgenommen (KW n)“
-// mit gleichem Betrag heben sich auf. Der Kontostand ändert sich dadurch nicht.
+// Fehlklick-Paare entfernen: Pro Kind und Kalenderwoche heben sich „Wochengeld gespart (KW n)“ und
+// „Sparen zurückgenommen (KW n)“ mit gleichem Betrag auf, unabhängig von der Reihenfolge (Uhren zweier
+// Handys können abweichen). Übrig bleibt höchstens die jüngste Sparbuchung. Der Kontostand ändert sich nicht.
 function compactTx(tx){
-  const drop=new Set(),open={};
+  const groups={};
   tx.forEach((x,i)=>{
     const g=/^Wochengeld gespart \(KW (\d+)\)$/.exec(x.note),z=/^Sparen zurückgenommen \(KW (\d+)\)$/.exec(x.note);
-    if(g&&x.amt>0)(open[x.kid+'|'+g[1]]||=[]).push(i);
-    else if(z&&x.amt<0){const st=open[x.kid+'|'+z[1]];const j=st&&st.length?st[st.length-1]:-1;
-      if(j>=0&&round2(tx[j].amt+x.amt)===0){st.pop();drop.add(i);drop.add(j);}}
+    const m=g&&x.amt>0?['g',g[1]]:z&&x.amt<0?['z',z[1]]:null;if(!m)return;
+    const k=x.kid+'|'+m[1]+'|'+Math.abs(x.amt);(groups[k]||={g:[],z:[]})[m[0]].push(i);
   });
+  const drop=new Set();
+  Object.values(groups).forEach(({g,z})=>{const n=Math.min(g.length,z.length);
+    z.slice(0,n).forEach(i=>drop.add(i));g.slice(0,n).forEach(i=>drop.add(i));}); // älteste Sparbuchungen fallen weg, jüngste bleibt
   return drop.size?tx.filter((_,i)=>!drop.has(i)):tx;
 }
 
