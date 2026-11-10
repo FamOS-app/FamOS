@@ -14,7 +14,7 @@ Keine Kindernamen, Lehrkräfte, Stundenpläne, Zugänge oder Passwörter im Repo
 | `app/icons/` | Logo (`logo.svg`) und daraus erzeugte PNG-Icons. |
 | `tools/build.py` | Baut `dist/` (Seite, Manifest, Service Worker, Icons), mit Personendaten-Check. |
 | `tools/make_icons.js` | Erzeugt die PNG-Icons aus `app/icons/logo.svg` (lokal, braucht Playwright). Nur nach Logo-Änderungen nötig. |
-| `LICENSES/` | Lizenz der eingebetteten Schrift. |
+| `LICENSES/` | Lizenz der eingebetteten Schrift (Manrope, OFL). |
 | `tests/` | Node-`vm`-Harness mit gestubbtem `document`/`localStorage`, ohne Abhängigkeiten. Nur fiktive Testnamen. |
 | `.github/workflows/ci.yml` | Tests, Build, Check, Veröffentlichung per GitHub Pages. |
 | `dist/` | Build-Ergebnis, nicht eingecheckt. |
@@ -42,7 +42,7 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 
 - Alle Daten liegen **pro Gerät** im `localStorage` (`ra_cfg3`, `ra_day3`, `ra_tgd`, `ra_savings`, `ra_tx`). Kein Server, kein Tracking, keine Cookies.
 - Backup und Gerätewechsel über **Einstellungen → Haushalt → Exportieren/Importieren**. Die Backup-Datei enthält Familiendaten: nicht ins Repo, nicht offen teilen.
-- Keine einzige externe Anfrage: Die Schrift Andika ist eingebettet (SIL Open Font License, siehe `LICENSES/Andika-OFL.txt`).
+- Keine einzige externe Anfrage: Die Schrift Manrope ist eingebettet (SIL Open Font License, siehe `LICENSES/Manrope-OFL.txt`).
 
 ## Sicherheit
 
@@ -62,8 +62,8 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 
 ## Design
 
-- Palette als CSS-Tokens in `:root`: Terracotta `#AE5238`, Mustard `#D39B32`, Deep Teal `#225D65` (Primärfarbe), Olive `#5C633E`, Warm Cream `#E3D8C6`.
-- Schrift: Andika (Druckschrift mit einstöckigem a, für Leseanfänger gemacht), eingebettet als WOFF2 (Latin, 400/700). Überschriften in Großbuchstaben.
+- Look: minimalistisch, flache Flächen mit 1-px-Linien, Linien-Icons in Navigation und Kopf. Zwei Farbwelten, pro Gerät wählbar unter Einstellungen → Haushalt: **Petrol** (Petrol, Terracotta, Senf) und **Pop** (Beige, Schwarz, Orange/Pink/Grün). Alles über CSS-Tokens, `data-look` am `<html>`.
+- Schrift: Manrope (variabel 200–800, Latin, 24 KB), eingebettet. Überschriften in Großbuchstaben.
 - Logo: Familien-Netz im Haus (vier verbundene Punkte in den Palettenfarben).
 - Tippflächen mindestens 44 px, Zoom erlaubt, sichtbarer Fokus, `prefers-reduced-motion` wird respektiert.
 

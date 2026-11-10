@@ -38,11 +38,12 @@ for (const file of [APP, VORLAGE]) {
     assert.match(html, /http-equiv="Content-Security-Policy"/);
     assert.match(html, /default-src 'none'/);
     assert.doesNotMatch(html, /user-scalable=no/);
-    // Keine externe Quelle, auch keine Schrift: Andika ist eingebettet
+    // Keine externe Quelle, auch keine Schrift: Manrope ist eingebettet
     const hosts = [...html.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)].map(m => m[1])
       .filter(h => h !== 'www.w3.org'); // SVG-Namespace in Data-URLs, kein Request
     assert.deepEqual([...new Set(hosts)], []);
-    assert.equal((html.match(/@font-face\{font-family:'Andika'/g) || []).length, 2);
+    assert.equal((html.match(/@font-face\{font-family:'Manrope'/g) || []).length, 1);
+    assert.match(html, /font-weight:200 800;font-display:swap;src:url\(data:font\/woff2;base64,/);
     assert.match(html, /font-src data:;/);
     assert.doesNotMatch(html, /<link[^>]+stylesheet/);
     assert.doesNotMatch(html, /googleapis|gstatic|google-analytics|gtag/i);
@@ -1020,7 +1021,7 @@ test('Rezept: Portionen und Schritte speichern, Ansicht rechnet um', () => {
   assert.equal(a.get('S.essen.persons'), 4); // nur die Ansicht, nicht die Einstellung
   // Heute: Rezept-Knopf mit Anzahl Schritte
   a.run(`setView('essen');setSlot(today(),'abend','${d.id}',true);render()`);
-  assert.match(a.app(), /📖 Rezept · 2 Schritte/);
+  assert.match(a.app(), /Rezept ansehen · 2 Schritte/);
 });
 
 test('Rezept: Personenzahl in den Einstellungen, Grenzen 1 bis 20', () => {
@@ -1048,4 +1049,21 @@ test('Rezept: Import begrenzt Schritte und Portionen, Schadcode wird Text', () =
   a.run(`openRecipe('d1')`);
   assert.doesNotMatch(a.els.mc.innerHTML, /<img/);
   assert.match(a.els.mc.innerHTML, /&lt;img/);
+});
+
+test('Aussehen: zwei Farbwelten, pro Gerät gespeichert, Kinderfarben passend benannt', () => {
+  const a = household();
+  assert.equal(a.get('getLook()'), 'petrol');
+  a.run(`openAdmin();setATab('kinder')`);
+  assert.match(a.adm(), /Aussehen auf diesem Gerät/);
+  a.run(`setLook('pop')`);
+  assert.equal(a.store.famos_look, 'pop');
+  assert.equal(a.get(`colorLabel('a')`), 'Orange');
+  assert.match(a.adm(), /aria-pressed="true" onclick="setLook\('pop'\)"/);
+  a.run(`setLook('<script>')`);
+  assert.equal(a.get('getLook()'), 'pop');
+  const b = load(VORLAGE, { storage: { ...a.store, famos_look: 'quatsch' } });
+  assert.equal(b.get('getLook()'), 'petrol');
+  // Look wandert nicht mit dem Backup (gerätebezogen)
+  assert.equal(JSON.stringify(a.get('buildExport()')).includes('famos_look'), false);
 });
