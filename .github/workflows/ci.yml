@@ -1,0 +1,77 @@
+name: CI und Veröffentlichung
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Standard: nur lesen. Schreibrechte bekommt ausschließlich der Deploy-Job.
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Syntaxcheck
+        run: |
+          node -e "const fs=require('fs');const h=fs.readFileSync('app/famos.html','utf8');fs.writeFileSync('/tmp/famos.js',h.match(/<script>([\s\S]*?)<\/script>/)[1])"
+          node --check /tmp/famos.js
+
+      - name: Tests
+        run: node --test tests/famos.test.js
+
+      - name: Bauen mit Personendaten-Check
+        env:
+          PERSONAL_NAMES: ${{ secrets.PERSONAL_NAMES }}
+          REQUIRE_PERSONAL_NAMES: '1'
+        run: python3 tools/build.py app/famos.html dist
+
+      - name: Personendaten-Check über das ganze Repo
+        env:
+          PERSONAL_NAMES: ${{ secrets.PERSONAL_NAMES }}
+        run: |
+          python3 - <<'EOF'
+          import os, re, subprocess, sys
+          names = [n.strip() for n in re.split(r'[,\n]', os.environ['PERSONAL_NAMES']) if n.strip()]
+          files = subprocess.check_output(['git', 'ls-files'], text=True).split() + ['dist/index.html', 'dist/manifest.webmanifest']
+          bad = [f for f in files if any(n in open(f, encoding='utf-8', errors='ignore').read() for n in names)]
+          if bad:
+              sys.exit(f'Personendaten gefunden in: {", ".join(bad)}')
+          print(f'{len(files)} Dateien geprüft, keine Treffer')
+          EOF
+
+      - name: Nur die öffentliche Seite hochladen
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

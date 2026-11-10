@@ -1,0 +1,9 @@
+# Build-Ergebnis, wird in CI erzeugt
+dist/
+# Sperrliste für den Personendaten-Check: nur lokal, in CI als Secret PERSONAL_NAMES
+.personal-names
+# Backups enthalten Familiendaten
+*.backup.json
+famos-backup-*.json
+node_modules/
+.DS_Store
