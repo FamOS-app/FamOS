@@ -1373,7 +1373,7 @@ async function runLinkImport(){const f=UI.form,url=String(f.url||'').trim();
 // ─── Mit Claude: Foto in der Claude-App, Antwort hier einfügen ───
 const CLAUDE_PROMPTS={
 rezept:`Lies das Rezept auf dem Foto (oder im Text) und gib es für meine App FamOS zurück.
-Antworte NUR mit JSON in genau diesem Format, ohne weiteren Text:
+Antworte NUR mit einem einzigen Codeblock (\`\`\`json … \`\`\`), damit ich ihn mit dem Kopieren-Knopf übernehmen kann. Kein Text davor oder danach. Inhalt in genau diesem Format:
 {"famos":"rezept","name":"Spaghetti Bolognese","emoji":"🍝","portionen":4,"zutaten":["500 g Spaghetti","1 Dose Tomaten"],"schritte":["Zwiebel würfeln und anbraten","…"],"mahlzeiten":["abend"],"eigenschaften":["fleisch"]}
 Regeln:
 - zutaten: eine Zutat pro Eintrag, Menge und Einheit vorne (g, kg, ml, l, EL, TL, Prise, Dose, Bund, Pck.)
@@ -1383,7 +1383,7 @@ Regeln:
 - eigenschaften aus: veg, schnell, we, fleisch, fisch
 - Mehrere Rezepte: als Liste [ {...}, {...} ]`,
 stundenplan:`Lies den Stundenplan auf dem Foto und gib ihn für meine App FamOS zurück.
-Antworte NUR mit JSON in genau diesem Format, ohne weiteren Text:
+Antworte NUR mit einem einzigen Codeblock (\`\`\`json … \`\`\`), damit ich ihn mit dem Kopieren-Knopf übernehmen kann. Kein Text davor oder danach. Inhalt in genau diesem Format:
 {"famos":"stundenplan","tage":{"mo":[{"fach":"Mathe","von":"8:15","bis":"9:00","lehrkraft":"Fr. Muster","emoji":"📐"}],"di":[],"mi":[],"do":[],"fr":[]}}
 Regeln:
 - Tage: mo, di, mi, do, fr (sa, so nur wenn vorhanden), Stunden in zeitlicher Reihenfolge
@@ -1402,7 +1402,7 @@ function renderClaudeModal(){const f=UI.form,rz=f.kind==='rezept',P=f.preview;
   return`<h3>${rz?'Rezept':'Stundenplan'} mit Claude</h3>
   <ol class="ins-steps"><li><span><button class="aa" style="margin:0" onclick="copyClaudePrompt()">Text für Claude kopieren</button></span></li>
   <li><span>In der Claude-App einen neuen Chat öffnen, den Text einfügen und ${rz?'das Foto vom Rezept':'ein Foto vom Stundenplan'} anhängen.</span></li>
-  <li><span>Claudes Antwort kopieren und hier einfügen:</span></li></ol>
+  <li><span>In Claudes Antwort auf <strong>Kopieren</strong> im Codeblock tippen und hier einfügen:</span></li></ol>
   ${f.showPrompt?`<div class="field"><label for="clP">Text für Claude (markieren und kopieren)</label><textarea id="clP" rows="6" readonly>${esc(CLAUDE_PROMPTS[f.kind])}</textarea></div>`:''}
   <div class="field"><label for="clA">Antwort von Claude</label><textarea id="clA" rows="6" placeholder='{"famos":"${f.kind}", …}' oninput="UI.form.text=this.value">${esc(f.text)}</textarea></div>
   ${f.err?`<div class="sync-err" role="alert">${esc(f.err)}</div>`:''}

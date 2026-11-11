@@ -1218,6 +1218,7 @@ test('Claude: ein Rezept aus der Antwort (mit Code-Block drumherum) füllt das F
   a.run(`openClaude('rezept')`);
   assert.match(a.els.mc.innerHTML, /Text für Claude kopieren/);
   assert.match(a.get('CLAUDE_PROMPTS.rezept'), /"famos":"rezept"/);
+  for (const k of ['rezept', 'stundenplan']) assert.match(a.get(`CLAUDE_PROMPTS.${k}`), /einzigen Codeblock \(```json … ```\)/);
   const answer = 'Hier ist das Rezept:\n```json\n' + JSON.stringify({ famos: 'rezept', name: 'Linsen-Dal', emoji: '🍛', portionen: 2,
     zutaten: ['250 g rote Linsen', '400 ml Kokosmilch'], schritte: ['Zwiebel anbraten', 'Linsen dazu, 15 Min. köcheln'], mahlzeiten: ['abend', 'snack'], eigenschaften: ['veg', 'quatsch'] }) + '\n```';
   a.run(`UI.form.text=${JSON.stringify(answer)};parseClaude()`);
