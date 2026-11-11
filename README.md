@@ -72,6 +72,7 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 ## Navigation und Startseite
 
 - Unten: **Heute · Kinder · Aufgaben · Kalender · Essen · Einkauf**. „Kinder“ bündelt Routine, Stundenplan, Taschengeld, Wünsche (nur wenn es Kinder gibt). Die App merkt sich pro Gerät die letzte Ansicht; Android-Zurück schließt erst Offenes.
+- **Fotos zu Gerichten:** Im Gericht-Dialog ein Foto vom Gerät wählen; es ersetzt das Emoji in Plan, Kochbuch, Auswahl und auf der Startseite und steht groß über dem Rezept. Die App verkleinert es vor dem Speichern (Vorschau 160 px, Bild höchstens 900 px, zusammen rund 0,1–0,2 MB) und entfernt dabei Aufnahmeort und Kameradaten. Auf dem Gerät liegen Fotos in IndexedDB, im Haushalt in der Tabelle `dish_images`; sie sind nicht im Backup-Export enthalten.
 - **Kalender:** Familientermine und Verabredungen mit Tag, optionaler Uhrzeit, Ort und Personen; mehrtägig (Urlaub) oder wiederkehrend (wöchentlich, jährlich). Ansicht als Liste ab heute oder als Monat. Kinder sehen ihre Termine der nächsten 7 Tage in der Routine (nur lesen). Kein Abgleich mit Google/Outlook, keine Erinnerungen.
 - **Heute:** Karten für Termine heute und morgen, meine fälligen Aufgaben (inkl. fälligem Taschengeld), Kinder (Routine-Fortschritt, Brot, Stundenplan kurz), Essen heute (würfeln, wenn leer), Einkauf (direkt eintragen), ab 14 Uhr „Morgen“. Leere Karten entfallen; morgens Kinder oben, ab 14 Uhr Aufgaben/Essen/Morgen.
 - **Gerät:** „Wer nutzt dieses Gerät?“ (Erwachsene oder Familiengerät), pro Gerät, einmal gefragt, änderbar unter Einstellungen → Haushalt.
@@ -151,7 +152,7 @@ Für alle, die FamOS mit **eigenem Supabase** betreiben möchten, damit die Fami
    - Region: **Central EU (Frankfurt)**
    - Datenbank-Passwort generieren lassen und im Passwort-Manager speichern
 2. **Auftragsverarbeitungsvertrag (DPA):** Organization Settings → Legal Documents, falls nicht schon automatisch vorhanden.
-3. **Tabellen und Regeln anlegen:** links **SQL Editor** → **New query**. Nacheinander jede Datei aus `supabase/migrations/` **in Nummernreihenfolge** einfügen und mit **Run** ausführen (001, 002, 003, 004 …). Jedes Mal sollte „Success. No rows returned“ erscheinen. Zum Kopieren auf GitHub die Datei öffnen und oben rechts „Copy raw file“ nutzen.
+3. **Tabellen und Regeln anlegen:** links **SQL Editor** → **New query**. Nacheinander jede Datei aus `supabase/migrations/` **in Nummernreihenfolge** einfügen und mit **Run** ausführen (001, 002, 003, 004, 005 …). Jedes Mal sollte „Success. No rows returned“ erscheinen. Zum Kopieren auf GitHub die Datei öffnen und oben rechts „Copy raw file“ nutzen.
 4. **Rezept-Import per Link (optional):** links **Edge Functions** → **Deploy a new function** → **Via Editor**.
    - Name: `recipe-import`
    - Beispielcode vollständig ersetzen durch den Inhalt von `supabase/functions/recipe-import/index.ts`
@@ -207,6 +208,7 @@ Ohne eigenen Mailversand verschickt Supabase nur einen Link und wenige Mails pro
 | Beim Haushalt-Anlegen *function … does not exist* | Migrationen fehlen oder in falscher Reihenfolge | alle Dateien aus `supabase/migrations/` der Reihe nach ausführen |
 | Aufgaben gleichen sich nicht ab | `003_aufgaben.sql` fehlt | ausführen; bereits angelegte Aufgaben werden nachgeliefert |
 | Termine gleichen sich nicht ab | `004_termine.sql` fehlt | ausführen; bereits angelegte Termine werden nachgeliefert |
+| Fotos erscheinen nicht auf dem anderen Handy | `005_gericht_fotos.sql` fehlt | ausführen; vorhandene Fotos werden nachgeliefert |
 | „Aus Link“: *noch nicht eingerichtet* | Edge Function fehlt oder heißt anders | Schritt 3.4, Name exakt `recipe-import` |
 | Login: *zu viele Anmelde-Mails* / „limit exceeded“ in Supabase | eingebauter Mailversand von Supabase: wenige Mails pro Stunde für das ganze Projekt | mit Passwort anmelden (siehe oben) oder eigenes SMTP einrichten |
 | Login: *nicht freigeschaltet* | Registrierung gesperrt, Adresse nicht eingeladen | unter Users einladen |

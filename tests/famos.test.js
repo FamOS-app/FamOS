@@ -1835,3 +1835,113 @@ test('Kalender: Backup enthält Termine, gelöschte Person verschwindet aus dem 
   const c = load(VORLAGE, { storage: a.store }); // beim nächsten Start bereinigt
   assert.deepEqual(c.get('S.kalender.items[0].who'), []);
 });
+
+// ─── Gericht-Fotos ───
+const { fakeIndexedDB } = require('./fake-idb');
+const JPG = n => 'data:image/jpeg;base64,' + 'A'.repeat(n);
+const tick = async () => { for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r)); };
+
+test('Fotos: nur JPEG-Data-URLs mit reinem Base64 werden angenommen', () => {
+  const a = household();
+  const ok = (v, max = 400000) => a.get(`sImg(${JSON.stringify(v)},${max})`);
+  assert.equal(ok(JPG(40)), JPG(40));
+  for (const bad of ['', 'data:image/svg+xml;base64,AAAA', 'data:image/png;base64,AAAA', 'https://example.org/x.jpg', 'data:image/jpeg;base64,',
+    'data:image/jpeg;base64,AA"AA', 'data:image/jpeg;base64,AAAA);background:url(https://example.org/x', 'data:image/jpeg;base64,AA AA', 'data:image/jpeg;base64,AA\nAA', ' ' + JPG(8)])
+    assert.equal(ok(bad), '', bad);
+  assert.equal(ok(JPG(100), 50), ''); // zu groß
+  assert.equal(a.run(`dishImgSet(S.essen.dishes[0].id,{t:'data:image/svg+xml;base64,AAAA',f:${JSON.stringify(JPG(8))}})`), false);
+  assert.equal(a.run(`dishImgSet('bad id',{t:${JSON.stringify(JPG(8))},f:${JSON.stringify(JPG(8))}})`), false);
+  assert.deepEqual(a.get('IMG.t'), {});
+});
+
+test('Fotos: ersetzen das Emoji in Plan, Kochbuch, Auswahl und Startseite; ohne Foto bleibt das Emoji', async () => {
+  const a = household();
+  const [d0, d1] = a.get('S.essen.dishes.slice(0,2)');
+  a.run(`const td=today();S.essen.plan[td]={abend:{id:'${d0.id}',pin:false}};S.essen.plan[addDays(td,1)]={abend:{id:'${d0.id}',pin:false},mittag:{id:'${d1.id}',pin:false}};S.essen.plan[addDays(td,2)]={abend:{id:'${d1.id}',pin:false}};setView('essen');setEssTab('plan')`);
+  assert.doesNotMatch(a.app(), /class="dimg/);
+  assert.equal(a.run(`dishImgSet('${d0.id}',{t:${JSON.stringify(JPG(64))},f:${JSON.stringify(JPG(640))}})`), true);
+  await tick();
+  a.run('render()');
+  // Vorschau liegt einmal als CSS-Regel vor, die Listen tragen nur den Klassennamen
+  assert.equal(a.els.dishCss.textContent, `.di-${d0.id}{background-image:url(${JPG(64)})}`);
+  let html = a.app();
+  assert.match(html, new RegExp(`<span class="ess-em"><span class="dimg dimg-64 di-${d0.id}"`)); // heute
+  assert.match(html, new RegExp(`<span class="dimg dimg-28 di-${d0.id}"[^>]*></span> ${d0.name}`)); // Wochenzeile
+  assert.doesNotMatch(html, /base64/);
+  assert.ok(html.includes(`${d1.em} ${d1.name}`)); // Gericht ohne Foto: Emoji
+  a.run(`setEssTab('buch')`);
+  html = a.app();
+  assert.match(html, new RegExp(`dimg dimg-56 di-${d0.id}`));
+  assert.ok(html.includes(`<span class="ess-em">${d1.em}</span>`));
+  a.run(`openEssPick(today(),'abend')`);
+  assert.match(a.els.mc.innerHTML, new RegExp(`dimg dimg-40 di-${d0.id}`));
+  a.run(`closeModal();setView('heute')`);
+  assert.match(a.app(), new RegExp(`Essen heute[\\s\\S]*dimg dimg-40 di-${d0.id}`));
+  // Rezept: großes Bild wird nachgeladen
+  a.run(`openRecipe('${d0.id}')`);
+  await tick();
+  assert.match(a.els.mc.innerHTML, new RegExp(`<div class="rc-photo di-${d0.id}"><img src="${JPG(640).replace(/[+/]/g, '\\$&')}" alt="Foto von `));
+  a.run(`closeModal();openRecipe('${d1.id}')`);
+  await tick();
+  assert.doesNotMatch(a.els.mc.innerHTML, /rc-photo/);
+});
+
+test('Fotos: im Gericht-Dialog wählen, ersetzen, entfernen; Gericht löschen entfernt das Foto', async () => {
+  const idb = fakeIndexedDB();
+  const a = household({ globals: { indexedDB: idb } });
+  await tick();
+  const id = a.get('S.essen.dishes[0].id');
+  a.run(`setView('essen');openDishModal('${id}')`);
+  assert.match(a.els.mc.innerHTML, /Foto \(optional\)[\s\S]*onclick="dishPickImg\(\)">📷 Foto wählen/);
+  assert.doesNotMatch(a.els.mc.innerHTML, /dishDropImg/);
+  // Datei-Auswahl: nur Bilder; die Verarbeitung (Canvas) läuft nur im Browser und ist dort geprüft
+  a.run('dishPickImg()');
+  const input = a.created.at(-1);
+  assert.deepEqual([input.type, input.accept, input.clicked], ['file', 'image/*', true]);
+  await input.onchange({ target: { files: [{ type: 'application/pdf', size: 10 }] } });
+  assert.match(a.toast(), /kein Bild/);
+  assert.equal(a.get('UI.form.img'), undefined);
+  // gewähltes Foto erscheint als Vorschau, gespeichert wird erst mit „Speichern“
+  a.run(`UI.form.img={t:${JSON.stringify(JPG(64))},f:${JSON.stringify(JPG(640))}};openModal()`);
+  assert.match(a.els.mc.innerHTML, /<img class="dimg dimg-64" src="data:image\/jpeg;base64,A+" alt="Gewähltes Foto">[\s\S]*Anderes Foto[\s\S]*dishDropImg/);
+  assert.deepEqual(a.get('IMG.t'), {});
+  a.run('saveDish()');
+  await tick();
+  assert.equal(a.get(`IMG.t['${id}']`), JPG(64));
+  assert.deepEqual([idb.data[id].t, idb.data[id].f], [JPG(64), JPG(640)]);
+  // nicht in den Einstellungen und nicht im Backup
+  assert.doesNotMatch(a.store.ra_cfg3, /base64/);
+  assert.doesNotMatch(JSON.stringify(a.get('buildExport()')), /base64/);
+  // Neustart: Vorschau kommt aus dem Gerätespeicher zurück
+  const b = load(VORLAGE, { storage: a.store, globals: { indexedDB: idb } });
+  assert.deepEqual(b.get('IMG.t'), {});
+  await tick();
+  assert.equal(b.get(`IMG.t['${id}']`), JPG(64));
+  assert.equal(b.get('IMG.ready'), true);
+  // kaputter Eintrag im Gerätespeicher wird ignoriert
+  idb.data.kaputt = { id: 'kaputt', t: 'data:image/svg+xml;base64,AAAA', f: 'x' };
+  const c = load(VORLAGE, { storage: a.store, globals: { indexedDB: idb } });
+  await tick();
+  assert.deepEqual(c.get('Object.keys(IMG.t)'), [id]);
+  delete idb.data.kaputt;
+  // entfernen
+  b.run(`openDishModal('${id}')`);
+  assert.match(b.els.mc.innerHTML, new RegExp(`<span class="dimg dimg-64 di-${id}"`));
+  b.run('dishDropImg()');
+  assert.doesNotMatch(b.els.mc.innerHTML, /class="dimg dimg/);
+  b.run('closeModal()'); // abgebrochen: Foto bleibt
+  await tick();
+  assert.ok(idb.data[id]);
+  b.run(`openDishModal('${id}');dishDropImg();saveDish()`);
+  await tick();
+  assert.equal(idb.data[id], undefined);
+  assert.deepEqual(b.get('IMG.t'), {});
+  assert.equal(b.els.dishCss.textContent, '');
+  // Gericht löschen nimmt das Foto mit
+  b.run(`dishImgSet('${id}',{t:${JSON.stringify(JPG(64))},f:${JSON.stringify(JPG(640))}})`);
+  await tick();
+  assert.ok(idb.data[id]);
+  b.run(`openDishModal('${id}');delDish()`);
+  await tick();
+  assert.equal(idb.data[id], undefined);
+});
