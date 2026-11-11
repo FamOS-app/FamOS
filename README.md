@@ -140,7 +140,7 @@ Für alle, die FamOS mit **eigenem Supabase** betreiben möchten, damit die Fami
 2. **Supabase-Konto** auf supabase.com (Login mit GitHub geht).
 
 ### Schritt 2: Repository kopieren (Fork)
-1. https://github.com/janabyromi-del/FamOS öffnen → oben rechts **Fork** → **Create fork**. Den Namen `FamOS` beibehalten, sonst ändert sich die Adresse.
+1. https://github.com/FamOS-app/FamOS öffnen → oben rechts **Fork** → **Create fork**. Den Namen `FamOS` beibehalten, sonst ändert sich die Adresse.
 2. Im eigenen Fork: Reiter **Actions** → **„I understand my workflows, go ahead and enable them“**. Bei Forks sind Actions anfangs aus.
 
 ### Schritt 3: Supabase-Projekt anlegen
