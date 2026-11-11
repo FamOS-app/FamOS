@@ -2,6 +2,8 @@
 
 **Das Gehirn der Familie.** Familien-App als Single-File-PWA (Vanilla HTML/CSS/JS, kein Build-Schritt, kein Framework). Module: Routine, Stundenplan, Taschengeld, Essen, Einkauf.
 
+**Selbst betreiben?** Siehe [Eigene Instanz einrichten](#eigene-instanz-einrichten).
+
 ## Grundregel: Im Code steht nur Rahmen, kein Inhalt
 
 Keine Kindernamen, Lehrkräfte, Stundenpläne, Zugänge oder Passwörter im Repo, auch nicht in Tests oder Commit-Nachrichten. Familiendaten kommen über den Import in die App (später über Supabase). Zugangsdaten gehören in GitHub-Secrets bzw. in nicht eingecheckte lokale Dateien.
@@ -123,6 +125,86 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 - Abmelden lässt die Daten auf dem Gerät. Besitzer/in kann den Haushalt in der Cloud löschen (DSGVO: Löschung), Mitglieder können austreten.
 - Ohne `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` baut die App ohne Sync; die CSP erlaubt dann keinerlei Netzwerkzugriff. Mit Konfiguration genau die eine Projektadresse.
 - Tests: `tests/sync.test.js` (zwei Geräte gegen nachgebauten Server `tests/fake-supabase.js`), `tests/db.test.js` (echte SQL-Regeln).
+
+## Eigene Instanz einrichten
+
+Für alle, die FamOS mit **eigenem Supabase** betreiben möchten, damit die Familiendaten bei ihnen selbst liegen und nicht bei der Person, die den Link geteilt hat.
+
+**Wer nur ausprobieren will, braucht das nicht:** Die App unter dem geteilten Link funktioniert für alle ohne Konto, die Daten bleiben dann auf dem Handy. Diese Anleitung ist für Konto & Sync auf eigener Infrastruktur.
+
+**Dauer:** ca. 45 Minuten, am besten am Computer. **Kosten:** keine (GitHub Free, Supabase Free-Plan).
+**Ergebnis:** eigene Adresse `https://<dein-github-name>.github.io/FamOS/`, eigenes Supabase-Projekt, eigene Konten.
+
+### Schritt 1: Konten anlegen
+1. **GitHub-Konto** auf github.com (falls noch nicht vorhanden). Die E-Mail-Adresse bestätigen, sonst lässt sich GitHub Pages nicht einschalten.
+2. **Supabase-Konto** auf supabase.com (Login mit GitHub geht).
+
+### Schritt 2: Repository kopieren (Fork)
+1. https://github.com/janabyromi-del/FamOS öffnen → oben rechts **Fork** → **Create fork**. Den Namen `FamOS` beibehalten, sonst ändert sich die Adresse.
+2. Im eigenen Fork: Reiter **Actions** → **„I understand my workflows, go ahead and enable them“**. Bei Forks sind Actions anfangs aus.
+
+### Schritt 3: Supabase-Projekt anlegen
+1. **New project**:
+   - Name: `famos`
+   - Region: **Central EU (Frankfurt)**
+   - Datenbank-Passwort generieren lassen und im Passwort-Manager speichern
+2. **Auftragsverarbeitungsvertrag (DPA):** Organization Settings → Legal Documents, falls nicht schon automatisch vorhanden.
+3. **Tabellen und Regeln anlegen:** links **SQL Editor** → **New query**. Nacheinander jede Datei aus `supabase/migrations/` **in Nummernreihenfolge** einfügen und mit **Run** ausführen (001, 002, 003 …). Jedes Mal sollte „Success. No rows returned“ erscheinen. Zum Kopieren auf GitHub die Datei öffnen und oben rechts „Copy raw file“ nutzen.
+4. **Rezept-Import per Link (optional):** links **Edge Functions** → **Deploy a new function** → **Via Editor**.
+   - Name: `recipe-import`
+   - Beispielcode vollständig ersetzen durch den Inhalt von `supabase/functions/recipe-import/index.ts`
+   - **Deploy**. „Verify JWT“ bleibt an.
+   - Achtung: Das ist kein SQL, also **nicht** in den SQL Editor.
+5. **Login-Adresse:** Authentication → **URL Configuration**
+   - Site URL: `https://<dein-github-name>.github.io/FamOS/`
+   - dieselbe Adresse unter **Redirect URLs** hinzufügen
+
+### Schritt 4: Zugangsdaten in GitHub eintragen
+Im eigenen Fork: **Settings → Secrets and variables → Actions**.
+
+| Wo | Name | Wert | Woher |
+|---|---|---|---|
+| Reiter **Variables** | `SUPABASE_URL` | `https://<projekt>.supabase.co` | Supabase → Project Settings → Data API (ein angehängtes `/rest/v1` stört nicht) |
+| Reiter **Variables** | `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_…` | Supabase → Project Settings → API Keys → **Publishable key** |
+| Reiter **Secrets** | `PERSONAL_NAMES` | Namen eurer Kinder, durch Komma getrennt | selbst festlegen (siehe unten) |
+
+- **Niemals den Secret Key (`sb_secret_…`) eintragen**, weder hier noch sonst irgendwo. Der Build bricht ab, wenn er ihn erkennt.
+- **`PERSONAL_NAMES` ist Pflicht.** Der Build prüft damit, dass diese Namen nie im Code landen, und läuft ohne das Secret nicht durch. Wer keine Kinder einträgt, setzt einen Platzhalter, z. B. `KEINNAME`.
+
+### Schritt 5: GitHub Pages einschalten und veröffentlichen
+1. **Settings → Pages** (linke Leiste, Abschnitt „Code and automation“) → **Source: GitHub Actions**.
+2. Reiter **Actions** → links **„CI und Veröffentlichung“** → **Run workflow** → **Run workflow**.
+3. Nach 1 bis 2 Minuten ist der Lauf grün. Die App liegt dann unter `https://<dein-github-name>.github.io/FamOS/`.
+
+### Schritt 6: Einrichten und absichern
+1. Die eigene Adresse auf dem Handy öffnen → Haushalt anlegen → **Als App speichern**.
+2. ⚙️ → **Konto & Sync** → **Anmelden** → Code bzw. Link aus der Mail → **Neuen Haushalt in der Cloud anlegen**.
+3. Partner/in meldet sich ebenfalls an und tritt mit dem **Einladungscode** bei.
+4. **Erst danach** die Registrierung sperren: Supabase → Authentication → **Sign In / Providers** → **„Allow new users to sign up“** aus. Weitere Personen lädt man unter Authentication → **Users** → **Invite user** ein.
+
+### Optional: Code direkt in der Login-Mail
+Ohne eigenen Mailversand verschickt Supabase nur einen Link und wenige Mails pro Stunde; die E-Mail-Vorlagen sind gesperrt. Die App kommt damit zurecht: Link in der Mail **lange drücken → kopieren → in der App einfügen**. Komfortabler wird es mit eigenem SMTP, z. B. Brevo (EU, kostenlos bis 300 Mails/Tag):
+- Supabase → Authentication → Emails → **SMTP Settings**: Host `smtp-relay.brevo.com`, Port `587`, Login und SMTP-Schlüssel aus Brevo
+- dann in den Vorlagen **„Confirm signup“** und **„Magic Link“** `{{ .Token }}` statt des Links verwenden
+
+### Updates übernehmen
+- Auf GitHub im eigenen Fork **„Sync fork“ → „Update branch“**. Die neue Version wird automatisch gebaut und veröffentlicht.
+- **Neue Dateien in `supabase/migrations/` beachten:** Kommt eine Datei mit neuer Nummer dazu (z. B. `004_…`), muss sie einmal im SQL Editor ausgeführt werden. Bereits ausgeführte Dateien **nicht** erneut ausführen.
+- Hat sich `supabase/functions/recipe-import/index.ts` geändert, den Code in der Edge Function ersetzen und erneut deployen.
+
+### Wenn etwas hakt
+
+| Meldung / Symptom | Ursache | Lösung |
+|---|---|---|
+| CI rot bei „Bauen mit Personendaten-Check“: *keine Sperrliste* | Secret `PERSONAL_NAMES` fehlt | Secret anlegen (Schritt 4), Lauf neu starten |
+| CI rot: *SUPABASE_URL muss so aussehen …* | Adresse falsch eingetragen | Variable prüfen: `https://<projekt>.supabase.co` |
+| CI rot: *Das ist der geheime Schlüssel* | Secret Key statt Publishable Key | Variable durch `sb_publishable_…` ersetzen und den Secret Key in Supabase neu erzeugen |
+| Deploy rot: *Ensure GitHub Pages has been enabled* | Pages-Quelle nicht gesetzt | Schritt 5.1 |
+| In der App kein „Konto & Sync“ | Variablen fehlten beim Build | Variablen setzen, Lauf neu starten |
+| Beim Haushalt-Anlegen *function … does not exist* | Migrationen fehlen oder in falscher Reihenfolge | alle Dateien aus `supabase/migrations/` der Reihe nach ausführen |
+| Aufgaben gleichen sich nicht ab | `003_aufgaben.sql` fehlt | ausführen; bereits angelegte Aufgaben werden nachgeliefert |
+| „Aus Link“: *noch nicht eingerichtet* | Edge Function fehlt oder heißt anders | Schritt 3.4, Name exakt `recipe-import` |
+| Login: *nicht freigeschaltet* | Registrierung gesperrt, Adresse nicht eingeladen | unter Users einladen |
 
 ## Roadmap
 
