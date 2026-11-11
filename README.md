@@ -117,7 +117,8 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 
 ### Konto & Sync in der App
 
-- Anmeldung per **6-stelligem Code aus der E-Mail** (kein Passwort, kein Link: ein Link würde auf dem iPhone in Safari statt in der installierten App landen).
+- Anmeldung per **6-stelligem Code aus der E-Mail** (kein Link: ein Link würde auf dem iPhone in Safari statt in der installierten App landen).
+- Alternativ **mit Passwort**, ganz ohne Mail: Konto in Supabase unter Authentication → Users → **Add user** mit E-Mail und Passwort anlegen („Auto Confirm User“ anhaken), in der App **Anmelden → Mit Passwort anmelden**. Das Passwort ändert jede/r selbst unter ⚙️ → Konto & Sync → **Passwort festlegen oder ändern** (mindestens 8 Zeichen). Die App speichert das Passwort nicht.
 - Lokal zuerst: Die App arbeitet immer mit `localStorage`. Mit Anmeldung werden Änderungen nach ~1 s hochgeladen.
 - **Sofort-Übertragung:** Dauerverbindung zu Supabase Realtime (WebSocket, nur `wss://<projekt>.supabase.co`). Eine Meldung löst nur das Abholen aus, die Daten kommen weiter über REST mit RLS. Fremde Haushalte lehnt der Server beim Verbinden ab.
 - Sicherheitsnetz: Steht die Dauerverbindung, fragt die App zusätzlich alle 30 s nach; ohne sie alle 5 s (Einkauf) bzw. 15 s (Rest). Abgerissene Verbindungen werden mit wachsendem Abstand (bis 60 s) neu aufgebaut.
@@ -207,6 +208,7 @@ Ohne eigenen Mailversand verschickt Supabase nur einen Link und wenige Mails pro
 | Aufgaben gleichen sich nicht ab | `003_aufgaben.sql` fehlt | ausführen; bereits angelegte Aufgaben werden nachgeliefert |
 | Termine gleichen sich nicht ab | `004_termine.sql` fehlt | ausführen; bereits angelegte Termine werden nachgeliefert |
 | „Aus Link“: *noch nicht eingerichtet* | Edge Function fehlt oder heißt anders | Schritt 3.4, Name exakt `recipe-import` |
+| Login: *zu viele Anmelde-Mails* / „limit exceeded“ in Supabase | eingebauter Mailversand von Supabase: wenige Mails pro Stunde für das ganze Projekt | mit Passwort anmelden (siehe oben) oder eigenes SMTP einrichten |
 | Login: *nicht freigeschaltet* | Registrierung gesperrt, Adresse nicht eingeladen | unter Users einladen |
 
 ## Roadmap

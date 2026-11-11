@@ -1842,7 +1842,7 @@ function epOwnOk(v){const t=sEm(String(v||'').trim(),'');return t&&/\p{Extended_
 function epOwnPick(){const el=document.getElementById('epOwn'),e=epOwnOk(el?.value);if(!e){toast('Bitte ein Emoji eintippen (Emoji-Tastatur).');return;}if(el)el.value='';epPick(e);}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,cal:renderCalModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,cal:renderCalModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,pwChange:renderPwChangeModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 
@@ -2057,14 +2057,22 @@ function authError(e){
 }
 
 // ─── Anmelden per Code aus der E-Mail ───
-function openLogin(){UI.form={mode:'login',step:AUTH?'household':'email',email:'',code:'',joinCode:'',busy:false,err:''};openModal();}
+function openLogin(){UI.form={mode:'login',step:AUTH?'household':'email',email:'',code:'',pw:'',joinCode:'',busy:false,err:''};openModal();}
 function renderLoginModal(){const f=UI.form,err=f.err?`<div class="sync-err" role="alert">${esc(f.err)}</div>`:'';
   if(f.step==='email')return`<h3>☁️ Anmelden</h3>
-  <div class="ins-why">Mit Konto teilt ihr Routinen, Wochenplan, Einkaufsliste und Taschengeld zwischen euren Handys. Du bekommst einen Code per E-Mail, ein Passwort gibt es nicht.</div>
+  <div class="ins-why">Mit Konto teilt ihr Routinen, Wochenplan, Einkaufsliste und Taschengeld zwischen euren Handys. Du bekommst einen Code per E-Mail. Wer schon ein Passwort hat, meldet sich damit an.</div>
   ${accessNote()}
   <div class="field"><label for="lgMail">E-Mail-Adresse</label><input id="lgMail" type="email" inputmode="email" autocomplete="email" maxlength="120" value="${esc(f.email)}" oninput="UI.form.email=this.value" onkeydown="if(event.key==='Enter')loginSend()"></div>
   ${err}${privacyNote()}
-  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginSend()" ${f.busy?'disabled':''}>${f.busy?'Sende …':'Code schicken'}</button></div>`;
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginSend()" ${f.busy?'disabled':''}>${f.busy?'Sende …':'Code schicken'}</button></div>
+  <button class="quick-all" onclick="UI.form.step='pw';UI.form.err='';openModal()">Mit Passwort anmelden</button>`;
+  if(f.step==='pw')return`<h3>☁️ Mit Passwort anmelden</h3>
+  <div class="ins-why">Für alle, die schon ein Passwort haben: selbst festgelegt unter ⚙️ → Konto &amp; Sync, oder von der Person bekommen, die euch eingeladen hat.</div>
+  <div class="field"><label for="lgMail">E-Mail-Adresse</label><input id="lgMail" type="email" inputmode="email" autocomplete="username" maxlength="120" value="${esc(f.email)}" oninput="UI.form.email=this.value"></div>
+  <div class="field"><label for="lgPw">Passwort</label><input id="lgPw" type="password" autocomplete="current-password" maxlength="72" oninput="UI.form.pw=this.value" onkeydown="if(event.key==='Enter')loginPassword()"></div>
+  ${err}${privacyNote()}
+  <button class="quick-all" onclick="UI.form.step='email';UI.form.pw='';UI.form.err='';openModal()">Lieber Code per E-Mail</button>
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginPassword()" ${f.busy?'disabled':''}>${f.busy?'Prüfe …':'Anmelden'}</button></div>`;
   if(f.step==='code')return`<h3>☁️ Code eingeben</h3>
   <div class="ins-why">Wir haben eine E-Mail an <strong>${esc(f.email)}</strong> geschickt. Schau auch im Spam-Ordner.</div>
   <div class="field"><label for="lgCode">Code aus der E-Mail</label><input id="lgCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" value="${esc(f.code)}" style="font-size:1.4rem;letter-spacing:.25em" oninput="UI.form.code=this.value" onkeydown="if(event.key==='Enter')loginVerify()"></div>
@@ -2120,6 +2128,39 @@ async function loginWithLink(){const f=UI.form,l=parseMailLink(f.link);
       catch(e){if(e.status>=500||!e.status||l.type==='email')throw e;d=await sb('/auth/v1/verify',{method:'POST',body:{type:'email',token_hash:l.token},auth:false});}
     setSession(d);f.link='';refreshAll();await afterLogin();}
   catch(e){loginBusy(false,/expired|invalid/i.test(e.message)&&e.status<500?'Der Link ist abgelaufen oder wurde schon benutzt. Bitte „Andere E-Mail oder neuen Code“ und neu anfordern.':authError(e));}
+}
+// Anmelden mit Passwort (ohne Mail). Das Passwort bleibt nur im Formular und wird nirgends gespeichert.
+function pwError(e){
+  if(/invalid_credentials|invalid login/i.test((e.code||'')+' '+e.message))return'E-Mail-Adresse oder Passwort stimmt nicht.';
+  if(/email_not_confirmed|not confirmed/i.test((e.code||'')+' '+e.message))return'Dieses Konto ist noch nicht bestätigt. Bitte die Person fragen, die dich eingeladen hat.';
+  if(/same_password|different from the old/i.test((e.code||'')+' '+e.message))return'Das neue Passwort ist dasselbe wie das alte.';
+  if(/weak_password/i.test((e.code||'')+' '+e.message))return'Das Passwort ist zu schwach. Bitte ein längeres wählen.';
+  if(/reauthentication|current_password|nonce/i.test((e.code||'')+' '+e.message))return'Zur Sicherheit bitte abmelden, neu anmelden und es direkt danach nochmal versuchen.';
+  if(e.status===429||/rate limit/i.test(e.message))return'Zu viele Versuche. Bitte kurz warten.';
+  if(!e.status)return'Keine Verbindung. Bist du online?';
+  return'Das hat nicht geklappt ('+e.message+').';}
+async function loginPassword(){const f=UI.form,email=String(f.email||'').trim(),password=String(f.pw||'');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){loginBusy(false,'Bitte eine gültige E-Mail-Adresse eingeben.');return;}
+  if(!password){loginBusy(false,'Bitte das Passwort eingeben.');return;}
+  f.email=email;loginBusy(true);
+  try{const d=await sb('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password},auth:false});f.pw='';setSession(d);refreshAll();await afterLogin();}
+  catch(e){f.pw='';loginBusy(false,pwError(e));}
+}
+// Passwort festlegen oder ändern (nur angemeldet)
+function openPwChange(){if(!AUTH)return;UI.form={mode:'pwChange',p1:'',p2:'',busy:false,err:''};openModal();}
+function renderPwChangeModal(){const f=UI.form;
+  return`<h3>🔑 Passwort</h3>
+  <div class="ins-why">Mit einem Passwort meldest du dich auf weiteren Geräten ohne E-Mail-Code an. Ein vorhandenes Passwort wird ersetzt.</div>
+  <div class="field"><label for="pwN1">Neues Passwort (mindestens 8 Zeichen)</label><input id="pwN1" type="password" autocomplete="new-password" maxlength="72" oninput="UI.form.p1=this.value"></div>
+  <div class="field"><label for="pwN2">Wiederholen</label><input id="pwN2" type="password" autocomplete="new-password" maxlength="72" oninput="UI.form.p2=this.value" onkeydown="if(event.key==='Enter')savePwChange()"></div>
+  ${f.err?`<div class="sync-err" role="alert">${esc(f.err)}</div>`:''}
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="savePwChange()" ${f.busy?'disabled':''}>${f.busy?'Speichere …':'Speichern'}</button></div>`;}
+async function savePwChange(){const f=UI.form,p1=String(f.p1||''),p2=String(f.p2||''),fail=m=>{f.p1='';f.p2='';f.busy=false;f.err=m;openModal();};
+  if(p1.length<8)return fail('Das Passwort braucht mindestens 8 Zeichen.');
+  if(p1!==p2)return fail('Die beiden Eingaben stimmen nicht überein.');
+  f.busy=true;f.err='';openModal();
+  try{await sb('/auth/v1/user',{method:'PUT',body:{password:p1}});f.p1='';f.p2='';closeModal();toast('Passwort gespeichert');}
+  catch(e){fail(pwError(e));}
 }
 // Nach dem Anmelden: vorhandenen Haushalt verbinden oder anbieten, einen anzulegen bzw. beizutreten
 async function afterLogin(){
@@ -2337,7 +2378,7 @@ function syncBadge(){if(!SYNC_ON||!SYNC.hid)return'';const st=SYNC.status,pend=O
   return` · <span class="sync-badge" title="${l}">${ic} ${l}</span>`;}
 function admKonto(){
   if(!AUTH)return`<div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Noch nicht angemeldet. Mit Konto gleicht FamOS eure Handys ab: Routinen, Wochenplan, Einkaufsliste, Taschengeld.</div>${accessNote()}${privacyNote()}<button class="m-save sync-wide" onclick="openLogin()">☁️ Anmelden</button></div>`;
-  if(!SYNC.hid)return`<div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Angemeldet als <strong>${esc(AUTH.user.email)}</strong>, aber noch mit keinem Haushalt verbunden.</div><button class="m-save sync-wide" onclick="openLogin()">Haushalt verbinden</button><button class="reset-btn" onclick="logout()">Abmelden</button></div>`;
+  if(!SYNC.hid)return`<div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Angemeldet als <strong>${esc(AUTH.user.email)}</strong>, aber noch mit keinem Haushalt verbunden.</div><button class="m-save sync-wide" onclick="openLogin()">Haushalt verbinden</button><button class="reset-btn" onclick="openPwChange()">Passwort festlegen oder ändern</button><button class="reset-btn" onclick="logout()">Abmelden</button></div>`;
   const pend=Object.keys(SYNC.dirty).length+SYNC.queue.length,at=SYNC.at?new Date(SYNC.at).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'–';
   return`<div class="tg-card"><div class="as-lbl">Abgleich</div>
     <div class="sync-row"><span>${syncBadge().replace(' · ','')}</span><span class="sync-at">zuletzt ${at}${pend?` · ${pend} offen`:''}</span></div>
@@ -2350,6 +2391,7 @@ function admKonto(){
     <div class="sync-code">${esc(fmtInvite(SYNC.invite))}</div>
     <div style="display:flex;gap:8px;margin-top:10px"><button class="aa" style="margin:0" onclick="copyInvite()">Code kopieren</button>${SYNC.role==='owner'?`<button class="aa" style="margin:0" onclick="rotateInvite()">Neuer Code</button>`:''}</div></div>
   <div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Angemeldet als <strong>${esc(AUTH.user.email)}</strong>${SYNC.role==='owner'?' · Besitzer/in':''}</div>
+    <button class="reset-btn" onclick="openPwChange()">Passwort festlegen oder ändern</button>
     <button class="reset-btn" onclick="logout()">Abmelden</button>
     <button class="reset-btn sync-danger" onclick="leaveHousehold()">${SYNC.role==='owner'?'Haushalt in der Cloud löschen':'Haushalt verlassen'}</button></div>`;
 }

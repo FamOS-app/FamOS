@@ -49,6 +49,7 @@ class FakeSupabase {
   notify(hid, table, type) {
     for (const s of this.sockets) if (s.hid === hid && s.topic) s.deliver({ topic: s.topic, event: 'postgres_changes', payload: { data: { table, type, schema: 'public' }, ids: [1] } });
   }
+  addUser(email, password, extra = {}) { this.users[email] = { id: uuid(), email, password, ...extra }; }
   code(email) { return this.codes[email]; }
   link(email, type = 'signup') { return `https://testprojekt.supabase.co/auth/v1/verify?token=${this.hashes[email]}&type=${type}&redirect_to=https://example.github.io/FamOS/`; }
   expireTokens() { this.tokens = {}; }
@@ -89,6 +90,13 @@ class FakeSupabase {
       delete this.codes[data.email];
       return res(200, this.session(data.email));
     }
+    if (path === '/auth/v1/token' && q.get('grant_type') === 'password') {
+      this.pwTries = (this.pwTries || 0) + 1;
+      const u = this.users[data.email];
+      if (!u || !u.password || u.password !== data.password) return res(400, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' });
+      if (u.unconfirmed) return res(400, { code: 400, error_code: 'email_not_confirmed', msg: 'Email not confirmed' });
+      return res(200, this.session(data.email));
+    }
     if (path === '/auth/v1/token') {
       const uid = this.refresh[data.refresh_token];
       if (!uid) return res(400, { error_code: 'refresh_token_not_found', msg: 'Invalid Refresh Token' });
@@ -100,6 +108,13 @@ class FakeSupabase {
     const uid = this.tokens[bearer];
     if (path === '/auth/v1/logout') { delete this.tokens[bearer]; return res(204); }
     if (!uid) return res(401, { code: 'PGRST301', message: 'JWT expired' });
+    if (path === '/auth/v1/user' && method === 'PUT') {
+      const u = Object.values(this.users).find(x => x.id === uid);
+      if (typeof data.password !== 'string' || data.password.length < 6) return res(422, { code: 422, error_code: 'weak_password', msg: 'Password should be at least 6 characters.' });
+      if (u.password === data.password) return res(422, { code: 422, error_code: 'same_password', msg: 'New password should be different from the old password.' });
+      u.password = data.password;
+      return res(200, { id: u.id, email: u.email });
+    }
     if (path === '/auth/v1/user') return res(200, Object.values(this.users).find(x => x.id === uid));
 
     // ── Edge Function Rezept-Import ──
