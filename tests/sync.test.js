@@ -602,3 +602,105 @@ test('Sync: Passwort festlegen und ändern, danach Anmeldung mit dem neuen Passw
   await tryPw('noch-ein-neues-3', 'noch-ein-neues-3');
   assert.equal(server.users['a@example.org'].password, 'ganz-anders-22'); // abgelaufene Sitzung ändert nichts
 });
+
+// ─── Gericht-Fotos ───
+const { fakeIndexedDB } = require('./fake-idb');
+const JPG = n => 'data:image/jpeg;base64,' + 'A'.repeat(n);
+const withIdb = (server, extra = {}) => { const idb = fakeIndexedDB(); return { idb, opts: { globals: { indexedDB: idb, ...extra } } }; };
+const setImg = (d, id, n) => d.run(`dishImgSet('${id}',{t:${JSON.stringify(JPG(n))},f:${JSON.stringify(JPG(n * 10))}})`);
+
+test('Sync: Foto kommt auf dem anderen Handy an, Ersetzen und Entfernen auch; Bilddaten werden nur bei Änderung geladen', async () => {
+  const server = new FakeSupabase();
+  const A = withIdb(server, { WebSocket: server.WebSocket }), B = withIdb(server, { WebSocket: server.WebSocket });
+  const a = await founder(server, A.opts);
+  const b = await partner(server, a, B.opts);
+  await settle(a, b);
+  const id = a.get('S.essen.dishes[0].id');
+  setImg(a, id, 60);
+  await settle(a, b); await settle(a, b);
+  assert.equal(server.images.length, 1);
+  assert.deepEqual([server.images[0].dish_id, server.images[0].thumb, server.images[0].photo], [id, JPG(60), JPG(600)]);
+  assert.equal(b.get(`IMG.t['${id}']`), JPG(60));
+  assert.equal(B.idb.data[id].f, JPG(600));
+  assert.equal(b.els.dishCss.textContent, `.di-${id}{background-image:url(${JPG(60)})}`);
+  b.run(`setView('essen');setEssTab('buch')`);
+  assert.match(b.app(), new RegExp(`dimg dimg-56 di-${id}`));
+  // nichts geändert: nur die schlanke Liste, keine Bilddaten
+  server.calls.length = 0;
+  await sync(b); await settle(a, b);
+  const calls = server.calls.filter(u => u.includes('/dish_images'));
+  assert.ok(calls.length >= 1);
+  assert.ok(calls.every(u => /select=dish_id(%2C|,)rev$/.test(u)), calls.join('\n'));
+  // Fotos stecken nicht im Einstellungs-Dokument und nicht in der Warteschlange auf dem Gerät
+  assert.doesNotMatch(JSON.stringify(server.docs), /base64/);
+  assert.doesNotMatch(JSON.stringify(a.store), /base64/);
+  // ersetzen (auf B), entfernen (auf A)
+  setImg(b, id, 70);
+  await settle(a, b); await settle(a, b);
+  assert.equal(a.get(`IMG.t['${id}']`), JPG(70));
+  assert.equal(A.idb.data[id].f, JPG(700));
+  a.run(`openDishModal('${id}');dishDropImg();saveDish()`);
+  await settle(a, b); await settle(a, b);
+  assert.equal(server.images.length, 0);
+  assert.deepEqual(b.get('IMG.t'), {});
+  assert.equal(B.idb.data[id], undefined);
+});
+
+test('Sync: ohne Foto-Tabelle (005 noch nicht eingespielt) läuft der Rest weiter, Fotos werden nachgeliefert', async () => {
+  const server = new FakeSupabase();
+  server.noImages = true;
+  const A = withIdb(server, { WebSocket: server.WebSocket }), B = withIdb(server, { WebSocket: server.WebSocket });
+  const a = await founder(server, A.opts);
+  const b = await partner(server, a, B.opts);
+  await settle(a, b);
+  assert.equal(a.get('RT.joined'), true);
+  const id = a.get('S.essen.dishes[0].id');
+  setImg(a, id, 60);
+  a.run(`UI.ekNew='Milch';ekAddInput()`);
+  await settle(a, b); await settle(a, b);
+  assert.equal(a.get('SYNC.status'), 'ok');
+  assert.deepEqual(b.get('S.einkauf.items.map(x=>x.name)'), ['Milch']);
+  assert.equal(a.get(`IMG.t['${id}']`), JPG(60)); // bleibt lokal
+  assert.deepEqual(b.get('IMG.t'), {});
+  server.noImages = false; // 005 eingespielt
+  await sync(a); await settle(a, b);
+  assert.equal(server.images.length, 1);
+  await sync(b); await settle(a, b); await settle(a, b);
+  assert.equal(b.get(`IMG.t['${id}']`), JPG(60));
+  for (const d of [a, b]) assert.equal(d.get('RT.joined'), true);
+  assert.ok(server.sockets.every(s => s.sent.find(m => m.event === 'phx_join').payload.config.postgres_changes.some(c => c.table === 'dish_images')));
+});
+
+test('Sync: Haushalt anlegen lädt vorhandene Fotos hoch, Beitritt ersetzt lokale Fotos durch die des Haushalts', async () => {
+  const server = new FakeSupabase();
+  const A = withIdb(server), B = withIdb(server);
+  const a = device(server, A.opts);
+  a.run(`openKidModal(null);UI.form.name='Emma';saveKid();ob().name='Familie Test';obFinish()`);
+  a.flush(); await settle(a);
+  const id = a.get('S.essen.dishes[0].id');
+  setImg(a, id, 60); // Foto schon vor dem Konto
+  await settle(a);
+  await login(a, server, 'a@example.org');
+  await a.run('createHousehold()');
+  await settle(a); await sync(a); await settle(a);
+  assert.deepEqual(server.images.map(r => r.dish_id), [id]);
+  // B hat lokal ein eigenes Foto und tritt bei
+  const b = device(server, B.opts);
+  b.run(`openKidModal(null);UI.form.name='Ben';saveKid();ob().name='Lokal';obFinish()`);
+  b.flush(); await settle(b);
+  setImg(b, 'lokal1', 50);
+  await settle(b);
+  await login(b, server, 'b@example.org');
+  b.run(`UI.form.joinCode=${JSON.stringify(a.get('SYNC.invite'))}`);
+  await b.run('joinHousehold()');
+  await settle(b); await sync(b); await settle(b);
+  assert.deepEqual(b.get('Object.keys(IMG.t)'), [id]);
+  assert.deepEqual(Object.keys(B.idb.data), [id]);
+  assert.deepEqual(server.images.map(r => r.dish_id), [id]); // das lokale Foto von B wurde nicht hochgeladen
+  // Fremde sehen nichts
+  const c = device(server, withIdb(server).opts);
+  await login(c, server, 'c@example.org');
+  c.run(`SYNC.hid='${a.get('SYNC.hid')}'`);
+  await sync(c); await settle(c);
+  assert.deepEqual(c.get('IMG.t'), {});
+});

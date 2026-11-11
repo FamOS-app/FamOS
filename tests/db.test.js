@@ -159,7 +159,7 @@ test('DB: höchstens 3 Haushalte pro Person, Realtime für docs und Einkauf akti
   for (let i = 0; i < 3; i++) await as(db, 'fremd', `select * from create_household('H${i}')`);
   await fails(as(db, 'fremd', `select * from create_household('H4')`), /zu viele Haushalte/);
   const pub = await db.query(`select tablename from pg_publication_tables where pubname='supabase_realtime' order by 1`);
-  assert.deepEqual(pub.rows.map(r => r.tablename), ['docs', 'events', 'shopping_items', 'tasks']);
+  assert.deepEqual(pub.rows.map(r => r.tablename), ['dish_images', 'docs', 'events', 'shopping_items', 'tasks']);
 });
 
 test('DB: Aufgaben nur für Mitglieder, Eingaben werden begrenzt, Realtime aktiv', async () => {
@@ -197,4 +197,38 @@ test('DB: Termine nur für Mitglieder, Eingaben werden begrenzt, Realtime aktiv'
   assert.equal(pub.rows.length, 1);
   await as(db, 'partner', `delete from households where id=$1`, [h.id]);
   assert.equal((await db.query('select count(*)::int n from events where household_id=$1', [h.id])).rows[0].n, 0);
+});
+
+test('DB: Gericht-Fotos nur für Mitglieder, nur JPEG-Data-URLs in begrenzter Größe, höchstens 300 je Haushalt', async () => {
+  const [h] = await as(db, 'partner', `select * from create_household('Foto-Test')`);
+  const jpg = n => 'data:image/jpeg;base64,' + 'A'.repeat(n);
+  const ins = (id, thumb, photo, rev = 'r1') => as(db, 'partner', `insert into dish_images (household_id, dish_id, thumb, photo, rev) values ($1, $2, $3, $4, $5)`, [h.id, id, thumb, photo, rev]);
+  await ins('d1', jpg(400), jpg(4000));
+  assert.deepEqual(await as(db, 'fremd', 'select dish_id from dish_images'), []);
+  await fails(as(db, 'fremd', `insert into dish_images (household_id, dish_id, thumb, photo) values ($1, 'x', $2, $2)`, [h.id, jpg(8)]), /row-level security/);
+  assert.deepEqual(await as(db, 'fremd', `delete from dish_images where dish_id='d1' returning 1`), []);
+  for (const [what, args] of [
+    ['SVG statt JPEG', ['d2', 'data:image/svg+xml;base64,AAAA', jpg(8)]],
+    ['Skript in der URL', ['d2', jpg(8), 'data:image/jpeg;base64,AAAA");background:url(https://example.org/x']],
+    ['fremde Adresse', ['d2', 'https://example.org/bild.jpg', jpg(8)]],
+    ['Vorschau zu groß', ['d2', jpg(40000), jpg(8)]],
+    ['Foto zu groß', ['d2', jpg(8), jpg(400000)]],
+    ['ungültige ID', ['bad id!', jpg(8), jpg(8)]],
+    ['ungültiger Stand', ['d2', jpg(8), jpg(8), 'x y']],
+  ]) await fails(ins(...args), /check/i, what);
+  // Gegenprobe: an der Grenze geht es durch
+  await ins('d2', jpg(40000 - 23), jpg(400000 - 23));
+  // Ersetzen wie in der App (Upsert)
+  const [r] = await as(db, 'partner', `insert into dish_images (household_id, dish_id, thumb, photo, rev) values ($1, 'd1', $2, $2, 'r2')
+    on conflict (household_id, dish_id) do update set thumb = excluded.thumb, photo = excluded.photo, rev = excluded.rev returning rev, char_length(photo) n`, [h.id, jpg(12)]);
+  assert.deepEqual(r, { rev: 'r2', n: 35 });
+  // Obergrenze: 300 Fotos, das 301. wird abgelehnt, Ersetzen geht weiter
+  await db.query(`insert into dish_images (household_id, dish_id, thumb, photo) select $1, 'f' || g, $2, $2 from generate_series(1, 298) g`, [h.id, jpg(8)]);
+  await fails(ins('zuviel', jpg(8), jpg(8)), /zu viele Fotos/);
+  await as(db, 'partner', `insert into dish_images (household_id, dish_id, thumb, photo, rev) values ($1, 'd1', $2, $2, 'r3')
+    on conflict (household_id, dish_id) do update set rev = excluded.rev`, [h.id, jpg(8)]);
+  const pub = await db.query(`select tablename from pg_publication_tables where pubname='supabase_realtime' and tablename='dish_images'`);
+  assert.equal(pub.rows.length, 1);
+  await as(db, 'partner', `delete from households where id=$1`, [h.id]);
+  assert.equal((await db.query('select count(*)::int n from dish_images where household_id=$1', [h.id])).rows[0].n, 0);
 });

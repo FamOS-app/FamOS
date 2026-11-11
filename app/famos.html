@@ -219,6 +219,11 @@ input{font-family:var(--font)}
 .seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg2);border-radius:14px;padding:4px;margin-bottom:16px}
 .seg-b{background:none;border-radius:10px;min-height:44px;font-weight:800;font-size:.95rem;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:8px}
 .seg-b.on{background:var(--card);color:var(--text)}
+.dimg{display:inline-block;vertical-align:middle;flex-shrink:0;background-size:cover;background-position:center;background-color:var(--bg2);border-radius:22%;object-fit:cover}
+.dimg-28{width:28px;height:28px;margin-right:6px}.dimg-40{width:40px;height:40px}.dimg-56{width:56px;height:56px}.dimg-64{width:64px;height:64px}
+.dimg-row{display:flex;gap:8px;align-items:center}
+.rc-photo{aspect-ratio:16/10;border-radius:14px;background-size:cover;background-position:center;background-color:var(--bg2);overflow:hidden;margin-bottom:14px}
+.rc-photo img{width:100%;height:100%;object-fit:cover;display:block}
 .cal-row .ek-item{align-items:flex-start}
 .cal-time{flex:0 0 64px;display:flex;flex-direction:column;font-weight:800;font-size:.88rem;color:var(--pri);padding-top:1px;font-variant-numeric:tabular-nums}
 .cal-time small{font-weight:700;font-size:.72rem;color:var(--muted)}
@@ -553,6 +558,7 @@ button,input,textarea{font-family:var(--font)}
 .look-sw{display:flex;gap:4px}
 .look-sw i{width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,.08);display:block}
 </style>
+<style id="dishCss"></style>
 </head>
 <body>
 <div id="app"></div>
@@ -1274,14 +1280,14 @@ function buildEssPlan(){
   const dates=weekDates(UI.essWeek),meals=activeMeals(),td=today(),showToday=dates.includes(td);
   const todayCard=m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
     return`<div class="tg-card ess-today"><div class="ess-meal">${m.l}</div>
-    ${d?`<button class="ess-dish" onclick="openRecipe('${d.id}','${td}','${m.id}')"><span class="ess-em">${esc(d.em)}</span><span class="ess-name">${esc(d.name)}</span></button><button class="ess-rc" onclick="openRecipe('${d.id}','${td}','${m.id}')">Rezept ansehen${d.steps.length?` · ${d.steps.length} Schritte`:''} →</button>`:`<div class="ess-none">Noch nichts geplant</div>`}
+    ${d?`<button class="ess-dish" onclick="openRecipe('${d.id}','${td}','${m.id}')"><span class="ess-em">${dishIc(d,64)}</span><span class="ess-name">${esc(d.name)}</span></button><button class="ess-rc" onclick="openRecipe('${d.id}','${td}','${m.id}')">Rezept ansehen${d.steps.length?` · ${d.steps.length} Schritte`:''} →</button>`:`<div class="ess-none">Noch nichts geplant</div>`}
     <div class="ess-acts"><button class="tg-act ein" onclick="rollToday('${m.id}')" ${sl?.pin?'disabled':''}>${d?'Nochmal würfeln':'Würfeln'}</button><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Auswählen</button>${d?`<button class="tg-act ess-pinbtn${sl.pin?' pinned':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="${sl.pin?'Festgelegt, tippen zum Lösen':'Festlegen'}" onclick="togPin('${td}','${m.id}')">📌</button>`:''}</div></div>`;};
   const rest=dates.filter(ds=>ds>td||(!showToday&&ds>=td));
   return`${showToday?`<div class="s-lbl">Heute</div>${meals.map(todayCard).join('')}`:''}
   <div class="ess-weekhead"><div class="rt-pills" style="margin:0"><button class="rt-pill${UI.essWeek===0?' on':''}" onclick="setEssWeek(0)">Diese Woche</button><button class="rt-pill${UI.essWeek===1?' on':''}" onclick="setEssWeek(1)">Nächste</button></div><button class="ess-roll" onclick="rollWeek()">Woche würfeln</button></div>
   ${rest.length?rest.map(ds=>{const i=DAYS.findIndex(d=>d.id===['so','mo','di','mi','do','fr','sa'][pdate(ds).getDay()]);
     return`<div class="ess-day"><div class="ess-dlbl">${DAYS[i].s}<span>${ds.slice(8,10)}.${ds.slice(5,7)}.</span></div><div class="ess-slots">${meals.map(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);
-    return`<div class="ess-slot"><button class="ess-pick" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${d?`${esc(d.em)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
+    return`<div class="ess-slot"><button class="ess-pick" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${d?`${dishIc(d,28)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
   <div class="ess-hint">📌 = festgelegt, bleibt beim Würfeln stehen.</div>`;
 }
 function buildEssBook(){
@@ -1292,7 +1298,7 @@ function buildEssBook(){
   ${S.essen.dishes.length>5?`<div class="ek-add" style="margin-top:10px"><label for="essQ" class="sr">Suchen</label><input id="essQ" type="search" placeholder="Gericht oder Zutat suchen" value="${esc(UI.essQ||'')}" oninput="UI.essQ=this.value;clearTimeout(UI._qT);UI._qT=setTimeout(()=>{render();const el=document.getElementById('essQ');if(el){el.focus();el.setSelectionRange?.(el.value.length,el.value.length);}},250)"></div>`:''}
   ${essTagChips()}
   <div class="ess-hint">Antippen, wer was mag: · → 👍 → 👎. ${noAdults?'Erwachsene unter ⚙️ → Haushalt anlegen, dann bewerten sie mit.':'Beim Würfeln kommt Beliebtes öfter.'}</div>
-  ${list.map(d=>`<div class="tg-card ess-book"><button class="ess-bk-head" onclick="openRecipe('${d.id}')"><span class="ess-em">${esc(d.em)}</span><span class="ess-bk-t"><span class="ess-name">${esc(d.name)}</span><span class="ai-sub">${d.meals.map(m=>mealOf(m).l).join(' · ')}${d.tags.length?' · '+d.tags.map(t=>TAGS.find(x=>x.id===t).l).join(', '):''}${d.ingr.length?` · ${d.ingr.length} Zutaten`:''}</span></span></button>${rateRow(d)}</div>`).join('')||'<div class="sp-empty">Nichts gefunden.</div>'}`;
+  ${list.map(d=>`<div class="tg-card ess-book"><button class="ess-bk-head" onclick="openRecipe('${d.id}')"><span class="ess-em">${dishIc(d,56)}</span><span class="ess-bk-t"><span class="ess-name">${esc(d.name)}</span><span class="ai-sub">${d.meals.map(m=>mealOf(m).l).join(' · ')}${d.tags.length?' · '+d.tags.map(t=>TAGS.find(x=>x.id===t).l).join(', '):''}${d.ingr.length?` · ${d.ingr.length} Zutaten`:''}</span></span></button>${rateRow(d)}</div>`).join('')||'<div class="sp-empty">Nichts gefunden.</div>'}`;
 }
 
 // ─── Mengen: „500 g Mehl“ erkennen, umrechnen, zusammenzählen ───
@@ -1325,10 +1331,10 @@ function scaleIngr(p,f,shop){if(p.q==null)return p;let q=p.q*f;
 function dishFactor(d,persons){return(persons||S.essen.persons||4)/(d.portions||4);}
 
 // Rezept ansehen: Zutaten für die eingestellte Personenzahl, Schritte nummeriert
-function openRecipe(id,ds,meal){const d=dishById(id);if(!d)return;UI.form={mode:'recipe',id,ds:ds||'',meal:meal||'',p:S.essen.persons||4};openModal();}
+function openRecipe(id,ds,meal){const d=dishById(id);if(!d)return;UI.form={mode:'recipe',id,ds:ds||'',meal:meal||'',p:S.essen.persons||4};openModal();imgFull(id);}
 function recipePersons(delta){UI.form.p=Math.min(20,Math.max(1,UI.form.p+delta));openModal();}
 function renderRecipeModal(){const f=UI.form,d=dishById(f.id);if(!d)return'';const fac=dishFactor(d,f.p);
-  return`<h3>${esc(d.em)} ${esc(d.name)}</h3>
+  return`${IMG.t[d.id]?`<div class="rc-photo di-${d.id}">${IMG.full?.id===d.id?`<img src="${IMG.full.f}" alt="Foto von ${esc(d.name)}">`:''}</div>`:''}<h3>${esc(d.em)} ${esc(d.name)}</h3>
   <div class="rc-persons"><span>Für</span><button class="rc-step" aria-label="Weniger Personen" onclick="recipePersons(-1)">−</button><strong>${f.p}</strong><button class="rc-step" aria-label="Mehr Personen" onclick="recipePersons(1)">＋</button><span>${f.p===1?'Person':'Personen'}</span><span class="rc-base">Rezept für ${d.portions}</span></div>
   ${rateRow(d)}
   <div class="as-lbl">Zutaten</div>
@@ -1351,9 +1357,10 @@ function dishPortions(v){const f=UI.form;f.portions=v;const n=Math.round(Number(
 
 // Gericht anlegen / bearbeiten
 function openDishModal(id){const ex=id?dishById(id):null;UI.form={mode:'dish',id:ex?id:null,em:ex?.em||'🍽️',name:ex?.name||'',meals:ex?ex.meals.slice():[activeMeals()[0]?.id||'abend'],tags:ex?ex.tags.slice():[],ingr:ex?ex.ingr.join('\n'):'',portions:ex?.portions||4,steps:ex?ex.steps.join('\n'):''};dishIngrBase();openModal();}
-function renderDishModal(){const f=UI.form,chip=(key,x)=>`<button class="ap${f[key].includes(x.id)?' on':''}" aria-pressed="${f[key].includes(x.id)}" onclick="dishTog('${key}','${x.id}',this)">${x.em} ${x.l}</button>`;
+function renderDishModal(){const f=UI.form,has=!!(f.id&&IMG.t[f.id]&&!f.imgDel),chip=(key,x)=>`<button class="ap${f[key].includes(x.id)?' on':''}" aria-pressed="${f[key].includes(x.id)}" onclick="dishTog('${key}','${x.id}',this)">${x.em} ${x.l}</button>`;
   return`<h3>${f.id?'Gericht bearbeiten':'Neues Gericht'}</h3>
   <div class="field"><label>Emoji</label><button class="em-btn" id="emD" onclick="epOpen(e=>{UI.form.em=e;document.getElementById('emD').textContent=e;})">${esc(f.em)}</button></div>
+  <div class="field"><label>Foto (optional)</label><div class="dimg-row">${f.img?`<img class="dimg dimg-64" src="${f.img.t}" alt="Gewähltes Foto">`:has?`<span class="dimg dimg-64 di-${f.id}" role="img" aria-label="Aktuelles Foto"></span>`:''}<button class="aa" style="margin:0;flex:1" onclick="dishPickImg()">📷 ${f.img||has?'Anderes Foto':'Foto wählen'}</button>${f.img||has?`<button class="aa" style="margin:0;flex:0 0 auto;width:auto;padding:12px 16px" aria-label="Foto entfernen" onclick="dishDropImg()">🗑️</button>`:''}</div><div class="field-hint">Mit Foto ersetzt es das Emoji in Plan und Kochbuch. Es wird verkleinert gespeichert, Aufnahmeort und Kameradaten fallen dabei weg.</div></div>
   <div class="field"><label>Name</label><input value="${esc(f.name)}" maxlength="60" placeholder="z.B. Spaghetti Bolognese" oninput="UI.form.name=this.value"></div>
   <div class="field"><label>Passt zu</label><div class="ap-wrap">${MEALS.map(m=>chip('meals',m)).join('')}</div></div>
   <div class="field"><label>Eigenschaften</label><div class="ap-wrap">${TAGS.map(t=>chip('tags',t)).join('')}</div></div>
@@ -1371,10 +1378,11 @@ function saveDish(){
     ingr:String(f.ingr||'').split('\n').map(x=>x.trim().slice(0,80)).filter(Boolean).slice(0,60),ratings:ex?ex.ratings:{},
     portions:Math.min(20,Math.max(1,Math.round(Number(f.portions))||4)),steps:String(f.steps||'').split('\n').map(x=>x.trim().slice(0,300)).filter(Boolean).slice(0,30)};
   if(ex)Object.assign(ex,d);else S.essen.dishes.push(d);
+  if(f.img)dishImgSet(d.id,f.img);else if(f.imgDel&&IMG.t[d.id])dishImgDel(d.id);
   saveCfg();closeModal();render();
 }
 function delDish(){const id=UI.form.id;if(!confirm('Gericht löschen?'))return;
-  S.essen.dishes=S.essen.dishes.filter(d=>d.id!==id);
+  S.essen.dishes=S.essen.dishes.filter(d=>d.id!==id);if(IMG.t[id])dishImgDel(id);
   Object.keys(S.essen.plan).forEach(ds=>Object.keys(S.essen.plan[ds]).forEach(m=>{if(S.essen.plan[ds][m].id===id)setSlot(ds,m,null);}));
   saveCfg();closeModal();render();}
 
@@ -1383,7 +1391,7 @@ function openEssPick(ds,meal){UI.form={mode:'essPick',ds,meal};openModal();}
 function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f.ds).getDay()+6)%7].l,cur=planSlot(f.ds,f.meal);
   const list=S.essen.dishes.filter(d=>d.meals.includes(f.meal)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
   return`<h3>${m.em} ${m.l} · ${day}</h3>
-  <div class="al">${list.map(d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" onclick="essPickSet('${d.id}')"><span class="ai-em">${esc(d.em)}</span><span class="ai-main">${esc(d.name)}</span></button>`).join('')||`<div class="sp-empty">Noch kein Gericht für ${m.l}.</div>`}</div>
+  <div class="al">${list.map(d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`).join('')||`<div class="sp-empty">Noch kein Gericht für ${m.l}.</div>`}</div>
   <div class="m-btns">${cur?`<button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
 function essPickSet(id){const f=UI.form;if(id&&!dishById(id))return;setSlot(f.ds,f.meal,id,true);pruneEssen();saveCfg();closeModal();render();}
 
@@ -1669,6 +1677,58 @@ function saveTodo(){const f=UI.form,t=S.aufgaben.items.find(x=>x.id===f.id);if(!
   todoOp('up',t);saveCfg();closeModal();render();}
 function delTodo(){const f=UI.form;if(!confirm('Aufgabe löschen?'))return;S.aufgaben.items=S.aufgaben.items.filter(x=>x.id!==f.id);todoOp('del',{id:f.id});saveCfg();closeModal();render();}
 
+// ═══ GERICHT-FOTOS ════════════════════════════
+// Je Gericht eine kleine Vorschau (für Listen, alle im Speicher) und ein großes Bild (erst beim Öffnen geladen).
+// Auf dem Gerät in IndexedDB, im Haushalt zeilenweise in der Tabelle dish_images. Nicht im cfg-Dokument und nicht im Backup.
+const IMG={t:{},rev:{},full:null,ready:false},IMG_MEM={};
+const IMG_PX_T=160,IMG_PX_F=900,IMG_T=40000,IMG_F=400000;
+// Nur JPEG als Data-URL mit reinem Base64: so kann nichts anderes in CSS oder HTML landen
+function sImg(v,max){return typeof v==='string'&&v.length<=max&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(v)?v:'';}
+function dishIc(d,px){return IMG.t[d.id]?`<span class="dimg dimg-${px} di-${d.id}" role="img" aria-label="Foto"></span>`:esc(d.em);}
+// Vorschaubilder einmal als CSS-Regeln ablegen, damit Listen beim Neuzeichnen keine Bilddaten mitschleppen
+function imgCss(){const el=document.getElementById('dishCss');if(el)el.textContent=Object.keys(IMG.t).map(id=>`.di-${id}{background-image:url(${IMG.t[id]})}`).join('');}
+function idbDo(mode,fn){return new Promise((res,rej)=>{
+  const o=indexedDB.open('famos',1);o.onupgradeneeded=()=>o.result.createObjectStore('dishimg',{keyPath:'id'});o.onerror=()=>rej(o.error);
+  o.onsuccess=()=>{const db=o.result,tx=db.transaction('dishimg',mode),rq=fn(tx.objectStore('dishimg'));
+    tx.oncomplete=()=>{db.close?.();res(rq?.result);};tx.onerror=tx.onabort=()=>{db.close?.();rej(tx.error);};};});}
+const IDB_ON=typeof indexedDB!=='undefined';
+async function imgDbAll(){return IDB_ON?(await idbDo('readonly',st=>st.getAll())||[]):Object.values(IMG_MEM);}
+async function imgDbGet(id){return(IDB_ON?await idbDo('readonly',st=>st.get(id)):IMG_MEM[id])||null;}
+async function imgDbPut(r){if(IDB_ON)await idbDo('readwrite',st=>st.put(r));else IMG_MEM[r.id]=r;}
+async function imgDbDel(id){if(IDB_ON)await idbDo('readwrite',st=>st.delete(id));else delete IMG_MEM[id];}
+async function imgDbClear(){if(IDB_ON)await idbDo('readwrite',st=>st.clear());else Object.keys(IMG_MEM).forEach(k=>delete IMG_MEM[k]);}
+async function imgLoad(){let rows=[];try{rows=await imgDbAll();}catch(e){}
+  rows.forEach(r=>{const id=sId(r?.id),t=sImg(r?.t,IMG_T);if(id&&t&&!IMG.t[id]){IMG.t[id]=t;IMG.rev[id]=sStr(r.rev,20);}});
+  IMG.ready=true;imgCss();if(Object.keys(IMG.t).length)render();if(SYNC_ON&&AUTH&&SYNC.hid)schedulePush();}
+async function imgFull(id){if(!IMG.t[id]||IMG.full?.id===id)return;
+  try{const r=await imgDbGet(id),f=sImg(r?.f,IMG_F);if(!f)return;IMG.full={id,f};if(UI.form?.mode==='recipe'&&UI.form.id===id&&document.getElementById('mb').classList.contains('open'))openModal();}catch(e){}}
+function imgOp(op,id){if(!SYNC?.hid)return;SYNC.queue=SYNC.queue.filter(q=>!(q.t==='img'&&q.id===id));SYNC.queue.push({t:'img',op,id});saveSync();schedulePush();}
+function dishImgSet(id,img){const t=sImg(img?.t,IMG_T),f=sImg(img?.f,IMG_F);if(!sId(id)||!t||!f)return false;
+  const rev=uid();IMG.t[id]=t;IMG.rev[id]=rev;IMG.full={id,f};imgCss();
+  imgDbPut({id,t,f,rev}).then(()=>imgOp('up',id),()=>toast('Das Foto konnte nicht gespeichert werden. Ist der Speicher voll?'));return true;}
+function dishImgDel(id){delete IMG.t[id];delete IMG.rev[id];if(IMG.full?.id===id)IMG.full=null;imgCss();imgDbDel(id).catch(()=>{});imgOp('del',id);}
+// Foto vom Gerät: zuschneiden und verkleinern. Dabei entsteht ein neues JPEG ohne Aufnahmeort und Kameradaten.
+async function imgFromFile(file){
+  if(!file||!/^image\//.test(file.type||''))throw new Error('Das ist kein Bild.');
+  if(file.size>30e6)throw new Error('Das Bild ist zu groß.');
+  let src;
+  if(typeof createImageBitmap==='function')src=await createImageBitmap(file);
+  else src=await new Promise((res,rej)=>{const fr=new FileReader();fr.onerror=()=>rej(new Error('nicht lesbar'));
+    fr.onload=()=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>rej(new Error('nicht lesbar'));im.src=fr.result;};fr.readAsDataURL(file);});
+  const w=src.naturalWidth||src.width,h=src.naturalHeight||src.height;if(!w||!h)throw new Error('Das Bild ist leer.');
+  const draw=(cw,ch,sx,sy,sw,sh,q)=>{const c=document.createElement('canvas');c.width=cw;c.height=ch;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cw,ch);x.drawImage(src,sx,sy,sw,sh,0,0,cw,ch);return c.toDataURL('image/jpeg',q);};
+  const sq=Math.min(w,h),t=draw(IMG_PX_T,IMG_PX_T,(w-sq)/2,(h-sq)/2,sq,sq,.72),k=Math.min(1,IMG_PX_F/Math.max(w,h));let f='';
+  for(const q of[.74,.6,.45]){f=draw(Math.max(1,Math.round(w*k)),Math.max(1,Math.round(h*k)),0,0,w,h,q);if(f.length<=IMG_F)break;}
+  src.close?.();
+  if(!sImg(t,IMG_T)||!sImg(f,IMG_F))throw new Error('Das Bild konnte nicht verarbeitet werden.');
+  return{t,f};}
+function dishPickImg(){const input=document.createElement('input');input.type='file';input.accept='image/*';
+  input.onchange=async e=>{const file=e.target.files[0];if(!file||UI.form?.mode!=='dish')return;
+    try{const img=await imgFromFile(file);if(UI.form?.mode!=='dish')return;UI.form.img=img;UI.form.imgDel=false;openModal();}
+    catch(err){toast(err.message||'Das Bild konnte nicht gelesen werden.');}};
+  input.click();}
+function dishDropImg(){UI.form.img=null;UI.form.imgDel=true;openModal();}
+
 // ═══ KALENDER ═════════════════════════════════
 // Familientermine und Verabredungen: Tag, optional Uhrzeit, mehrtägig oder wiederkehrend (wöchentlich, jährlich).
 // Abgleich zeilenweise über die Tabelle events (wie Aufgaben).
@@ -1812,14 +1872,14 @@ function buildHeute(){
       return`<div class="home-kid"><span class="wish-em">${esc(k.icon)}</span><span class="todo-t"><span class="ek-name">${esc(k.name)}</span><span class="todo-m">${[modOn('routine')&&tot?`${esc(S.routines[rt].label)}routine ${done}/${tot}${done>=tot?' ✓':''}`:'',brot?'🍞 braucht ein Brot':'',sp].filter(Boolean).join(' · ')||'–'}</span></span></div>`;}).join(''),"goKinder()");}
   // Essen heute
   if(modOn('essen')&&S.essen.dishes.length){cards.essen=homeCard('essen','Essen heute',activeMeals().map(m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
-    return`<div class="home-kid"><span class="wish-em">${d?esc(d.em):m.em}</span><span class="todo-t"><span class="todo-m">${m.l}</span>${d?`<button class="home-link" onclick="openRecipe('${d.id}','${td}','${m.id}')">${esc(d.name)}</button>`:'<span class="ek-name">noch offen</span>'}</span>${d?'':`<button class="tg-act" onclick="rollToday('${m.id}')">Würfeln</button>`}</div>`;}).join(''),"setView('essen')");}
+    return`<div class="home-kid"><span class="wish-em">${d?dishIc(d,40):m.em}</span><span class="todo-t"><span class="todo-m">${m.l}</span>${d?`<button class="home-link" onclick="openRecipe('${d.id}','${td}','${m.id}')">${esc(d.name)}</button>`:'<span class="ek-name">noch offen</span>'}</span>${d?'':`<button class="tg-act" onclick="rollToday('${m.id}')">Würfeln</button>`}</div>`;}).join(''),"setView('essen')");}
   // Einkauf
   if(modOn('einkauf')){const n=ekOpen().length;
     cards.einkauf=homeCard('einkauf',`Einkauf${n?` · ${n} ${n===1?'Ding':'Dinge'}`:''}`,`<div class="ek-add" style="margin:0"><label for="homeEk" class="sr">Auf die Einkaufsliste</label><input id="homeEk" maxlength="80" placeholder="Auf die Liste: Was fehlt?" autocomplete="off" enterkeyhint="done" onkeydown="if(event.key==='Enter'){event.preventDefault();homeEkAdd()}"><button class="m-save ek-plus" aria-label="Hinzufügen" onclick="homeEkAdd()">＋</button></div>`,"setView('einkauf')");}
   // Morgen (ab Nachmittag)
   if(late){const tm=addDays(td,1),rows=[];
     S.kids.forEach(k=>{const sp=modOn('stundenplan')?spSummary(k.id,tm):'';if(sp)rows.push(`<div class="home-kid"><span class="wish-em">${esc(k.icon)}</span><span class="todo-t"><span class="ek-name">${esc(k.name)}</span><span class="todo-m">${sp}</span></span></div>`);});
-    if(modOn('essen'))activeMeals().forEach(m=>{const sl=planSlot(tm,m.id),d=sl&&dishById(sl.id);if(d)rows.push(`<div class="home-kid"><span class="wish-em">${esc(d.em)}</span><span class="todo-t"><span class="todo-m">${m.l}</span><span class="ek-name">${esc(d.name)}</span></span></div>`);});
+    if(modOn('essen'))activeMeals().forEach(m=>{const sl=planSlot(tm,m.id),d=sl&&dishById(sl.id);if(d)rows.push(`<div class="home-kid"><span class="wish-em">${dishIc(d,40)}</span><span class="todo-t"><span class="todo-m">${m.l}</span><span class="ek-name">${esc(d.name)}</span></span></div>`);});
     if(modOn('aufgaben')){const n=S.aufgaben.items.filter(t=>!t.done&&t.due===tm&&todoFor(t,mp?.id||'')).length;if(n)rows.push(`<div class="home-kid"><span class="wish-em">📝</span><span class="todo-t"><span class="ek-name">${n} ${n===1?'Aufgabe':'Aufgaben'}</span></span></div>`);}
     cards.morgen=homeCard('morgen','Morgen',rows.join(''),modOn('aufgaben')?"setView('aufgaben')":"goKinder()");}
   const order=late?['termine','todo','essen','morgen','einkauf','kinder']:['termine','kinder','todo','essen','einkauf'];
@@ -2197,10 +2257,12 @@ async function connectHousehold(h,role,{upload=false,replace=false}={}){
       SYNC=emptySync();saveSync();throw new Error('abgebrochen');}
     docs.forEach(d=>applyRemote(d.key,d.data,d.version));
     S.einkauf.items=[];S.aufgaben.items=[];S.kalender.items=[];
+    IMG.t={};IMG.rev={};IMG.full=null;imgCss();try{await imgDbClear();}catch(e){}
   }else{SYNC_KEYS.forEach(k=>{SYNC.dirty[k]=true;});
     S.einkauf.items.forEach(it=>SYNC.queue.push({op:'up',item:{...it}}));
     S.aufgaben.items.forEach(t=>SYNC.queue.push({t:'tasks',op:'up',item:{...t}}));
-    S.kalender.items.forEach(e=>SYNC.queue.push({t:'events',op:'up',item:{...e}}));}
+    S.kalender.items.forEach(e=>SYNC.queue.push({t:'events',op:'up',item:{...e}}));
+    Object.keys(IMG.t).forEach(id=>SYNC.queue.push({t:'img',op:'up',id}));}
   saveSync();await syncNow(true);
   UI.kid=S.kids[0]?.id||null;UI.rt=firstActiveRt();UI.ob=null;refreshAll();rtStop();rtStart();
 }
@@ -2273,7 +2335,15 @@ async function pullDocs(){
 // ─── Einkaufsliste: Operationen in Warteschlange, Server-Liste plus offene Operationen ───
 function ekOp(op,item){if(!SYNC?.hid)return;SYNC.queue.push(op==='del'?{op,id:item.id}:{op,item:{id:item.id,name:item.name,n:item.n,done:!!item.done}});if(SYNC.queue.length>500)SYNC.queue=SYNC.queue.slice(-500);saveSync();schedulePush();}
 async function flushQueue(){
-  while(SYNC.queue.length){const q=SYNC.queue[0],tbl=q.t==='tasks'?'tasks':q.t==='events'?'events':'shopping_items';
+  while(SYNC.queue.length){const q=SYNC.queue[0];
+    if(q.t==='img'){ // Foto: die Daten liegen in IndexedDB, in der Warteschlange steht nur die Gericht-ID
+      try{
+        if(q.op==='up'){const r=await imgDbGet(q.id),t=sImg(r?.t,IMG_T),f=sImg(r?.f,IMG_F);
+          if(t&&f)await sb('/rest/v1/dish_images?on_conflict=household_id,dish_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:{household_id:SYNC.hid,dish_id:q.id,thumb:t,photo:f,rev:sStr(r.rev,20)}});}
+        else await sb(`/rest/v1/dish_images?household_id=eq.${SYNC.hid}&dish_id=eq.${encodeURIComponent(q.id)}`,{method:'DELETE'});
+      }catch(e){if(e.status!==404)throw e;SYNC.imgMissing=true;} // Tabelle fehlt noch (005): Fotos bleiben lokal
+      SYNC.queue.shift();saveSync();continue;}
+    const tbl=q.t==='tasks'?'tasks':q.t==='events'?'events':'shopping_items';
     const body=q.op==='up'?(tbl==='events'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,day:q.item.day,end_day:q.item.end||null,t_from:q.item.from,t_to:q.item.to,place:q.item.place,note:q.item.note,who:q.item.who,rep:q.item.rep}:tbl==='tasks'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,note:q.item.note,who:q.item.who,due:q.item.due||null,rep:q.item.rep,done:q.item.done,done_by:q.item.doneBy,done_at:q.item.doneAt||null}:{household_id:SYNC.hid,...q.item}):null;
     try{
       if(q.op==='up')await sb(`/rest/v1/${tbl}?on_conflict=household_id,id`,{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body});
@@ -2316,6 +2386,25 @@ async function pullEvents(){
   S.kalender=sanitizeKalender({items},raters().map(p=>p.id));lsSet('ra_cfg3',JSON.stringify(S));
   return JSON.stringify(S.kalender.items)!==before;
 }
+// Fotos: erst nur die Liste (Gericht + Stand) holen, Bilddaten nur für Neues oder Geändertes
+async function pullImgs(){
+  if(!modOn('essen')||!IMG.ready)return false;
+  const base=`/rest/v1/dish_images?household_id=eq.${SYNC.hid}`;
+  let rows;try{rows=await sb(base+'&select=dish_id,rev')||[];}
+  catch(e){if(e.status===404){SYNC.imgMissing=true;return false;}throw e;} // Tabelle noch nicht angelegt (005 fehlt)
+  if(SYNC.imgMissing){SYNC.imgMissing=false;Object.keys(IMG.t).forEach(id=>SYNC.queue.push({t:'img',op:'up',id}));saveSync();await flushQueue();rows=await sb(base+'&select=dish_id,rev')||[];}
+  if(!SYNC.imgOk){SYNC.imgOk=true;saveSync();if(RT.ws){rtStop();rtStart();}}
+  const pend=new Set(SYNC.queue.filter(q=>q.t==='img').map(q=>q.id)),srv={};let changed=false;
+  rows.forEach(r=>{const id=sId(r?.dish_id);if(id)srv[id]=sStr(r.rev,20);});
+  for(const id of Object.keys(IMG.t))if(!(id in srv)&&!pend.has(id)){delete IMG.t[id];delete IMG.rev[id];if(IMG.full?.id===id)IMG.full=null;await imgDbDel(id);changed=true;}
+  const need=Object.keys(srv).filter(id=>!pend.has(id)&&IMG.rev[id]!==srv[id]);
+  for(let i=0;i<need.length;i+=4){
+    const got=await sb(base+`&select=dish_id,thumb,photo,rev&dish_id=in.(${need.slice(i,i+4).join(',')})`)||[];
+    for(const r of got){const id=sId(r?.dish_id),t=sImg(r?.thumb,IMG_T),f=sImg(r?.photo,IMG_F),rev=sStr(r?.rev,20);if(!id||!t||!f)continue;
+      await imgDbPut({id,t,f,rev});IMG.t[id]=t;IMG.rev[id]=rev;if(IMG.full?.id===id)IMG.full={id,f};changed=true;}}
+  if(changed)imgCss();
+  return changed;
+}
 // ─── Sofort-Übertragung (Supabase Realtime, Phoenix-Protokoll) ───
 // Die Meldung löst nur ein Abholen aus; Daten kommen weiter über die REST-Schnittstelle mit RLS.
 const RT={ws:null,ref:0,joinRef:null,joined:false,hb:null,timer:null,retry:0,poke:null};
@@ -2330,7 +2419,7 @@ function rtStart(){
   RT.ws=ws;RT.joined=false;
   ws.onopen=()=>{
     rtSend({topic:rtTopic(),event:'phx_join',payload:{access_token:AUTH.access_token,config:{broadcast:{self:false},presence:{key:''},private:false,
-      postgres_changes:[{event:'*',schema:'public',table:'docs',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'shopping_items',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'tasks',filter:'household_id=eq.'+SYNC.hid},...(SYNC.eventsOk?[{event:'*',schema:'public',table:'events',filter:'household_id=eq.'+SYNC.hid}]:[])]}}},true);
+      postgres_changes:[{event:'*',schema:'public',table:'docs',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'shopping_items',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'tasks',filter:'household_id=eq.'+SYNC.hid},...(SYNC.eventsOk?[{event:'*',schema:'public',table:'events',filter:'household_id=eq.'+SYNC.hid}]:[]),...(SYNC.imgOk?[{event:'*',schema:'public',table:'dish_images',filter:'household_id=eq.'+SYNC.hid}]:[])]}}},true);
     clearInterval(RT.hb);RT.hb=setInterval(()=>rtSend({topic:'phoenix',event:'heartbeat',payload:{}}),25000);
   };
   ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
@@ -2361,6 +2450,7 @@ async function syncNow(force){
     if(await pullItems())changed=true;
     if(await pullTasks())changed=true;
     if(await pullEvents())changed=true;
+    if(await pullImgs())changed=true;
     SYNC.status='ok';SYNC.err='';SYNC.at=now;
   }catch(e){
     SYNC.status=!e.status?'offline':e.status===401?'out':'err';SYNC.err=e.message||'';
@@ -2462,6 +2552,7 @@ W?.addEventListener?.('appinstalled',()=>{_bip=null;S.installHintDone=true;saveC
 // Offline-Start und schnelle Updates; nur auf der echten Adresse (https), nicht beim lokalen Öffnen
 if(W&&typeof navigator!=='undefined'&&navigator.serviceWorker&&W.location?.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 render();
+imgLoad();
 if(SYNC_ON){
   if(readAuthHash())finishHashLogin();
   else if(AUTH&&SYNC.hid){syncNow(true);rtStart();}

@@ -13,8 +13,8 @@ class FakeSupabase {
     this.hashes = {};     // email → Token-Hash im Mail-Link
     this.tokens = {};     // access → userId
     this.refresh = {};    // refresh → userId
-    this.households = []; this.members = []; this.docs = []; this.items = []; this.tasks = []; this.events = [];
-    this.offline = false; this.rateLimited = false; this.log = [];
+    this.households = []; this.members = []; this.docs = []; this.items = []; this.tasks = []; this.events = []; this.images = [];
+    this.offline = false; this.rateLimited = false; this.log = []; this.calls = [];
     this.fetch = this.fetch.bind(this);
     this.sockets = []; this.realtimeDown = false;
     const server = this;
@@ -34,7 +34,7 @@ class FakeSupabase {
         if (m.event === 'phx_join') {
           const uid = server.tokens[m.payload.access_token];
           const f = m.payload.config.postgres_changes.map(c => c.filter.replace('household_id=eq.', ''));
-          const unknown = server.noEvents && m.payload.config.postgres_changes.some(c => c.table === 'events');
+          const unknown = m.payload.config.postgres_changes.some(c => (server.noEvents && c.table === 'events') || (server.noImages && c.table === 'dish_images'));
           const ok = uid && f.every(h => server.isMember(uid, h)) && !unknown;
           if (ok) { this.topic = m.topic; this.hid = f[0]; }
           this.deliver({ topic: m.topic, event: 'phx_reply', ref: m.ref, payload: ok ? { status: 'ok', response: {} } : { status: 'error', response: { reason: 'unauthorized' } } });
@@ -66,6 +66,7 @@ class FakeSupabase {
     const u = new URL(url), path = u.pathname, q = u.searchParams;
     const data = body ? JSON.parse(body) : undefined;
     this.log.push(`${method} ${path}`);
+    this.calls.push(`${method} ${path}${u.search}`);
     const res = (status, obj) => ({ ok: status < 300, status, text: async () => (obj === undefined ? '' : JSON.stringify(obj)) });
     if (headers.apikey !== KEY) return res(401, { message: 'Invalid API key' });
 
@@ -155,7 +156,7 @@ class FakeSupabase {
       const hid = eq('id');
       if (this.members.some(m => m.household_id === hid && m.user_id === uid && m.role === 'owner')) {
         this.households = this.households.filter(h => h.id !== hid);
-        for (const t of ['members', 'docs', 'items', 'tasks', 'events']) this[t] = this[t].filter(r => r.household_id !== hid);
+        for (const t of ['members', 'docs', 'items', 'tasks', 'events', 'images']) this[t] = this[t].filter(r => r.household_id !== hid);
       }
       return res(204);
     }
@@ -187,6 +188,24 @@ class FakeSupabase {
         return res(201);
       }
       if (method === 'DELETE') { this.tasks = this.tasks.filter(r => !(r.household_id === hid && r.id === eq('id') && this.isMember(uid, hid))); this.notify(hid, 'tasks', 'DELETE'); return res(204); }
+    }
+    if (path === '/rest/v1/dish_images') {
+      if (this.noImages) return res(404, { code: 'PGRST205', message: "Could not find the table 'public.dish_images' in the schema cache" });
+      const hid = eq('household_id'), sel = (q.get('select') || '').split(','), inF = q.get('dish_id') || '';
+      const ids = inF.startsWith('in.(') ? inF.slice(4, -1).split(',') : inF.startsWith('eq.') ? [inF.slice(3)] : null;
+      if (method === 'GET') return res(200, mine(this.images).filter(r => r.household_id === hid && (!ids || ids.includes(r.dish_id))).map(r => Object.fromEntries(sel.map(k => [k, r[k]]))));
+      if (method === 'POST') {
+        if (!this.isMember(uid, data.household_id)) return denied();
+        // wie die Prüfregeln in 005_gericht_fotos.sql
+        const img = (v, max) => typeof v === 'string' && v.length <= max && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(v);
+        if (!img(data.thumb, 40000) || !img(data.photo, 400000) || !/^[A-Za-z0-9_-]{1,40}$/.test(data.dish_id) || !/^[A-Za-z0-9]{0,20}$/.test(data.rev))
+          return res(400, { code: '23514', message: 'new row for relation "dish_images" violates check constraint' });
+        const ex = this.images.find(r => r.household_id === data.household_id && r.dish_id === data.dish_id);
+        if (ex) Object.assign(ex, data); else this.images.push({ ...data });
+        this.notify(data.household_id, 'dish_images', ex ? 'UPDATE' : 'INSERT');
+        return res(201);
+      }
+      if (method === 'DELETE') { this.images = this.images.filter(r => !(r.household_id === hid && ids.includes(r.dish_id) && this.isMember(uid, hid))); this.notify(hid, 'dish_images', 'DELETE'); return res(204); }
     }
     if (path === '/rest/v1/events') {
       if (this.noEvents) return res(404, { code: 'PGRST205', message: "Could not find the table 'public.events' in the schema cache" });
