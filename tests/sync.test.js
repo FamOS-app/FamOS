@@ -59,7 +59,7 @@ test('Sync: ohne Konfiguration keine Konto-Funktionen, mit Konfiguration CSP nur
   assert.match(html, /connect-src https:\/\/testprojekt\.supabase\.co wss:\/\/testprojekt\.supabase\.co;/);
   const a = device(new FakeSupabase());
   assert.equal(a.get('SYNC_ON'), true);
-  assert.match(a.app(), /Schon ein FamOS-Konto\? Anmelden/);
+  assert.match(a.app(), /Eingeladen\?[\s\S]*onclick="openLogin\(\)">☁️ Anmelden und beitreten[\s\S]*Oder neu starten[\s\S]*Name des Haushalts/); // Beitreten steht vor dem Neuanlegen
 });
 
 test('Sync: Anmelden per Code, falsche Eingaben verständlich abgefangen', async () => {
@@ -239,7 +239,8 @@ test('Sync: Anmelden mit kopiertem Link aus der Mail (ohne Code), fremde Links w
   const a = device(server);
   a.run(`openLogin();UI.form.email='a@example.org'`);
   await a.run('loginSend()');
-  assert.match(a.els.mc.innerHTML, /Kein Code, nur ein Link/);
+  assert.match(a.els.mc.innerHTML, /E-Mail bestätigen[\s\S]*Link in der Mail antippen[\s\S]*id="lgLink"[\s\S]*id="lgCode"/); // Link ist der Normalfall, Code nur Zusatz
+  assert.doesNotMatch(a.els.mc.innerHTML, /Code schicken|Code eingeben/);
   for (const bad of ['https://evil.example/auth/v1/verify?token=abcdefghijkl&type=signup', 'kein link', 'https://testprojekt.supabase.co/auth/v1/verify?token=<x>&type=signup']) {
     a.run(`UI.form.code='';UI.form.link=${JSON.stringify(bad)}`);
     await a.run('loginVerify()');

@@ -912,7 +912,11 @@ function buildOnboarding(){
   const adRows=o.adults.map(a=>`<div class="ai"><div class="ai-em">${esc(a.icon)}</div><div class="ai-info"><div class="ai-main">${esc(a.name)}</div><div class="ai-sub">Erwachsene/r</div></div><button class="ai-edit" aria-label="Bearbeiten" onclick="openAdultModal('${a.id}')">✏️</button><button class="ai-del" aria-label="Löschen" onclick="obDelAdult('${a.id}')">🗑️</button></div>`).join('');
   const ready=S.kids.length>0||o.adults.length>0;
   return`<div class="wrap no-nav">
-  <div class="hdr"><div><div class="hdr-title">FamOS</div><div class="hdr-date">Das Gehirn der Familie · Haushalt anlegen</div></div></div>
+  <div class="hdr"><div><div class="hdr-title">FamOS</div><div class="hdr-date">Das Gehirn der Familie · Willkommen</div></div></div>
+  ${SYNC_ON?`<div class="tg-card"><div class="as-lbl">Eingeladen?</div>
+    <div class="ins-why">Gibt es euren Haushalt schon auf einem anderen Handy? Dann hier nichts neu anlegen, sondern anmelden und mit dem Einladungscode beitreten.</div>
+    <button class="m-save sync-wide" onclick="openLogin()">☁️ Anmelden und beitreten</button></div>
+  <div class="s-lbl" style="margin-top:6px">Oder neu starten</div>`:''}
   <div class="tg-card">
     <div class="field" style="margin-bottom:0"><label>Name des Haushalts</label><input value="${esc(o.name)}" placeholder="z.B. Familie Müller" oninput="ob().name=this.value"></div>
   </div>
@@ -927,7 +931,6 @@ function buildOnboarding(){
     <button class="aa" onclick="openAdultModal()">＋ Erwachsene/n hinzufügen</button>
   </div>
   <button class="m-save" style="width:100%;${ready?'':'opacity:.45'}" onclick="obFinish()">Haushalt anlegen</button>
-  ${SYNC_ON?`<button class="aa" style="margin-top:12px" onclick="openLogin()">☁️ Schon ein FamOS-Konto? Anmelden</button>`:''}
   <div style="text-align:center;margin-top:14px;font-size:.78rem;font-weight:700;color:var(--muted);line-height:1.7">Schon ein Backup? <button onclick="importData()" style="background:none;color:var(--text);font-weight:800;font-size:.78rem;text-decoration:underline;padding:0">Importieren</button></div>
   <div style="margin-top:22px;font-size:.7rem;font-weight:700;color:var(--subtle);line-height:1.6;text-align:center">Deine Eingaben bleiben nur auf diesem Gerät gespeichert. Kein Tracking, keine Cookies, keine Verbindung zu fremden Servern.</div>
   </div>`;
@@ -2056,37 +2059,35 @@ function authError(e){
   return'Das hat nicht geklappt ('+e.message+').';
 }
 
-// ─── Anmelden per Code aus der E-Mail ───
+// ─── Anmelden per E-Mail (Link oder Code) oder Passwort ───
 function openLogin(){UI.form={mode:'login',step:AUTH?'household':'email',email:'',code:'',pw:'',joinCode:'',busy:false,err:''};openModal();}
 function renderLoginModal(){const f=UI.form,err=f.err?`<div class="sync-err" role="alert">${esc(f.err)}</div>`:'';
   if(f.step==='email')return`<h3>☁️ Anmelden</h3>
-  <div class="ins-why">Mit Konto teilt ihr Routinen, Wochenplan, Einkaufsliste und Taschengeld zwischen euren Handys. Du bekommst einen Code per E-Mail. Wer schon ein Passwort hat, meldet sich damit an.</div>
+  <div class="ins-why">Mit Konto teilt ihr Routinen, Wochenplan, Einkaufsliste und Taschengeld zwischen euren Handys. Du bekommst eine E-Mail zum Bestätigen. Wer schon ein Passwort hat, meldet sich damit an.</div>
   ${accessNote()}
   <div class="field"><label for="lgMail">E-Mail-Adresse</label><input id="lgMail" type="email" inputmode="email" autocomplete="email" maxlength="120" value="${esc(f.email)}" oninput="UI.form.email=this.value" onkeydown="if(event.key==='Enter')loginSend()"></div>
   ${err}${privacyNote()}
-  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginSend()" ${f.busy?'disabled':''}>${f.busy?'Sende …':'Code schicken'}</button></div>
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginSend()" ${f.busy?'disabled':''}>${f.busy?'Sende …':'Anmelde-Mail schicken'}</button></div>
   <button class="quick-all" onclick="UI.form.step='pw';UI.form.err='';openModal()">Mit Passwort anmelden</button>`;
   if(f.step==='pw')return`<h3>☁️ Mit Passwort anmelden</h3>
   <div class="ins-why">Für alle, die schon ein Passwort haben: selbst festgelegt unter ⚙️ → Konto &amp; Sync, oder von der Person bekommen, die euch eingeladen hat.</div>
   <div class="field"><label for="lgMail">E-Mail-Adresse</label><input id="lgMail" type="email" inputmode="email" autocomplete="username" maxlength="120" value="${esc(f.email)}" oninput="UI.form.email=this.value"></div>
   <div class="field"><label for="lgPw">Passwort</label><input id="lgPw" type="password" autocomplete="current-password" maxlength="72" oninput="UI.form.pw=this.value" onkeydown="if(event.key==='Enter')loginPassword()"></div>
   ${err}${privacyNote()}
-  <button class="quick-all" onclick="UI.form.step='email';UI.form.pw='';UI.form.err='';openModal()">Lieber Code per E-Mail</button>
+  <button class="quick-all" onclick="UI.form.step='email';UI.form.pw='';UI.form.err='';openModal()">Lieber per E-Mail anmelden</button>
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginPassword()" ${f.busy?'disabled':''}>${f.busy?'Prüfe …':'Anmelden'}</button></div>`;
-  if(f.step==='code')return`<h3>☁️ Code eingeben</h3>
-  <div class="ins-why">Wir haben eine E-Mail an <strong>${esc(f.email)}</strong> geschickt. Schau auch im Spam-Ordner.</div>
-  <div class="field"><label for="lgCode">Code aus der E-Mail</label><input id="lgCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" value="${esc(f.code)}" style="font-size:1.4rem;letter-spacing:.25em" oninput="UI.form.code=this.value" onkeydown="if(event.key==='Enter')loginVerify()"></div>
-  <details class="lg-link"${f.link?' open':''}><summary>Kein Code, nur ein Link in der Mail?</summary>
-    <div class="ins-why">Den Link <strong>nicht antippen</strong>, sondern lange drücken → „Link kopieren“ und hier einfügen:</div>
-    <div class="field"><label for="lgLink">Link aus der E-Mail</label><input id="lgLink" type="url" autocomplete="off" value="${esc(f.link||'')}" placeholder="https://…supabase.co/auth/v1/verify?…" oninput="UI.form.link=this.value" onkeydown="if(event.key==='Enter')loginVerify()"></div>
-  </details>
-  ${err}<button class="quick-all" onclick="UI.form.step='email';UI.form.err='';openModal()">Andere E-Mail oder neuen Code</button>
+  if(f.step==='code')return`<h3>☁️ E-Mail bestätigen</h3>
+  <div class="ins-why">Wir haben eine E-Mail an <strong>${esc(f.email)}</strong> geschickt. Schau auch im Spam-Ordner. Darin steht ein Link, manchmal zusätzlich ein Code.</div>
+  <div class="ins-why"><strong>Am einfachsten:</strong> den Link in der Mail antippen. FamOS öffnet sich im Browser und du bist angemeldet.</div>
+  <div class="field"><label for="lgLink">FamOS als App installiert? Link lange drücken, kopieren, hier einfügen</label><input id="lgLink" type="url" autocomplete="off" value="${esc(f.link||'')}" placeholder="https://…supabase.co/auth/v1/verify?…" oninput="UI.form.link=this.value" onkeydown="if(event.key==='Enter')loginVerify()"></div>
+  <div class="field"><label for="lgCode">Oder der Code, falls einer in der Mail steht</label><input id="lgCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" value="${esc(f.code)}" style="font-size:1.4rem;letter-spacing:.25em" oninput="UI.form.code=this.value" onkeydown="if(event.key==='Enter')loginVerify()"></div>
+  ${err}<button class="quick-all" onclick="UI.form.step='email';UI.form.err='';openModal()">Andere E-Mail oder neue Mail</button>
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginVerify()" ${f.busy?'disabled':''}>${f.busy?'Prüfe …':'Anmelden'}</button></div>`;
   return`<h3>☁️ Haushalt verbinden</h3>
   <div class="ins-why">Angemeldet als <strong>${esc(AUTH?.user.email||'')}</strong>.</div>
   ${S.household?`<button class="m-save sync-wide" onclick="createHousehold()" ${f.busy?'disabled':''}>Neuen Haushalt in der Cloud anlegen<br><small>mit den Daten von diesem Gerät</small></button><div class="sync-or">oder</div>`:''}
   <div class="field"><label for="lgJoin">Einladungscode eines bestehenden Haushalts</label><input id="lgJoin" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="z.B. ABCD EFGH" value="${esc(f.joinCode)}" style="font-size:1.2rem;letter-spacing:.15em" oninput="UI.form.joinCode=this.value" onkeydown="if(event.key==='Enter')joinHousehold()"></div>
-  ${err}${S.household?'':'<div class="ins-why">Noch kein Haushalt? Dann zuerst hier einrichten, er wird danach automatisch in der Cloud angelegt.</div>'}
+  ${err}${S.household?'':'<div class="ins-why">Keinen Code bekommen? Dann „Erst einrichten“ wählen und einen eigenen Haushalt anlegen; er wird danach automatisch in der Cloud gespeichert.</div>'}
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">${S.household?'Später':'Erst einrichten'}</button><button class="m-save" onclick="joinHousehold()" ${f.busy?'disabled':''}>Beitreten</button></div>`;
 }
 function refreshAll(){render();if(document.getElementById('adm').classList.contains('open'))renderAdmin();}
@@ -2114,7 +2115,7 @@ function parseMailLink(raw){
 async function loginVerify(){const f=UI.form;
   if(String(f.link||'').trim()&&!String(f.code||'').trim())return loginWithLink();
   const token=String(f.code||'').replace(/\D/g,'');
-  if(token.length<6){loginBusy(false,'Der Code hat mindestens 6 Ziffern. Kam nur ein Link? Dann unten „Kein Code, nur ein Link“ öffnen.');return;}
+  if(token.length<6){loginBusy(false,'Bitte den Link aus der Mail einfügen oder den Code eintragen (mindestens 6 Ziffern).');return;}
   loginBusy(true);
   try{let d;try{d=await sb('/auth/v1/verify',{method:'POST',body:{type:'email',email:f.email,token},auth:false});}
       catch(e){if(e.status>=500||!e.status)throw e;d=await sb('/auth/v1/verify',{method:'POST',body:{type:'signup',email:f.email,token},auth:false});}
@@ -2127,7 +2128,7 @@ async function loginWithLink(){const f=UI.form,l=parseMailLink(f.link);
   try{let d;try{d=await sb('/auth/v1/verify',{method:'POST',body:{type:l.type,token_hash:l.token},auth:false});}
       catch(e){if(e.status>=500||!e.status||l.type==='email')throw e;d=await sb('/auth/v1/verify',{method:'POST',body:{type:'email',token_hash:l.token},auth:false});}
     setSession(d);f.link='';refreshAll();await afterLogin();}
-  catch(e){loginBusy(false,/expired|invalid/i.test(e.message)&&e.status<500?'Der Link ist abgelaufen oder wurde schon benutzt. Bitte „Andere E-Mail oder neuen Code“ und neu anfordern.':authError(e));}
+  catch(e){loginBusy(false,/expired|invalid/i.test(e.message)&&e.status<500?'Der Link ist abgelaufen oder wurde schon benutzt. Bitte „Andere E-Mail oder neue Mail“ wählen und neu anfordern.':authError(e));}
 }
 // Anmelden mit Passwort (ohne Mail). Das Passwort bleibt nur im Formular und wird nirgends gespeichert.
 function pwError(e){
