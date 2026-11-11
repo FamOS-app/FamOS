@@ -41,7 +41,10 @@ for (const file of [APP, VORLAGE]) {
     // Keine externe Quelle, auch keine Schrift: Manrope ist eingebettet
     const hosts = [...html.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)].map(m => m[1])
       .filter(h => h !== 'www.w3.org'); // SVG-Namespace in Data-URLs, kein Request
-    assert.deepEqual([...new Set(hosts)], []);
+    assert.deepEqual([...new Set(hosts)].filter(h => h !== 'github.com'), []);
+    // github.com nur als Link zur Anleitung, aus der eigenen Adresse gebaut – kein Konto-Name im Code
+    assert.equal((html.match(/https?:\/\/github\.com/g) || []).length, 1);
+    assert.match(html, /return m&&r\?`https:\/\/github\.com\/\$\{m\[1\]\}\/\$\{r\[1\]\}#eigene-instanz-einrichten`/);
     assert.equal((html.match(/@font-face\{font-family:'Manrope'/g) || []).length, 1);
     assert.match(html, /font-weight:200 800;font-display:swap;src:url\(data:font\/woff2;base64,/);
     assert.match(html, /font-src data:;/);

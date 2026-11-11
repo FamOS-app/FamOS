@@ -254,6 +254,8 @@ input{font-family:var(--font)}
 .rc-steps{margin-bottom:12px}
 .lg-link{margin:4px 0 12px}
 .lg-link summary{cursor:pointer;font-weight:700;font-size:.88rem;color:var(--pri);padding:8px 0;min-height:44px;display:flex;align-items:center}
+.sync-access{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:.82rem;font-weight:600;line-height:1.5;color:var(--text);margin-bottom:12px}
+.sync-access a{color:var(--text);font-weight:800}
 .sync-badge{text-transform:none;letter-spacing:0;font-weight:700}
 .sync-wide{width:100%;margin:6px 0 4px;line-height:1.35}
 .sync-wide small{font-weight:600;opacity:.85}
@@ -1934,7 +1936,7 @@ async function refreshToken(){
 }
 function authError(e){
   // Neue Registrierungen in Supabase ausgeschaltet: nur eingeladene Adressen dürfen sich anmelden
-  if(/signups? (are )?not allowed|signup_disabled|otp_disabled/i.test(e.message+' '+(e.code||'')))return'Diese E-Mail-Adresse ist für FamOS nicht freigeschaltet. Bitte die Person fragen, die dir den Link gegeben hat.';
+  if(/signups? (are )?not allowed|signup_disabled|otp_disabled/i.test(e.message+' '+(e.code||'')))return'Diese E-Mail-Adresse ist für den Abgleich nicht freigeschaltet. FamOS funktioniert trotzdem vollständig auf diesem Gerät; sichere deine Daten ab und zu unter ⚙️ → Haushalt → Exportieren.';
   if(e.status===429||/rate limit/i.test(e.message))return'Gerade zu viele Anmelde-Mails. Bitte in einer Stunde nochmal versuchen.';
   if(/expired|invalid/i.test(e.message)&&e.status<500)return'Der Code stimmt nicht oder ist abgelaufen.';
   if(!e.status)return'Keine Verbindung. Bist du online?';
@@ -1946,6 +1948,7 @@ function openLogin(){UI.form={mode:'login',step:AUTH?'household':'email',email:'
 function renderLoginModal(){const f=UI.form,err=f.err?`<div class="sync-err" role="alert">${esc(f.err)}</div>`:'';
   if(f.step==='email')return`<h3>☁️ Anmelden</h3>
   <div class="ins-why">Mit Konto teilt ihr Routinen, Wochenplan, Einkaufsliste und Taschengeld zwischen euren Handys. Du bekommst einen Code per E-Mail, ein Passwort gibt es nicht.</div>
+  ${accessNote()}
   <div class="field"><label for="lgMail">E-Mail-Adresse</label><input id="lgMail" type="email" inputmode="email" autocomplete="email" maxlength="120" value="${esc(f.email)}" oninput="UI.form.email=this.value" onkeydown="if(event.key==='Enter')loginSend()"></div>
   ${err}${privacyNote()}
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="loginSend()" ${f.busy?'disabled':''}>${f.busy?'Sende …':'Code schicken'}</button></div>`;
@@ -1966,6 +1969,11 @@ function renderLoginModal(){const f=UI.form,err=f.err?`<div class="sync-err" rol
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">${S.household?'Später':'Erst einrichten'}</button><button class="m-save" onclick="joinHousehold()" ${f.busy?'disabled':''}>Beitreten</button></div>`;
 }
 function refreshAll(){render();if(document.getElementById('adm').classList.contains('open'))renderAdmin();}
+// Hinweis für alle ohne Freischaltung: die App läuft vollständig lokal, Abgleich nur für freigeschaltete Haushalte
+// Link zur Anleitung aus der eigenen Adresse ableiten (<name>.github.io/<repo> → github.com/<name>/<repo>), kein Name im Code
+function ownGuide(){const l=W?.location;const m=/^([a-z0-9-]+)\.github\.io$/i.exec(l?.hostname||''),r=/^\/([A-Za-z0-9._-]+)\//.exec(l?.pathname||'');
+  return m&&r?`https://github.com/${m[1]}/${r[1]}#eigene-instanz-einrichten`:'';}
+function accessNote(){return`<div class="sync-access"><strong>Nur für freigeschaltete Haushalte.</strong> Ohne Konto funktioniert FamOS vollständig auf diesem Gerät. Für den Abgleich zwischen Handys: die Person fragen, die dir den Link gegeben hat, oder ${ownGuide()?`<a href="${esc(ownGuide())}" target="_blank" rel="noopener noreferrer">eine eigene Instanz einrichten</a>`:'eine eigene Instanz einrichten'}.</div>`;}
 function privacyNote(){return`<div class="sync-privacy">Gespeichert wird in einer Datenbank von Supabase in Frankfurt (EU). Sehen kann die Daten nur, wer zu eurem Haushalt gehört. Die E-Mail-Adresse dient nur der Anmeldung. Abmelden und Haushalt löschen geht jederzeit in den Einstellungen.</div>`;}
 function loginBusy(b,err){UI.form.busy=b;UI.form.err=err||'';openModal();}
 async function loginSend(){const f=UI.form,email=String(f.email||'').trim();
@@ -2198,7 +2206,7 @@ function syncBadge(){if(!SYNC_ON||!SYNC.hid)return'';const st=SYNC.status,pend=O
   const [ic,l]=st==='offline'?['📴','offline']:st==='err'?['⚠️','Abgleich hakt']:st==='out'?['🔑','neu anmelden']:pend?['⏳','gleicht ab']:['☁️','synchron'];
   return` · <span class="sync-badge" title="${l}">${ic} ${l}</span>`;}
 function admKonto(){
-  if(!AUTH)return`<div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Noch nicht angemeldet. Mit Konto gleicht FamOS eure Handys ab: Routinen, Wochenplan, Einkaufsliste, Taschengeld.</div>${privacyNote()}<button class="m-save sync-wide" onclick="openLogin()">☁️ Anmelden</button></div>`;
+  if(!AUTH)return`<div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Noch nicht angemeldet. Mit Konto gleicht FamOS eure Handys ab: Routinen, Wochenplan, Einkaufsliste, Taschengeld.</div>${accessNote()}${privacyNote()}<button class="m-save sync-wide" onclick="openLogin()">☁️ Anmelden</button></div>`;
   if(!SYNC.hid)return`<div class="tg-card"><div class="as-lbl">Konto</div><div class="ins-why">Angemeldet als <strong>${esc(AUTH.user.email)}</strong>, aber noch mit keinem Haushalt verbunden.</div><button class="m-save sync-wide" onclick="openLogin()">Haushalt verbinden</button><button class="reset-btn" onclick="logout()">Abmelden</button></div>`;
   const pend=Object.keys(SYNC.dirty).length+SYNC.queue.length,at=SYNC.at?new Date(SYNC.at).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'–';
   return`<div class="tg-card"><div class="as-lbl">Abgleich</div>

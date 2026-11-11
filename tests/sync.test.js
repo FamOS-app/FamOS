@@ -426,8 +426,23 @@ test('Sync: Registrierung gesperrt – Unbekannte bekommen eine verständliche M
   x.run(`openLogin();UI.form.email='fremd@example.org'`);
   await x.run('loginSend()');
   assert.match(x.get('UI.form.err'), /nicht freigeschaltet/);
+  assert.match(x.get('UI.form.err'), /vollständig auf diesem Gerät/);
   assert.equal(x.get('UI.form.step'), 'email');
   const a2 = device(server);
   await login(a2, server, 'a@example.org');
   assert.equal(a2.get('SYNC.hid'), a.get('SYNC.hid'));
+});
+
+test('Sync: ohne Konto steht vorab, dass FamOS lokal voll funktioniert und wie man an Sync kommt', () => {
+  const server = new FakeSupabase();
+  const window = { location: { protocol: 'https:', hostname: 'beispiel-familie.github.io', pathname: '/FamOS/', hash: '', search: '' }, addEventListener() {}, matchMedia: () => ({ matches: false }), navigator: {} };
+  const x = device(server, { globals: { window, navigator: { serviceWorker: { register: () => Promise.resolve() } } } });
+  x.run(`openKidModal(null);UI.form.name='Emma';saveKid();obFinish();closeModal();openAdmin();setATab('konto')`); x.flush();
+  assert.match(x.adm(), /Nur für freigeschaltete Haushalte[\s\S]*vollständig auf diesem Gerät/);
+  assert.match(x.adm(), /href="https:\/\/github\.com\/beispiel-familie\/FamOS#eigene-instanz-einrichten" target="_blank" rel="noopener noreferrer"/);
+  const y = device(server); // lokal geöffnet: kein Link, nur Text
+  y.run(`openLogin()`);
+  assert.match(y.els.mc.innerHTML, /oder eine eigene Instanz einrichten\./);
+  x.run('openLogin()');
+  assert.match(x.els.mc.innerHTML, /Nur für freigeschaltete Haushalte/);
 });
