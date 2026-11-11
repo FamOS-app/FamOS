@@ -85,8 +85,9 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 
 - Eintragen per Textfeld (Enter, Tastatur bleibt offen), Doppeltes wird abgefangen.
 - „Zutaten aus dem Wochenplan“: diese Woche ab heute oder nächste Woche; gleiche Zeilen werden gezählt (×2), was schon offen auf der Liste steht, kommt nicht doppelt dazu. Mengen werden nicht verrechnet („500 g“ + „200 g“ bleiben zwei Zeilen).
+- **Bereiche im Laden:** Die offene Liste ist nach Bereichen gruppiert, Standard-Reihenfolge wie ein typischer Aldi (Obst/Gemüse/Eier → Brot → Nudeln/Konserven/Öl → Kühlregal → Käse/Wurst/Fleisch → Getränke → Müsli/Aufstrich/Backen → Drogerie → Tiefkühl → Sonstiges). Zuordnung per Wörterbuch (das letzte Glied eines zusammengesetzten Worts entscheidet, Signalwörter wie „passiert“, „Dose“, „TK“ haben Vorrang). Über „⋯“ lässt sich ein Artikel umbenennen, löschen oder einem anderen Bereich zuordnen; das wird pro Artikel gemerkt. Reihenfolge der Bereiche unter Einstellungen → Einkauf.
+- **Standardliste:** wiederkehrende Einkäufe unter Einstellungen → Einkauf; „Standardliste hinzufügen“ ergänzt nur, was noch fehlt.
 - Abhaken → „Im Wagen“; „Erledigte entfernen“ merkt sich die letzten 20 Einträge als Schnellwahl.
-- Bis zum Supabase-Sync liegt die Liste nur auf dem jeweiligen Gerät.
 
 ## Supabase
 

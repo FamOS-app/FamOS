@@ -189,6 +189,13 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.ek-cat{font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:16px 2px 8px}
+.ek-src{display:flex;gap:8px}
+.ek-src .ek-plan{flex:1;margin-bottom:6px}
+.ek-hint{font-size:.78rem;color:var(--muted);font-weight:600;margin:0 2px 6px}
+.ek-del{font-size:1.2rem;font-weight:700;letter-spacing:.05em}
+.ess-acts .ess-pinbtn{flex:0 0 52px;padding:0;filter:grayscale(1);opacity:.55}
+.ess-acts .ess-pinbtn.pinned{filter:none;opacity:1}
 .ess-rc{margin-top:8px;background:none;padding:6px 0;font-weight:700;font-size:.85rem;color:var(--pri);min-height:36px}
 .ess-open{background:none;padding:0;min-width:36px;min-height:36px}
 .ess-list .ai-info{cursor:pointer}
@@ -567,7 +574,7 @@ const DEF={
     ],
     plan:{},
   },
-  einkauf:{items:[],recent:[]},
+  einkauf:{items:[],recent:[],cats:{},order:[],std:[]},
   modules:{routine:true,stundenplan:true,taschengeld:true,essen:true,einkauf:true},
   installHintDone:false,
   _mv:4,
@@ -583,6 +590,27 @@ const SYNC_ON=/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SB_URL)&&/^sb_publisha
 // Neuer Bereich = ein Eintrag hier + Build-Funktion im View-Switch von buildApp()
 const MEALS=[{id:'fruehstueck',em:'🥐',l:'Frühstück'},{id:'mittag',em:'🌤️',l:'Mittag'},{id:'abend',em:'🌙',l:'Abend'}];
 const TAGS=[{id:'veg',em:'🥦',l:'Vegetarisch'},{id:'schnell',em:'⚡',l:'Schnell'},{id:'we',em:'🎉',l:'Wochenende'},{id:'fleisch',em:'🍖',l:'Fleisch'},{id:'fisch',em:'🐟',l:'Fisch'}];
+// Bereiche im Laden; Standard-Reihenfolge wie ein typischer Aldi. Drogerie vor Tiefkühl, damit TK zuletzt in den Wagen kommt.
+const EK_CATS=[
+  {id:'obst',em:'🥦',l:'Obst, Gemüse & Eier'},{id:'brot',em:'🥖',l:'Brot & Backwaren'},{id:'vorrat',em:'🥫',l:'Nudeln, Konserven & Öl'},
+  {id:'kuehl',em:'🥛',l:'Milch, Sahne & Joghurt'},{id:'kaese',em:'🧀',l:'Käse, Wurst & Fleisch'},{id:'getraenke',em:'🧃',l:'Getränke'},
+  {id:'fruehstueck',em:'🥣',l:'Müsli, Aufstrich & Backen'},{id:'haushalt',em:'🧻',l:'Drogerie & Haushalt'},{id:'tk',em:'🧊',l:'Tiefkühl'},{id:'sonst',em:'🛒',l:'Sonstiges'}];
+// Wörterbuch: Bei zusammengesetzten Wörtern bestimmt das letzte Glied („Kräuter|tee“, „Erdbeer|marmelade“):
+// der Treffer, der am weitesten hinten endet, gewinnt; bei Gleichstand der längere („Frischkäse“ vor „Käse“).
+// Signalwörter („passiert“, „Dose“, „TK“) haben immer Vorrang. Kurze Wörter (bis 4 Zeichen) nur am Wortanfang/-ende.
+const EK_WORDS={
+  obst:'apfel äpfel birne banane orange mandarine clementine zitrone limette traube beere erdbeer himbeer heidelbeer blaubeer kiwi mango ananas melone pfirsich nektarine pflaume kirsche avocado obst tomate gurke paprika zucchini aubergine karotte möhre kartoffel zwiebel knoblauch lauch porree salat rucola spinat brokkoli blumenkohl kohl kohlrabi sellerie fenchel pilz champignon radieschen ingwer petersilie schnittlauch basilikum dill koriander minze kräuter gemüse kürbis spargel ei eier frühlingszwiebel rosenkohl rote bete',
+  brot:'brot brötchen toast baguette croissant brezel laugen knäcke wrap tortilla semmel ciabatta zwieback kuchen fladenbrot',
+  vorrat:'nudel spaghetti penne fusilli farfalle lasagne tortellini reis couscous bulgur linse kichererbse dose passiert tomatenmark konserve mais öl olivenöl rapsöl sonnenblumenöl essig ketchup mayo mayonnaise senf brühe gewürz salz pfeffer paprikapulver curry soße sauce pesto thunfisch olive suppe chips nüsse mandel erdnuss kokosmilch gnocchi',
+  kuehl:'milch sahne joghurt jogurt quark butter schmand creme crème frischkäse skyr kefir buttermilch margarine pudding tofu pizzateig blätterteig hefeteig schlagsahne',
+  kaese:'käse gouda mozzarella feta parmesan emmentaler camembert brie halloumi wurst salami schinken aufschnitt würstchen wiener leberwurst hack hackfleisch fleisch hähnchen huhn pute rind schwein steak schnitzel lachs fisch speck bacon frikadelle',
+  getraenke:'saft o-saft orangensaft apfelsaft wasser sprudel mineralwasser limo limonade cola eistee bier wein schorle sirup',
+  fruehstueck:'müsli haferflocken cornflakes flakes marmelade konfitüre honig nutella aufstrich kaffee tee kakao mehl zucker backpulver hefe vanille puderzucker speisestärke schokolade kekse cracker gummibär süßigkeit',
+  haushalt:'klopapier toilettenpapier küchenrolle küchenpapier taschentuch spülmittel spültab waschmittel weichspüler müllbeutel schwamm zahnpasta zahnbürste shampoo duschgel seife windel feuchttücher sonnencreme deo alufolie frischhaltefolie backpapier batterie',
+  tk:'tiefkühl tk pommes fischstäbchen eis gefroren rahmspinat tiefkühlpizza kroketten',
+};
+const EK_DICT=Object.entries(EK_WORDS).flatMap(([cat,w])=>w.split(' ').map(k=>[k,cat]));
+const EK_SIGNAL={passiert:'vorrat',passierte:'vorrat',dose:'vorrat',konserve:'vorrat',tk:'tk',tiefkühl:'tk',gefroren:'tk'};
 const MODULES=[
   {id:'routine',em:'✅',lbl:'Routine',nav:'Routine',desc:'Tägliche Aufgaben, Brot-Check, Haushalts-Wahl'},
   {id:'stundenplan',em:'📅',lbl:'Stundenplan',nav:'Plan',desc:'Schule und Kita pro Wochentag'},
@@ -663,7 +691,11 @@ function sanitizeEinkauf(e){
     const n=Math.round(sNum(x.n,1,99))||1;return{id,name,n,done:!!x.done};}).filter(Boolean);
   const seen=new Set(),recent=[];
   sArr(e.recent,40).forEach(r=>{const name=sStr(r,80).trim(),k=ekKey(name);if(name&&!seen.has(k)&&recent.length<20){seen.add(k);recent.push(name);}});
-  return{items,recent};
+  const cats={};Object.keys(sObj(e.cats)).slice(0,400).forEach(k=>{const key=sStr(k,80).toLowerCase().trim(),v=e.cats[k];if(key&&!BAD_IDS.includes(key)&&EK_CATS.some(c=>c.id===v))cats[key]=v;});
+  const order=[];sArr(e.order,20).forEach(id=>{if(EK_CATS.some(c=>c.id===id)&&!order.includes(id))order.push(id);});
+  EK_CATS.forEach(c=>{if(!order.includes(c.id))order.push(c.id);});
+  const std=[],sk=new Set();sArr(e.std,100).forEach(r=>{const name=sStr(r,80).trim(),k=ekKey(name);if(name&&!sk.has(k)&&std.length<60){sk.add(k);std.push(name);}});
+  return{items,recent,cats,order,std};
 }
 function sanitizeDay(d){d=sObj(d);return{date:sStr(d.date,10),chk:sObj(d.chk),brot:sObj(d.brot),wahl:sObj(d.wahl)};}
 function sanitizeTgd(t){const o={};Object.keys(sObj(t)).slice(-600).forEach(k=>{if(/^[A-Za-z0-9_-]{1,40}:\d{4}W\d{2}$/.test(k)&&(t[k]==='ausgezahlt'||t[k]==='gespart'))o[k]=t[k];});return o;}
@@ -914,12 +946,13 @@ function buildTgHist(kidId){
 
 // ═══ ADMIN VIEW ═══════════════════════════════
 function renderAdmin(){
-  const tabs={konto:admKonto,kinder:admKinder,module:admModule,routinen:admRoutinen,stundenplan:admSp,haushalt:admHaushalt,taschengeld:admTg,essen:admEssen};
+  const tabs={konto:admKonto,kinder:admKinder,module:admModule,routinen:admRoutinen,stundenplan:admSp,haushalt:admHaushalt,taschengeld:admTg,essen:admEssen,einkauf:admEinkauf};
   const aTabs=[{id:'kinder',l:'Haushalt'},...(SYNC_ON?[{id:'konto',l:'Konto & Sync'}]:[]),{id:'module',l:'Module'}];
   if(modOn('routine'))aTabs.push({id:'routinen',l:'Routinen'},{id:'haushalt',l:'Hausarbeit'});
   if(modOn('stundenplan'))aTabs.push({id:'stundenplan',l:'Stundenplan'});
   if(modOn('taschengeld'))aTabs.push({id:'taschengeld',l:'Taschengeld'});
   if(modOn('essen'))aTabs.push({id:'essen',l:'Essen'});
+  if(modOn('einkauf'))aTabs.push({id:'einkauf',l:'Einkauf'});
   if(!aTabs.find(t=>t.id===UI.aTab))UI.aTab='module';
   document.getElementById('adm').innerHTML=`
   <div class="adm-hdr">
@@ -1097,7 +1130,7 @@ function buildEssToday(){
   return essTagChips()+activeMeals().map(m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
     return`<div class="tg-card"><div class="ess-meal">${m.em} ${m.l}</div>
     ${d?`<button class="ess-dish" onclick="openRecipe('${d.id}','${td}','${m.id}')"><span class="ess-em">${esc(d.em)}</span><span class="ess-name">${esc(d.name)}</span></button>${d.ingr.length?`<div class="ess-ingr">${d.ingr.map(x=>esc(x)).join(' · ')}</div>`:''}<button class="ess-rc" onclick="openRecipe('${d.id}','${td}','${m.id}')">Rezept ansehen${d.steps.length?` · ${d.steps.length} Schritte`:''} →</button>`:`<div class="ess-none">Noch nichts geplant</div>`}
-    <div class="ess-acts"><button class="tg-act ein" onclick="rollToday('${m.id}')" ${sl?.pin?'disabled':''}>${d?'Nochmal würfeln':'Würfeln'}</button>${d?`<button class="tg-act${sl.pin?' pinned':''}" aria-pressed="${sl.pin?'true':'false'}" onclick="togPin('${td}','${m.id}')">${sl.pin?'Festgelegt':'Festlegen'}</button>`:''}</div></div>`;}).join('');
+    <div class="ess-acts"><button class="tg-act ein" onclick="rollToday('${m.id}')" ${sl?.pin?'disabled':''}>${d?'Nochmal würfeln':'Würfeln'}</button><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Auswählen</button>${d?`<button class="tg-act ess-pinbtn${sl.pin?' pinned':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="${sl.pin?'Festgelegt, tippen zum Lösen':'Festlegen'}" onclick="togPin('${td}','${m.id}')">📌</button>`:''}</div></div>`;}).join('');
 }
 function buildEssWeek(){
   const dates=weekDates(UI.essWeek),meals=activeMeals(),td=today();
@@ -1204,6 +1237,52 @@ function admEssen(){
 function togMeal(id){const M=S.essen.meals;if(M[id]&&activeMeals().length<=1){toast('Mindestens eine Mahlzeit muss aktiv bleiben!');return;}M[id]=!M[id];saveCfg();renderAdmin();}
 
 // ═══ EINKAUF ══════════════════════════════════
+function ekCatKey(name){return parseIngr(name).name.toLowerCase().replace(/\s+/g,' ').trim();}
+function ekGuessCat(name){
+  const p=parseIngr(name);if(p.u==='Dose'||p.u==='Glas')return'vorrat';
+  const t=p.name.toLowerCase(),tokens=t.split(/[^a-zäöüß-]+/).filter(Boolean);
+  for(const x of tokens)for(const[sig,cat]of Object.entries(EK_SIGNAL))if(x===sig||x.startsWith(sig))return cat;
+  let best=null;
+  for(const[k,cat]of EK_DICT){let end=-1;
+    if(k.length<=4){let off=0;for(const x of tokens){const at=t.indexOf(x,off);off=at+x.length;
+        if(x===k||x.endsWith(k))end=Math.max(end,at+x.length);else if(x.startsWith(k))end=Math.max(end,at+k.length);}}
+    else{const i=t.lastIndexOf(k);if(i>=0)end=i+k.length;}
+    if(end<0)continue;
+    if(!best||end>best.end||(end===best.end&&k.length>best.len))best={end,len:k.length,cat};
+  }
+  return best?best.cat:'sonst';
+}
+function ekCat(name){return S.einkauf.cats[ekCatKey(name)]||ekGuessCat(name);}
+function ekCatOf(id){return EK_CATS.find(c=>c.id===id)||EK_CATS[EK_CATS.length-1];}
+// Eintrag bearbeiten: Name, Bereich (wird für diesen Artikel gemerkt), löschen
+function openEkItem(id){const x=S.einkauf.items.find(i=>i.id===id);if(!x)return;UI.form={mode:'ekItem',id,name:x.name,cat:ekCat(x.name),catSet:false};openModal();}
+function renderEkItemModal(){const f=UI.form;
+  return`<h3>Eintrag</h3>
+  <div class="field"><label for="ekName">Name</label><input id="ekName" maxlength="80" value="${esc(f.name)}" oninput="UI.form.name=this.value"></div>
+  <div class="field"><label>Bereich im Laden</label><div class="ap-wrap">${S.einkauf.order.map(id=>{const c=ekCatOf(id);return`<button class="ap${f.cat===c.id?' on':''}" onclick="UI.form.cat='${c.id}';UI.form.catSet=true;openModal()">${c.em} ${esc(c.l)}</button>`;}).join('')}</div></div>
+  <div class="m-btns"><button class="m-cancel" onclick="ekDel(UI.form.id);closeModal()">Löschen</button><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveEkItem()">Speichern</button></div>`;}
+function saveEkItem(){const f=UI.form,x=S.einkauf.items.find(i=>i.id===f.id);if(!x)return closeModal();
+  const name=String(f.name||'').replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,80);if(!name){toast('Bitte einen Namen eingeben!');return;}
+  if(name!==x.name){x.name=name;ekOp('up',x);}
+  // Bereich nur merken, wenn er selbst gewählt wurde und vom Wörterbuch abweicht
+  if(f.catSet){const key=ekCatKey(name);if(f.cat===ekGuessCat(name))delete S.einkauf.cats[key];else S.einkauf.cats[key]=f.cat;}
+  saveCfg();closeModal();render();}
+// Standardliste: wiederkehrende Einkäufe mit einem Tipp auf die Liste
+function ekAddStd(){let n=0,had=0;S.einkauf.std.forEach(name=>{if(ekFind(name)){had++;return;}if(S.einkauf.items.length>=300)return;const it={id:uid(),name,n:1,done:false};S.einkauf.items.push(it);ekOp('up',it);n++;});
+  saveCfg();render();toast(n?`${n} ${n===1?'Eintrag':'Einträge'} aus der Standardliste${had?`, ${had} standen schon drauf`:''}`:'Alles aus der Standardliste steht schon drauf.');}
+function admEinkauf(){const E=S.einkauf;
+  return`<div class="as-lbl">Standardliste</div>
+  <div class="tg-card"><div class="ins-why" style="margin-bottom:10px">Was ihr jede Woche kauft, eine Zeile pro Artikel. In der Einkaufsliste kommt alles mit einem Tipp auf „Standardliste hinzufügen“ dazu.</div>
+  <div class="field" style="margin-bottom:10px"><label for="ekStd" class="sr">Standardliste</label><textarea id="ekStd" rows="7" placeholder="5 l Milch&#10;10 Eier&#10;Bananen&#10;Brot" oninput="UI.ekStd=this.value">${esc(UI.ekStd??E.std.join('\n'))}</textarea></div>
+  <div style="display:flex;gap:8px"><button class="m-save" style="flex:1" onclick="saveEkStd()">Speichern</button>${ekOpen().length?`<button class="m-cancel" style="flex:1" onclick="ekStdFromList()">Aktuelle Liste übernehmen</button>`:''}</div></div>
+  <div class="as-lbl">Reihenfolge im Laden</div>
+  <div class="ins-why" style="margin-bottom:10px">So sortiert sich die Einkaufsliste. Voreingestellt wie ein typischer Aldi.</div>
+  <div class="al">${E.order.map((id,i)=>{const c=ekCatOf(id);return`<div class="ai"><div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0"><button class="move-btn" aria-label="Nach oben" onclick="ekMoveCat(${i},-1)" ${i===0?'disabled':''}>↑</button><button class="move-btn" aria-label="Nach unten" onclick="ekMoveCat(${i},1)" ${i===E.order.length-1?'disabled':''}>↓</button></div><div class="ai-em">${c.em}</div><div class="ai-info"><div class="ai-main">${esc(c.l)}</div></div></div>`;}).join('')}</div>
+  <button class="reset-btn" onclick="ekResetOrder()">Reihenfolge und eigene Zuordnungen zurücksetzen</button>`;}
+function saveEkStd(){const lines=String(UI.ekStd??S.einkauf.std.join('\n')).split('\n');S.einkauf=sanitizeEinkauf({...S.einkauf,std:lines});UI.ekStd=undefined;saveCfg();renderAdmin();toast(`Standardliste gespeichert (${S.einkauf.std.length})`);}
+function ekStdFromList(){UI.ekStd=[...new Set([...(UI.ekStd??S.einkauf.std.join('\n')).split('\n').filter(x=>x.trim()),...ekOpen().map(x=>x.name)])].join('\n');renderAdmin();toast('Übernommen. Noch „Speichern“ tippen.');}
+function ekMoveCat(i,d){const o=S.einkauf.order,j=i+d;if(j<0||j>=o.length)return;[o[i],o[j]]=[o[j],o[i]];saveCfg();renderAdmin();}
+function ekResetOrder(){if(!confirm('Reihenfolge auf Standard und eigene Zuordnungen zurücksetzen?'))return;S.einkauf.order=EK_CATS.map(c=>c.id);S.einkauf.cats={};saveCfg();renderAdmin();}
 // Liste pro Gerät; gemeinsamer Live-Abgleich kommt mit Supabase
 function ekKey(name){return String(name).toLowerCase().replace(/\s+/g,' ').trim();}
 function ekOpen(){return S.einkauf.items.filter(x=>!x.done);}
@@ -1250,12 +1329,15 @@ function ekFromPlan(off){
 function buildEinkaufContent(){
   const open=ekOpen(),done=S.einkauf.items.filter(x=>x.done),onList=new Set(open.map(x=>ekKey(x.name)));
   const quick=S.einkauf.recent.map((r,i)=>[r,i]).filter(([r])=>!onList.has(ekKey(r))).slice(0,12);
-  const row=x=>`<div class="ek-row${x.done?' done':''}"><button class="ek-item" aria-pressed="${x.done}" onclick="ekToggle('${x.id}')"><span class="t-chk">${x.done?'✓':''}</span><span class="ek-name">${esc(x.name)}</span>${x.n>1?`<span class="ai-badge">×${x.n}</span>`:''}</button><button class="ek-del" aria-label="${esc(x.name)} entfernen" onclick="ekDel('${x.id}')">✕</button></div>`;
+  const row=x=>`<div class="ek-row${x.done?' done':''}"><button class="ek-item" aria-pressed="${x.done}" onclick="ekToggle('${x.id}')"><span class="t-chk">${x.done?'✓':''}</span><span class="ek-name">${esc(x.name)}</span>${x.n>1?`<span class="ai-badge">×${x.n}</span>`:''}</button><button class="ek-del" aria-label="${esc(x.name)} bearbeiten" onclick="openEkItem('${x.id}')">⋯</button></div>`;
+  const byCat={};open.forEach(x=>{(byCat[ekCat(x.name)]||=[]).push(x);});
+  const grouped=S.einkauf.order.filter(id=>byCat[id]).map(id=>{const c=ekCatOf(id);return`<div class="ek-cat">${c.em} ${esc(c.l)}</div>${byCat[id].map(row).join('')}`;}).join('');
   return`<div class="ek-add"><label for="ekNew" class="sr">Was fehlt?</label><input id="ekNew" value="${esc(UI.ekNew||'')}" maxlength="80" placeholder="Was fehlt?" autocomplete="off" enterkeyhint="done" oninput="UI.ekNew=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();ekAddInput()}"><button class="m-save ek-plus" aria-label="Hinzufügen" onclick="ekAddInput()">＋</button></div>
-  ${modOn('essen')?`<button class="aa ek-plan" onclick="openEkPlanModal()">Zutaten aus dem Wochenplan</button>`:''}
+  <div class="ek-src">${S.einkauf.std.length?`<button class="aa ek-plan" onclick="ekAddStd()">Standardliste hinzufügen</button>`:''}${modOn('essen')?`<button class="aa ek-plan" onclick="openEkPlanModal()">Aus dem Wochenplan</button>`:''}</div>
+  ${S.einkauf.std.length?'':`<div class="ek-hint">Tipp: Unter ⚙️ → Einkauf eine Standardliste anlegen.</div>`}
   ${quick.length?`<div class="s-lbl">Schnell hinzufügen</div><div class="ap-wrap ek-quick">${quick.map(([r,i])=>`<button class="ap" onclick="ekQuick(${i})">＋ ${esc(r)}</button>`).join('')}</div>`:''}
   <div class="s-lbl">Einkaufen${open.length?` · ${open.length}`:''}</div>
-  ${open.length?open.map(row).join(''):`<div class="sp-empty">Die Liste ist leer. Oben eintragen${modOn('essen')?' oder Zutaten aus dem Wochenplan übernehmen':''}.</div>`}
+  ${open.length?grouped:`<div class="sp-empty">Die Liste ist leer. Oben eintragen${modOn('essen')?' oder Zutaten aus dem Wochenplan übernehmen':''}.</div>`}
   ${done.length?`<div class="s-lbl">Im Wagen · ${done.length}</div>${done.map(row).join('')}<button class="reset-btn" onclick="ekClearDone()">Erledigte entfernen</button>`:''}`;
 }
 
@@ -1269,7 +1351,7 @@ function renderEp(){document.getElementById('epCats').innerHTML=EC.map(c=>`<butt
 function epPick(e){if(_epCb)_epCb(e);epClose();}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 
@@ -1563,11 +1645,11 @@ function fmtInvite(c){return String(c||'').replace(/^(.{4})(.{4})$/,'$1 $2');}
 
 // ─── Dokumente: was geht in welchen Bereich ───
 function docOf(k){
-  if(k==='cfg'){const c=JSON.parse(JSON.stringify(S));delete c.installHintDone;c.einkauf={recent:S.einkauf.recent};return c;}
+  if(k==='cfg'){const c=JSON.parse(JSON.stringify(S));delete c.installHintDone;c.einkauf={recent:S.einkauf.recent,cats:S.einkauf.cats,order:S.einkauf.order,std:S.einkauf.std};return c;}
   return k==='day'?D:k==='tgd'?TGD:k==='savings'?SAVINGS:TX;
 }
 function applyRemote(k,data,version){
-  if(k==='cfg'){const c=sanitizeCfg({...data,installHintDone:S.installHintDone,einkauf:{items:S.einkauf.items,recent:data?.einkauf?.recent}});if(c){S=c;lsSet('ra_cfg3',JSON.stringify(S));}}
+  if(k==='cfg'){const c=sanitizeCfg({...data,installHintDone:S.installHintDone,einkauf:{...sObj(data?.einkauf),items:S.einkauf.items}});if(c){S=c;lsSet('ra_cfg3',JSON.stringify(S));}}
   else if(k==='day'){const d=sanitizeDay(data);if(d.date===today()){D=d;lsSet('ra_day3',JSON.stringify(D));}}
   else if(k==='tgd'){TGD=sanitizeTgd(data);lsSet('ra_tgd',JSON.stringify(TGD));}
   else if(k==='savings'){SAVINGS=sanitizeSavings(data);lsSet('ra_savings',JSON.stringify(SAVINGS));}
@@ -1625,7 +1707,7 @@ async function pullItems(){
   let items=rows.map(r=>({id:r.id,name:r.name,n:r.n,done:!!r.done}));
   SYNC.queue.forEach(q=>{if(q.op==='del')items=items.filter(x=>x.id!==q.id);else{const i=items.findIndex(x=>x.id===q.item.id);if(i>=0)items[i]={...q.item};else items.push({...q.item});}});
   const before=JSON.stringify(S.einkauf.items);
-  S.einkauf=sanitizeEinkauf({items,recent:S.einkauf.recent});lsSet('ra_cfg3',JSON.stringify(S));
+  S.einkauf=sanitizeEinkauf({...S.einkauf,items});lsSet('ra_cfg3',JSON.stringify(S));
   return JSON.stringify(S.einkauf.items)!==before;
 }
 // ─── Sofort-Übertragung (Supabase Realtime, Phoenix-Protokoll) ───

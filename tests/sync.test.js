@@ -98,7 +98,8 @@ test('Sync: Haushalt anlegen lädt alle Daten hoch, Einladungscode erscheint', a
   const cfg = server.docs.find(d => d.key === 'cfg').data;
   assert.deepEqual(cfg.kids.map(k => k.name), ['Emma', 'Ben']);
   assert.equal(cfg.installHintDone, undefined); // gerätebezogen, bleibt lokal
-  assert.deepEqual(cfg.einkauf, { recent: [] }); // Einkauf läuft zeilenweise
+  assert.equal(cfg.einkauf.items, undefined); // Einkauf läuft zeilenweise
+  assert.deepEqual(cfg.einkauf.std, []);
   assert.match(a.app(), /☁️ synchron/);
   a.run(`openAdmin();setATab('konto')`);
   assert.match(a.adm(), /Familie Test/);
@@ -335,4 +336,15 @@ test('Live: Abmelden schließt die Verbindung, erneuerte Sitzung geht an die Ver
   await settle(a);
   assert.equal(server.sockets.length, 0);
   assert.equal(a.get('RT.ws'), null);
+});
+
+test('Sync: Standardliste und Bereichs-Zuordnungen gelten auf beiden Handys', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server);
+  const b = await partner(server, a);
+  a.run(`UI.ekStd='5 l Milch\\n10 Eier';saveEkStd();S.einkauf.cats.geschenkpapier='haushalt';ekMoveCat(8,-1);saveCfg()`);
+  await sync(a); await sync(b);
+  assert.deepEqual(b.get('S.einkauf.std'), ['5 l Milch', '10 Eier']);
+  assert.equal(b.get(`ekCat('Geschenkpapier')`), 'haushalt');
+  assert.deepEqual(b.get('S.einkauf.order'), a.get('S.einkauf.order'));
 });

@@ -533,7 +533,9 @@ test('Migration: alter Stand ohne household/modules/_mv wird ergänzt, Daten ble
   const S = a.get('S');
   assert.deepEqual(S.household, { name: 'Unsere Familie', adults: [] });
   assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true, essen: true, einkauf: true });
-  assert.deepEqual(S.einkauf, { items: [], recent: [] });
+  assert.deepEqual(S.einkauf.items, []);
+  assert.deepEqual(S.einkauf.std, []);
+  assert.equal(S.einkauf.order[0], 'obst');
   assert.ok(S.essen.dishes.length >= 5); // ältere Stände bekommen Beispielgerichte
   assert.equal(S._mv, 4);
   assert.deepEqual(S.stundenplan.k1.mo, [{ em: '📖', lbl: 'Lesen', time: '', teacher: '' }]);
@@ -1109,4 +1111,101 @@ test('Taschengeld: Aufräumen klappt auch, wenn „zurückgenommen“ vor „ges
   ];
   const a = load(VORLAGE, { storage: { ra_tx: JSON.stringify(tx) } });
   assert.deepEqual(a.get('TX.map(x=>x.t)'), [t(5)]);
+});
+
+// ─── Einkauf: Bereiche im Laden, Standardliste ────────────────
+test('Einkauf: Artikel landen im richtigen Bereich (Wörterbuch, längster Treffer)', () => {
+  const a = household();
+  const c = n => a.get(`ekGuessCat(${JSON.stringify(n)})`);
+  const cases = {
+    Bananen: 'obst', '10 Eier': 'obst', 'Kartoffeln': 'obst', 'Frühlingszwiebeln': 'obst',
+    Vollkornbrot: 'brot', Toastbrot: 'brot', Brötchen: 'brot',
+    '500 g Spaghetti': 'vorrat', 'Tomatenmark': 'vorrat', '1 Dose Tomaten': 'vorrat', 'passierte Tomaten': 'vorrat', Olivenöl: 'vorrat', Kokosmilch: 'vorrat',
+    '5 l Milch': 'kuehl', 'Schlagsahne': 'kuehl', 'Frischkäse': 'kuehl', 'Joghurt': 'kuehl', Pizzateig: 'kuehl',
+    Gouda: 'kaese', Salami: 'kaese', '400 g Hackfleisch': 'kaese',
+    'O-Saft': 'getraenke', Mineralwasser: 'getraenke',
+    Müsli: 'fruehstueck', Erdbeermarmelade: 'fruehstueck', Mehl: 'fruehstueck', Kräutertee: 'fruehstueck', Milchschokolade: 'fruehstueck',
+    Klopapier: 'haushalt', Spülmittel: 'haushalt',
+    Fischstäbchen: 'tk', 'TK Erbsen': 'tk', Rahmspinat: 'tk', Eis: 'tk',
+    Geschenkpapier: 'sonst', Reis: 'vorrat',
+  };
+  for (const [n, want] of Object.entries(cases)) assert.equal(c(n), want, n);
+});
+
+test('Einkauf: Liste ist nach Läden-Reihenfolge gruppiert, Umsortieren wird gemerkt', () => {
+  const a = household();
+  a.run(`setView('einkauf')`);
+  ['Fischstäbchen', 'Milch', 'Bananen', 'Brot', 'Geschenkpapier'].forEach(n => a.run(`ekAdd(${JSON.stringify(n)})`));
+  a.run('render()');
+  const order = [...a.app().matchAll(/class="ek-cat">[^ ]+ ([^<]+)</g)].map(m => m[1]);
+  assert.deepEqual(order, ['Obst, Gemüse &amp; Eier', 'Brot &amp; Backwaren', 'Milch, Sahne &amp; Joghurt', 'Tiefkühl', 'Sonstiges']);
+  // Geschenkpapier gehört bei uns zu Drogerie: einmal zuordnen, gilt auch für später
+  const id = a.get(`S.einkauf.items.find(x=>x.name==='Geschenkpapier').id`);
+  a.run(`openEkItem('${id}');UI.form.cat='haushalt';UI.form.catSet=true;saveEkItem()`);
+  assert.equal(a.get(`ekCat('Geschenkpapier')`), 'haushalt');
+  assert.equal(a.saved('ra_cfg3').einkauf.cats.geschenkpapier, 'haushalt');
+  // Reihenfolge der Bereiche ändern: Tiefkühl ganz nach oben
+  const tk = a.get(`S.einkauf.order.indexOf('tk')`);
+  for (let i = tk; i > 0; i--) a.run(`ekMoveCat(${i},-1)`);
+  a.run('render()');
+  assert.match(a.app(), /class="ek-cat">🧊 Tiefkühl</);
+  assert.ok(a.app().indexOf('Tiefkühl<') < a.app().indexOf('Obst, Gemüse'));
+  a.run('ekResetOrder()');
+  assert.equal(a.get('S.einkauf.order[0]'), 'obst');
+  assert.deepEqual(a.get('S.einkauf.cats'), {});
+});
+
+test('Einkauf: Eintrag umbenennen und löschen über ⋯', () => {
+  const a = household();
+  a.run(`setView('einkauf');ekAdd('Milhc')`);
+  const id = a.get('S.einkauf.items[0].id');
+  a.run(`openEkItem('${id}')`);
+  assert.match(a.els.mc.innerHTML, /Bereich im Laden/);
+  a.run(`UI.form.name='Milch';saveEkItem()`);
+  assert.equal(a.get('S.einkauf.items[0].name'), 'Milch');
+  assert.deepEqual(a.get('S.einkauf.cats'), {}); // erkannter Bereich wird nicht extra gespeichert
+  a.run(`openEkItem('${id}');ekDel(UI.form.id);closeModal()`);
+  assert.deepEqual(a.get('S.einkauf.items'), []);
+});
+
+test('Einkauf: Standardliste pflegen und mit einem Tipp hinzufügen, ohne Doppelte', () => {
+  const a = household();
+  a.run(`setView('einkauf')`);
+  assert.doesNotMatch(a.app(), /Standardliste hinzufügen/);
+  assert.match(a.app(), /Standardliste anlegen/);
+  a.run(`openAdmin();setATab('einkauf');UI.ekStd='5 l Milch\\n10 Eier\\n\\nbananen\\nBananen\\nBrot';saveEkStd()`);
+  assert.deepEqual(a.get('S.einkauf.std'), ['5 l Milch', '10 Eier', 'bananen', 'Brot']);
+  a.run(`closeAdmin()`); a.flush();
+  a.run(`setView('einkauf');ekAdd('Brot');ekAddStd()`);
+  assert.deepEqual(a.get('S.einkauf.items.map(x=>x.name)'), ['Brot', '5 l Milch', '10 Eier', 'bananen']);
+  assert.match(a.toast(), /3 Einträge aus der Standardliste, 1 standen schon drauf/);
+  a.run('ekAddStd()');
+  assert.match(a.toast(), /steht schon drauf/);
+  // aktuelle Liste als Standard übernehmen
+  a.run(`ekAdd('Klopapier');openAdmin();setATab('einkauf');ekStdFromList();saveEkStd()`);
+  assert.ok(a.get('S.einkauf.std').includes('Klopapier'));
+});
+
+test('Einkauf: Import begrenzt Bereiche, Reihenfolge und Standardliste', () => {
+  const a = load(VORLAGE);
+  const data = { cfg: { kids: [{ id: 'k1', name: 'Emma' }], household: { name: 'X' }, einkauf: {
+    cats: { milch: 'tk', '__proto__': 'tk', brot: 'gibtsnicht' }, order: ['tk', 'tk', 'quatsch', 'obst'], std: ['<b>x</b>', 7, '', ...Array(80).fill(0).map((_, i) => 'A' + i)],
+  } } };
+  assert.equal(a.run(`applyImport(${JSON.stringify(data)})`), true);
+  const E = a.get('S.einkauf');
+  assert.deepEqual(E.cats, { milch: 'tk' });
+  assert.deepEqual(E.order.slice(0, 3), ['tk', 'obst', 'brot']);
+  assert.equal(E.order.length, 10);
+  assert.equal(E.std.length, 60);
+  a.run(`setView('einkauf');ekAdd('<b>x</b>');render()`);
+  assert.doesNotMatch(a.app(), /<b>x/);
+});
+
+test('Essen: Gericht für heute direkt auswählen, ohne zu würfeln', () => {
+  const a = household();
+  a.run(`setView('essen')`);
+  assert.match(a.app(), /onclick="openEssPick\('[0-9-]+','abend'\)">Auswählen</);
+  a.run(`openEssPick(today(),'abend');essPickSet('g3')`);
+  assert.deepEqual(a.get(`planSlot(today(),'abend')`), { id: 'g3', pin: true });
+  assert.match(a.app(), /Pizza/);
 });
