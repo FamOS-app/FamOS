@@ -2126,7 +2126,7 @@ test('Datenschutz: Kontakt kommt aus PRIVACY_NAME/PRIVACY_EMAIL in den Build, ge
   assert.doesNotMatch(log, /Testperson|kontakt@/);
   const a = load(path.join(out, 'index.html'));
   a.run('openPrivacy()');
-  assert.match(a.els.mc.innerHTML, /<strong>Testperson Müller<\/strong>, E-Mail: <a href="mailto:kontakt@example.org">kontakt@example.org<\/a>/);
+  assert.match(a.els.mc.innerHTML, /<strong>Testperson Müller<\/strong>, E-Mail: <a href="mailto:kontakt@example.org"[^>]*>kontakt@example.org<\/a>/);
   assert.doesNotMatch(a.els.mc.innerHTML, /die Person, die diese FamOS-Instanz betreibt/);
   // ungültig: Build bricht ab, ohne die Werte auszugeben
   for (const [bad, re] of [
