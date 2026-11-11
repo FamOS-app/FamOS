@@ -1092,22 +1092,7 @@ function admKinder(){const me=getMe(),mp=meAdult();return`<div class="as-lbl">Di
       <button onclick="exportData()" style="flex:1;padding:11px;border-radius:var(--r);background:var(--pri);color:var(--on);font-weight:800;font-size:.86rem;border:none">📤 Exportieren</button>
       <button onclick="importData()" style="flex:1;padding:11px;border-radius:var(--r);background:var(--bg2);color:var(--muted);font-weight:800;font-size:.86rem;border:1.5px solid var(--border)">📥 Importieren</button>
     </div>
-  </div>
-  <div style="margin-top:20px;padding-top:16px;border-top:1.5px solid var(--border)">
-    <div class="as-lbl">FamOS weiterempfehlen</div>
-    <div style="font-size:.77rem;color:var(--muted);font-weight:700;line-height:1.6;margin-bottom:12px">Schickt nur den Link zur App. Eure Familiendaten bleiben bei euch, wer den Link öffnet, startet mit einer leeren App.</div>
-    <div style="display:flex;gap:8px"><button onclick="shareWhatsApp()" style="flex:1;padding:11px;border-radius:var(--r);background:var(--pri);color:var(--on);font-weight:800;font-size:.86rem;border:none">💬 Per WhatsApp</button><button onclick="shareApp()" style="flex:1;padding:11px;border-radius:var(--r);background:var(--bg2);color:var(--muted);font-weight:800;font-size:.86rem;border:1.5px solid var(--border)">🔗 Anderer Weg</button></div>
   </div>`;}
-// Adresse der App zum Weitergeben: ohne Query und Hash, denn dort kann ein Login-Link stehen
-function appUrl(){const l=W?.location;return l&&/^https?:$/.test(l.protocol||'')?l.origin+l.pathname:'';}
-const SHARE_TXT='FamOS – Das Gehirn der Familie';
-// WhatsApp: öffnet nur einen Link (wa.me) mit vorbereitetem Text, es wird nichts nachgeladen
-function shareWhatsApp(){const url=appUrl();if(!url){toast('Teilen geht nur in der veröffentlichten App.');return;}
-  W.open('https://wa.me/?text='+encodeURIComponent(SHARE_TXT+'\n'+url),'_blank','noopener,noreferrer');}
-function shareApp(){const url=appUrl();if(!url){toast('Teilen geht nur in der veröffentlichten App.');return;}
-  const copy=()=>{try{navigator.clipboard.writeText(url).then(()=>toast('Link kopiert'),()=>toast(url));}catch(e){toast(url);}};
-  if(typeof navigator.share!=='function'){copy();return;}
-  try{navigator.share({title:'FamOS',text:SHARE_TXT,url}).catch(e=>{if(e?.name!=='AbortError')copy();});}catch(e){copy();}}
 function buildExport(){return{app:'famos',v:1,cfg:S,tgd:TGD,savings:SAVINGS,tx:TX,exported:new Date().toISOString()};}
 function exportData(){const blob=new Blob([JSON.stringify(buildExport(),null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`famos-backup-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Backup gespeichert. Enthält Namen und Stundenplan, also nicht offen teilen.');}
 // Übernimmt ein Backup. Alles wird validiert, unbekannte Felder fallen weg.

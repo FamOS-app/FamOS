@@ -41,10 +41,7 @@ for (const file of [APP, VORLAGE]) {
     // Keine externe Quelle, auch keine Schrift: Manrope ist eingebettet
     const hosts = [...html.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)].map(m => m[1])
       .filter(h => h !== 'www.w3.org'); // SVG-Namespace in Data-URLs, kein Request
-    assert.deepEqual([...new Set(hosts)].filter(h => h !== 'github.com' && h !== 'wa.me'), []);
-    // wa.me nur als Link zum Teilen (öffnet WhatsApp in neuem Tab), genau eine Stelle, kein Request aus der App
-    assert.equal((html.match(/https?:\/\/wa\.me/g) || []).length, 1);
-    assert.match(html, /W\.open\('https:\/\/wa\.me\/\?text='\+encodeURIComponent\(SHARE_TXT\+'\\n'\+url\),'_blank','noopener,noreferrer'\)/);
+    assert.deepEqual([...new Set(hosts)].filter(h => h !== 'github.com'), []);
     // github.com nur als Link zur Anleitung, aus der eigenen Adresse gebaut – kein Konto-Name im Code
     assert.equal((html.match(/https?:\/\/github\.com/g) || []).length, 1);
     assert.match(html, /return m&&r\?`https:\/\/github\.com\/\$\{m\[1\]\}\/\$\{r\[1\]\}#eigene-instanz-einrichten`/);
@@ -1696,52 +1693,4 @@ test('Emoji-Auswahl: viele Kategorien, alles gültig, eigenes Emoji über die Ta
   a.run(`epOpen(e=>{UI.form.icon=e});document.getElementById('epOwn').value='Hallo';epOwnPick()`);
   assert.match(a.toast(), /Emoji eintippen/);
   assert.equal(a.get('UI.form.icon'), '🦩');
-});
-
-test('App teilen: nur die Adresse ohne Query/Hash, Teilen-Dialog oder Zwischenablage', async () => {
-  const loc = { protocol: 'https:', origin: 'https://beispiel.github.io', pathname: '/FamOS/', search: '?code=geheim', hash: '#access_token=geheim', hostname: 'beispiel.github.io' };
-  const shared = [], copied = [];
-  const a = load(VORLAGE, { globals: { window: { location: loc }, navigator: { share: d => { shared.push(d); return Promise.resolve(); } } } });
-  a.run(`UI.aTab='kinder';renderAdmin()`);
-  assert.match(a.adm(), /onclick="shareApp\(\)"/);
-  a.run('shareApp()');
-  assert.equal(shared.length, 1);
-  assert.equal(shared[0].url, 'https://beispiel.github.io/FamOS/');
-  assert.doesNotMatch(JSON.stringify(shared[0]), /geheim/);
-
-  // WhatsApp: wa.me mit Text und Adresse, ohne Login-Reste
-  const opened = [];
-  const w = load(VORLAGE, { globals: { window: { location: loc, open: (...x) => { opened.push(x); } } } });
-  w.run(`UI.aTab='kinder';renderAdmin()`);
-  assert.match(w.adm(), /onclick="shareWhatsApp\(\)"/);
-  w.run('shareWhatsApp()');
-  assert.equal(opened.length, 1);
-  const wa = new URL(opened[0][0]);
-  assert.equal(wa.origin + wa.pathname, 'https://wa.me/');
-  assert.equal(wa.searchParams.get('text'), 'FamOS – Das Gehirn der Familie\nhttps://beispiel.github.io/FamOS/');
-  assert.equal(opened[0][1], '_blank');
-  assert.match(opened[0][2], /noopener/);
-
-  // ohne Teilen-Dialog (Desktop): Link in die Zwischenablage
-  const b = load(VORLAGE, { globals: { window: { location: loc }, navigator: { clipboard: { writeText: t => { copied.push(t); return Promise.resolve(); } } } } });
-  b.run('shareApp()');
-  await new Promise(r => setImmediate(r));
-  assert.deepEqual(copied, ['https://beispiel.github.io/FamOS/']);
-  assert.match(b.toast(), /Link kopiert/);
-
-  // Dialog abgebrochen: nichts kopieren; anderer Fehler: Zwischenablage als Ersatz
-  for (const [name, n] of [['AbortError', 0], ['NotAllowedError', 1]]) {
-    const cp = [];
-    const c = load(VORLAGE, { globals: { window: { location: loc }, navigator: { share: () => Promise.reject(Object.assign(new Error('x'), { name })), clipboard: { writeText: t => { cp.push(t); return Promise.resolve(); } } } } });
-    c.run('shareApp()');
-    await new Promise(r => setImmediate(r));
-    assert.equal(cp.length, n, name);
-  }
-
-  // lokal geöffnet (file://): kein Link, nur Hinweis
-  const d = load(VORLAGE, { globals: { window: { location: { protocol: 'file:', origin: 'null', pathname: '/tmp/index.html' } } } });
-  d.run('shareApp()');
-  assert.match(d.toast(), /veröffentlichten App/);
-  d.run(`document.getElementById('toast').textContent='';shareWhatsApp()`);
-  assert.match(d.toast(), /veröffentlichten App/);
 });
