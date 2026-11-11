@@ -27,7 +27,7 @@ create extension pgcrypto schema extensions;
 `;
 
 const U = {
-  jana: '11111111-1111-1111-1111-111111111111',
+  mama: '11111111-1111-1111-1111-111111111111',
   partner: '22222222-2222-2222-2222-222222222222',
   fremd: '33333333-3333-3333-3333-333333333333',
 };
@@ -64,18 +64,18 @@ async function fails(p, re) {
 let db, hh;
 test.before(async () => {
   db = await setup();
-  [hh] = await as(db, 'jana', `select * from create_household('Familie Test')`);
+  [hh] = await as(db, 'mama', `select * from create_household('Familie Test')`);
 });
 
 test('DB: Haushalt anlegen macht mich zum Besitzer, Code hat 8 Zeichen ohne Verwechsler', async () => {
   assert.match(hh.invite_code, /^[A-HJKMNP-Z2-9]{8}$/);
-  const m = await as(db, 'jana', 'select user_id, role from members');
-  assert.deepEqual(m, [{ user_id: U.jana, role: 'owner' }]);
+  const m = await as(db, 'mama', 'select user_id, role from members');
+  assert.deepEqual(m, [{ user_id: U.mama, role: 'owner' }]);
 });
 
 test('DB: Fremde sehen nichts und können nichts schreiben', async () => {
-  await as(db, 'jana', `insert into docs (household_id, key, data) values ($1, 'cfg', '{"kids":[{"name":"Emma"}]}')`, [hh.id]);
-  await as(db, 'jana', `insert into shopping_items (household_id, id, name) values ($1, 'i1', 'Milch')`, [hh.id]);
+  await as(db, 'mama', `insert into docs (household_id, key, data) values ($1, 'cfg', '{"kids":[{"name":"Emma"}]}')`, [hh.id]);
+  await as(db, 'mama', `insert into shopping_items (household_id, id, name) values ($1, 'i1', 'Milch')`, [hh.id]);
   for (const t of ['households', 'members', 'docs', 'shopping_items']) {
     assert.deepEqual(await as(db, 'fremd', `select * from ${t}`), [], t);
   }
@@ -104,7 +104,7 @@ test('DB: Beitreten per Code, Groß-/Kleinschreibung und Leerzeichen egal', asyn
   const docs = await as(db, 'partner', 'select data from docs');
   assert.equal(docs[0].data.kids[0].name, 'Emma');
   await as(db, 'partner', `select * from join_household($1)`, [hh.invite_code]); // doppelt: kein Fehler
-  const m = await as(db, 'jana', 'select role from members order by role');
+  const m = await as(db, 'mama', 'select role from members order by role');
   assert.deepEqual(m.map(x => x.role), ['adult', 'owner']);
 });
 
@@ -112,7 +112,7 @@ test('DB: Mitglieder dürfen nur den Namen ändern, nicht den Code; Code erneuer
   await as(db, 'partner', `update households set name='Familie Neu' where id=$1`, [hh.id]);
   await fails(as(db, 'partner', `update households set invite_code='AAAAAAAA' where id=$1`, [hh.id]), /permission denied/);
   await fails(as(db, 'partner', `select rotate_invite($1)`, [hh.id]), /nur für den Besitzer/);
-  const [{ rotate_invite: neu }] = await as(db, 'jana', `select rotate_invite($1)`, [hh.id]);
+  const [{ rotate_invite: neu }] = await as(db, 'mama', `select rotate_invite($1)`, [hh.id]);
   assert.notEqual(neu, hh.invite_code);
   await fails(as(db, 'fremd', `select * from join_household($1)`, [hh.invite_code]), /Code ungültig/); // alter Code tot
   hh.invite_code = neu;
@@ -125,32 +125,32 @@ test('DB: Rollen und Mitgliedschaften lassen sich nicht selbst hochstufen', asyn
 });
 
 test('DB: Dokument-Version steigt bei jeder Änderung, Konflikte sind erkennbar', async () => {
-  const [{ version: v1 }] = await as(db, 'jana', `select version from docs where household_id=$1 and key='cfg'`, [hh.id]);
+  const [{ version: v1 }] = await as(db, 'mama', `select version from docs where household_id=$1 and key='cfg'`, [hh.id]);
   const ok = await as(db, 'partner', `update docs set data='{"kids":[]}' where household_id=$1 and key='cfg' and version=$2 returning version, updated_by`, [hh.id, v1]);
   assert.deepEqual(ok, [{ version: v1 + 1, updated_by: U.partner }]);
   // Jana schreibt mit veralteter Version: trifft keine Zeile → App weiß, dass sie neu laden muss
-  const stale = await as(db, 'jana', `update docs set data='{"x":1}' where household_id=$1 and key='cfg' and version=$2 returning 1`, [hh.id, v1]);
+  const stale = await as(db, 'mama', `update docs set data='{"x":1}' where household_id=$1 and key='cfg' and version=$2 returning 1`, [hh.id, v1]);
   assert.equal(stale.length, 0);
-  await fails(as(db, 'jana', `insert into docs (household_id, key, data) values ($1, 'geheim', '{}')`, [hh.id]), /check/);
+  await fails(as(db, 'mama', `insert into docs (household_id, key, data) values ($1, 'geheim', '{}')`, [hh.id]), /check/);
 });
 
 test('DB: Einkaufsliste zeilenweise, Eingaben werden begrenzt', async () => {
   await as(db, 'partner', `insert into shopping_items (household_id, id, name) values ($1, 'i2', 'Brot')`, [hh.id]);
-  await as(db, 'jana', `update shopping_items set done=true where household_id=$1 and id='i1'`, [hh.id]);
+  await as(db, 'mama', `update shopping_items set done=true where household_id=$1 and id='i1'`, [hh.id]);
   const rows = await as(db, 'partner', 'select id, name, done from shopping_items order by id');
   assert.deepEqual(rows, [{ id: 'i1', name: 'Milch', done: true }, { id: 'i2', name: 'Brot', done: false }]);
-  await fails(as(db, 'jana', `insert into shopping_items (household_id, id, name) values ($1, 'bad id!', 'x')`, [hh.id]), /check/);
-  await fails(as(db, 'jana', `insert into shopping_items (household_id, id, name, n) values ($1, 'i3', 'x', 500)`, [hh.id]), /check/);
-  await fails(as(db, 'jana', `insert into shopping_items (household_id, id, name) values ($1, 'i4', $2)`, [hh.id, 'x'.repeat(81)]), /check/);
+  await fails(as(db, 'mama', `insert into shopping_items (household_id, id, name) values ($1, 'bad id!', 'x')`, [hh.id]), /check/);
+  await fails(as(db, 'mama', `insert into shopping_items (household_id, id, name, n) values ($1, 'i3', 'x', 500)`, [hh.id]), /check/);
+  await fails(as(db, 'mama', `insert into shopping_items (household_id, id, name) values ($1, 'i4', $2)`, [hh.id, 'x'.repeat(81)]), /check/);
 });
 
 test('DB: Austreten, Besitzer entfernt Mitglieder, Haushalt löschen räumt alles ab', async () => {
   await as(db, 'partner', `delete from members where user_id=$1`, [U.partner]);
   assert.deepEqual(await as(db, 'partner', 'select * from docs'), []);
   await as(db, 'partner', `select * from join_household($1)`, [hh.invite_code]);
-  const removed = await as(db, 'jana', `delete from members where user_id=$1 returning 1`, [U.partner]);
+  const removed = await as(db, 'mama', `delete from members where user_id=$1 returning 1`, [U.partner]);
   assert.equal(removed.length, 1);
-  await as(db, 'jana', `delete from households where id=$1`, [hh.id]);
+  await as(db, 'mama', `delete from households where id=$1`, [hh.id]);
   const left = await db.query('select (select count(*) from docs) d, (select count(*) from shopping_items) s, (select count(*) from members) m');
   assert.deepEqual(left.rows[0], { d: 0, s: 0, m: 0 });
 });
@@ -163,14 +163,14 @@ test('DB: höchstens 3 Haushalte pro Person, Realtime für docs und Einkauf akti
 });
 
 test('DB: Aufgaben nur für Mitglieder, Eingaben werden begrenzt, Realtime aktiv', async () => {
-  const [h] = await as(db, 'jana', `select * from create_household('Aufgaben-Test')`);
-  await as(db, 'jana', `insert into tasks (household_id, id, title, who, due, rep) values ($1, 't1', 'Müll rausbringen', '["k1"]', '2026-11-16', 'w')`, [h.id]);
+  const [h] = await as(db, 'mama', `select * from create_household('Aufgaben-Test')`);
+  await as(db, 'mama', `insert into tasks (household_id, id, title, who, due, rep) values ($1, 't1', 'Müll rausbringen', '["k1"]', '2026-11-16', 'w')`, [h.id]);
   assert.deepEqual(await as(db, 'fremd', 'select * from tasks'), []);
   await fails(as(db, 'fremd', `insert into tasks (household_id, id, title) values ($1, 'x', 'Hack')`, [h.id]), /row-level security/);
   for (const [col, val] of [['title', 'x'.repeat(121)], ['rep', 'jährlich'], ['who', '{"a":1}'], ['id', 'bad id!']]) {
-    await fails(as(db, 'jana', `insert into tasks (household_id, id, title, ${col === 'id' || col === 'title' ? '' : col + ','} note) values ($1, ${col === 'id' ? `'${val}'` : "'t2'"}, ${col === 'title' ? `'${val}'` : "'ok'"}, ${col === 'id' || col === 'title' ? '' : `'${val}',`} '')`, [h.id]), /check|invalid/i);
+    await fails(as(db, 'mama', `insert into tasks (household_id, id, title, ${col === 'id' || col === 'title' ? '' : col + ','} note) values ($1, ${col === 'id' ? `'${val}'` : "'t2'"}, ${col === 'title' ? `'${val}'` : "'ok'"}, ${col === 'id' || col === 'title' ? '' : `'${val}',`} '')`, [h.id]), /check|invalid/i);
   }
-  const [r] = await as(db, 'jana', `update tasks set done=true, done_by='k1' where household_id=$1 and id='t1' returning done, rep, who`, [h.id]);
+  const [r] = await as(db, 'mama', `update tasks set done=true, done_by='k1' where household_id=$1 and id='t1' returning done, rep, who`, [h.id]);
   assert.deepEqual(r, { done: true, rep: 'w', who: ['k1'] });
   const pub = await db.query(`select tablename from pg_publication_tables where pubname='supabase_realtime' and tablename='tasks'`);
   assert.equal(pub.rows.length, 1);
