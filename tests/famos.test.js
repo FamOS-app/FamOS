@@ -2095,3 +2095,52 @@ test('Essen: ganzer Tag nicht zu Hause, wenn mehrere Mahlzeiten geplant werden',
   a.run(`essPickOff('away',true)`);
   assert.deepEqual(a.get(`S.essen.plan['${d1}']`), { mittag: { off: 'away' }, abend: { off: 'away' } });
 });
+
+// ─── Datenschutz ───
+test('Datenschutz: erreichbar von Startseite, Einstellungen und Anmeldung; ohne Kontakt-Secret kein Name', () => {
+  const a = load(VORLAGE);
+  assert.match(a.app(), /onclick="openPrivacy\(\)"[^>]*>Datenschutz</);
+  a.run('openPrivacy()');
+  const html = a.els.mc.innerHTML;
+  for (const t of ['Verantwortlich', 'Ohne Konto', 'Aufruf der Seite', 'GitHub Pages', 'Supabase', 'Frankfurt', 'Rezept aus Link', 'Mit Claude', 'Wie lange', 'Deine Rechte', 'Aufsichtsbehörde', 'Art. 6 Abs. 1 lit. b', 'Art. 6 Abs. 1 lit. f'])
+    assert.ok(html.includes(t), t);
+  assert.match(html, /die Person, die diese FamOS-Instanz betreibt/);
+  assert.doesNotMatch(html, /mailto:|__PRIVACY/);
+  a.run('closePrivacy()');
+  const b = household();
+  b.run(`openAdmin();UI.aTab='kinder';renderAdmin()`);
+  assert.match(b.adm(), /onclick="openPrivacy\(\)">🔒 Datenschutz/);
+  // aus dem Anmelde-Dialog heraus und wieder zurück, Eingaben bleiben
+  b.run(`openLogin();UI.form.email='x@example.org';openModal()`);
+  b.run('openPrivacy()');
+  assert.equal(b.get('UI.form.mode'), 'privacy');
+  b.run('closePrivacy()');
+  assert.deepEqual(b.get('[UI.form.mode,UI.form.email]'), ['login', 'x@example.org']);
+});
+
+test('Datenschutz: Kontakt kommt aus PRIVACY_NAME/PRIVACY_EMAIL in den Build, geprüft und nie im Log', () => {
+  const out = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'famos-priv-'));
+  const env = { PRIVACY_NAME: '  Testperson   Müller ', PRIVACY_EMAIL: 'kontakt@example.org' };
+  const log = execFileSync('python3', [BUILD, APP, out], { env: { ...process.env, ...env }, stdio: 'pipe' }).toString();
+  assert.match(log, /Datenschutz-Kontakt gesetzt/);
+  assert.doesNotMatch(log, /Testperson|kontakt@/);
+  const a = load(path.join(out, 'index.html'));
+  a.run('openPrivacy()');
+  assert.match(a.els.mc.innerHTML, /<strong>Testperson Müller<\/strong>, E-Mail: <a href="mailto:kontakt@example.org">kontakt@example.org<\/a>/);
+  assert.doesNotMatch(a.els.mc.innerHTML, /die Person, die diese FamOS-Instanz betreibt/);
+  // ungültig: Build bricht ab, ohne die Werte auszugeben
+  for (const [bad, re] of [
+    [{ PRIVACY_NAME: 'Testperson', PRIVACY_EMAIL: '' }, /nur zusammen/],
+    [{ PRIVACY_NAME: '', PRIVACY_EMAIL: 'kontakt@example.org' }, /nur zusammen/],
+    [{ PRIVACY_NAME: 'Test<script>', PRIVACY_EMAIL: 'kontakt@example.org' }, /PRIVACY_NAME/],
+    [{ PRIVACY_NAME: 'Test"person', PRIVACY_EMAIL: 'kontakt@example.org' }, /PRIVACY_NAME/],
+    [{ PRIVACY_NAME: 'Testperson', PRIVACY_EMAIL: 'kein-at-zeichen' }, /PRIVACY_EMAIL/],
+    [{ PRIVACY_NAME: 'Testperson', PRIVACY_EMAIL: 'a@b.de"><img' }, /PRIVACY_EMAIL/],
+  ]) {
+    const r = runBuild(bad);
+    assert.equal(r.code, 1, JSON.stringify(bad));
+    assert.match(r.out, re);
+    assert.doesNotMatch(r.out, /Testperson|kontakt@|kein-at/);
+    assert.deepEqual(r.files, []);
+  }
+});

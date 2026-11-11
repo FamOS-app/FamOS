@@ -41,6 +41,7 @@ Die Sperrliste (Namen, die nie im Code auftauchen dürfen) steht selbst nicht im
 Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 
 ## Daten und Datenschutz
+- **Datenschutzerklärung in der App:** Startseite (unten), Einstellungen (unten) und Anmeldung verlinken sie. Name und E-Mail der verantwortlichen Person kommen aus den GitHub-Secrets `PRIVACY_NAME` und `PRIVACY_EMAIL` (Settings → Secrets and variables → Actions); ohne sie nennt die App keinen Namen. Der Text beschreibt, was die App tatsächlich tut, ersetzt aber keine Rechtsberatung.
 
 - Alle Daten liegen **pro Gerät** im `localStorage` (`ra_cfg3`, `ra_day3`, `ra_tgd`, `ra_savings`, `ra_tx`). Kein Server, kein Tracking, keine Cookies.
 - Backup und Gerätewechsel über **Einstellungen → Haushalt → Exportieren/Importieren**. Die Backup-Datei enthält Familiendaten: nicht ins Repo, nicht offen teilen.

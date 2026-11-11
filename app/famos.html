@@ -673,6 +673,8 @@ const DEF={
 // ═══ SYNC-KONFIGURATION ═══════════════════════
 // Platzhalter ersetzt tools/build.py aus den GitHub-Variablen. Nicht eingesetzt = App läuft nur lokal.
 const SB_URL='__SUPABASE_URL__',SB_KEY='__SUPABASE_KEY__';
+// Verantwortliche/r für die Datenschutzerklärung: setzt der Build aus den Secrets PRIVACY_NAME und PRIVACY_EMAIL, nie im Code
+const PRIV_NAME='__PRIVACY_NAME__',PRIV_MAIL='__PRIVACY_EMAIL__';
 const SYNC_ON=/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SB_URL)&&/^sb_publishable_[A-Za-z0-9_-]+$/.test(SB_KEY);
 
 // ═══ MODULE-REGISTER ══════════════════════════
@@ -942,7 +944,7 @@ function buildOnboarding(){
   </div>
   <button class="m-save" style="width:100%;${ready?'':'opacity:.45'}" onclick="obFinish()">Haushalt anlegen</button>
   <div style="text-align:center;margin-top:14px;font-size:.78rem;font-weight:700;color:var(--muted);line-height:1.7">Schon ein Backup? <button onclick="importData()" style="background:none;color:var(--text);font-weight:800;font-size:.78rem;text-decoration:underline;padding:0">Importieren</button></div>
-  <div style="margin-top:22px;font-size:.7rem;font-weight:700;color:var(--subtle);line-height:1.6;text-align:center">Deine Eingaben bleiben nur auf diesem Gerät gespeichert. Kein Tracking, keine Cookies, keine Verbindung zu fremden Servern.</div>
+  <div style="margin-top:22px;font-size:.7rem;font-weight:700;color:var(--subtle);line-height:1.6;text-align:center">Ohne Konto bleiben deine Eingaben nur auf diesem Gerät. Kein Tracking, keine Werbung, keine Cookies. <button onclick="openPrivacy()" style="background:none;color:var(--text);font-weight:800;font-size:.7rem;text-decoration:underline;padding:0">Datenschutz</button></div>
   </div>`;
 }
 function obFinish(){
@@ -1103,7 +1105,7 @@ function renderAdmin(){
       ${aTabs.map(t=>`<button class="adm-tab${UI.aTab===t.id?' on':''}" onclick="setATab('${t.id}')">${esc(t.l)}</button>`).join('')}
     </div>
   </div>
-  <div class="adm-body">${tabs[UI.aTab]?.()}</div>`;}
+  <div class="adm-body">${tabs[UI.aTab]?.()}<button class="reset-btn" style="margin-top:28px" onclick="openPrivacy()">🔒 Datenschutz</button></div>`;}
 
 function admModule(){
   return`<div style="font-size:.8rem;color:var(--muted);font-weight:700;margin-bottom:13px;line-height:1.65">Blende Bereiche aus, die ihr nicht nutzt. Die Daten bleiben erhalten und sind wieder da, sobald du den Bereich einschaltest.</div>
@@ -1944,7 +1946,7 @@ function epOwnOk(v){const t=sEm(String(v||'').trim(),'');return t&&/\p{Extended_
 function epOwnPick(){const el=document.getElementById('epOwn'),e=epOwnOk(el?.value);if(!e){toast('Bitte ein Emoji eintippen (Emoji-Tastatur).');return;}if(el)el.value='';epPick(e);}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,cal:renderCalModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,pwChange:renderPwChangeModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,cal:renderCalModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,privacy:renderPrivacyModal,pwChange:renderPwChangeModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 
@@ -2189,13 +2191,33 @@ function renderLoginModal(){const f=UI.form,err=f.err?`<div class="sync-err" rol
   ${err}${S.household?'':'<div class="ins-why">Keinen Code bekommen? Dann „Erst einrichten“ wählen und einen eigenen Haushalt anlegen; er wird danach automatisch in der Cloud gespeichert.</div>'}
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">${S.household?'Später':'Erst einrichten'}</button><button class="m-save" onclick="joinHousehold()" ${f.busy?'disabled':''}>Beitreten</button></div>`;
 }
+// ─── Datenschutzerklärung ───
+function privContact(){const ok=/^[^\s@<>"'`]+@[^\s@<>"'`]+\.[a-z]{2,}$/i.test(PRIV_MAIL)&&!/^__/.test(PRIV_NAME)&&PRIV_NAME.trim();
+  return ok?{name:PRIV_NAME.trim(),mail:PRIV_MAIL}:null;}
+function openPrivacy(){const back=UI.form?.mode&&UI.form.mode!=='privacy'&&document.getElementById('mb').classList.contains('open')?{...UI.form}:null;UI.form={mode:'privacy',back};openModal();}
+function closePrivacy(){const b=UI.form?.back;if(b){UI.form=b;openModal();}else closeModal();}
+function renderPrivacyModal(){const c=privContact(),h=t=>`<div class="as-lbl" style="margin-top:16px">${t}</div>`,p=t=>`<div class="ins-why">${t}</div>`;
+  const who=c?`<strong>${esc(c.name)}</strong>, E-Mail: <a href="mailto:${esc(c.mail)}" style="color:var(--pri)">${esc(c.mail)}</a>`:'die Person, die diese FamOS-Instanz betreibt und dir den Link gegeben hat';
+  return`<h3>🔒 Datenschutz</h3>
+  ${p('FamOS ist eine private Familien-App ohne Werbung, ohne Tracking und ohne Cookies. Hier steht, welche Daten wo landen.')}
+  ${h('Verantwortlich')}${p(who+'. Für alle Fragen zum Datenschutz und für deine Rechte (siehe unten) genügt eine kurze Nachricht.')}
+  ${h('Ohne Konto')}${p('Alles, was du einträgst, bleibt auf deinem Gerät (Browser-Speicher). Nichts davon wird übertragen. Löschen: Browserdaten für diese Seite löschen oder die App entfernen.')}
+  ${h('Aufruf der Seite')}${p('Die App liegt bei GitHub Pages (GitHub, Inc., USA). Beim Aufruf verarbeitet GitHub technisch nötige Daten wie IP-Adresse und Zeitpunkt, um die Seite auszuliefern und vor Missbrauch zu schützen. Rechtsgrundlage: berechtigtes Interesse an einer sicheren Bereitstellung (Art. 6 Abs. 1 lit. f DSGVO). Dabei können Daten in die USA übermittelt werden. Schrift und alle übrigen Inhalte stecken in der App selbst; es werden keine weiteren Dienste geladen.')}
+  ${h('Mit Konto: Abgleich zwischen Handys')}${p('Wer sich anmeldet, speichert die Daten des Haushalts bei Supabase (Supabase, Inc.) in einem Rechenzentrum in Frankfurt (EU): E-Mail-Adresse und gegebenenfalls Passwort (nur verschlüsselt) für die Anmeldung, dazu was ihr in FamOS eintragt: Namen und Symbole der Familienmitglieder, Routinen, Stundenpläne, Taschengeld, Wünsche, Gerichte mit Fotos, Wochenplan, Einkaufsliste, Aufgaben und Termine. Sehen kann das nur, wer zum Haushalt gehört. Zweck ist allein der Abgleich zwischen euren Geräten. Rechtsgrundlage: die Nutzung der App, um die du gebeten hast (Art. 6 Abs. 1 lit. b DSGVO).')}
+  ${p('Fotos zu Gerichten werden vor dem Speichern verkleinert; Aufnahmeort und Kameradaten fallen dabei weg. Die Anmelde-Mails verschickt Supabase oder ein dafür eingerichteter Mail-Dienst.')}
+  ${h('Rezept aus Link')}${p('Beim Import aus einem Link geht nur die Adresse der Rezeptseite an eine Funktion bei Supabase, die die Seite abruft und das Rezept zurückgibt. Die Rezeptseite sieht dabei den Server von Supabase, nicht dein Gerät.')}
+  ${h('Mit Claude')}${p('FamOS schickt nichts an Claude. Der Knopf kopiert nur einen Text; was du davon in dein eigenes Claude-Konto (Anthropic) einfügst, entscheidest du dort.')}
+  ${h('Wie lange')}${p('Bis ihr es löscht: einzelne Einträge in der App, den ganzen Haushalt unter ⚙️ → Konto &amp; Sync → „Haushalt in der Cloud löschen“. Das Konto selbst (E-Mail-Adresse) löscht die verantwortliche Person auf Nachricht.')}
+  ${h('Deine Rechte')}${p('Du kannst Auskunft über deine Daten verlangen, ihre Berichtigung oder Löschung, die Einschränkung der Verarbeitung und eine Kopie (Datenübertragbarkeit; die meisten Daten auch selbst über ⚙️ → Haushalt → Exportieren). Du kannst der Verarbeitung widersprechen und dich bei einer Datenschutz-Aufsichtsbehörde beschweren.')}
+  ${p('<small>Stand: November 2026</small>')}
+  <div class="m-btns"><button class="m-save" onclick="closePrivacy()">Schließen</button></div>`;}
 function refreshAll(){render();if(document.getElementById('adm').classList.contains('open'))renderAdmin();}
 // Hinweis für alle ohne Freischaltung: die App läuft vollständig lokal, Abgleich nur für freigeschaltete Haushalte
 // Link zur Anleitung aus der eigenen Adresse ableiten (<name>.github.io/<repo> → github.com/<name>/<repo>), kein Name im Code
 function ownGuide(){const l=W?.location;const m=/^([a-z0-9-]+)\.github\.io$/i.exec(l?.hostname||''),r=/^\/([A-Za-z0-9._-]+)\//.exec(l?.pathname||'');
   return m&&r?`https://github.com/${m[1]}/${r[1]}#eigene-instanz-einrichten`:'';}
 function accessNote(){return`<div class="sync-access"><strong>Nur für freigeschaltete Haushalte.</strong> Ohne Konto funktioniert FamOS vollständig auf diesem Gerät. Für den Abgleich zwischen Handys: die Person fragen, die dir den Link gegeben hat, oder ${ownGuide()?`<a href="${esc(ownGuide())}" target="_blank" rel="noopener noreferrer">eine eigene Instanz einrichten</a>`:'eine eigene Instanz einrichten'}.</div>`;}
-function privacyNote(){return`<div class="sync-privacy">Gespeichert wird in einer Datenbank von Supabase in Frankfurt (EU). Sehen kann die Daten nur, wer zu eurem Haushalt gehört. Die E-Mail-Adresse dient nur der Anmeldung. Abmelden und Haushalt löschen geht jederzeit in den Einstellungen.</div>`;}
+function privacyNote(){return`<div class="sync-privacy">Gespeichert wird in einer Datenbank von Supabase in Frankfurt (EU). Sehen kann die Daten nur, wer zu eurem Haushalt gehört. Die E-Mail-Adresse dient nur der Anmeldung. Abmelden und Haushalt löschen geht jederzeit in den Einstellungen. <button class="home-link" style="font-size:inherit" onclick="openPrivacy()">Mehr zum Datenschutz</button></div>`;}
 function loginBusy(b,err){UI.form.busy=b;UI.form.err=err||'';openModal();}
 async function loginSend(){const f=UI.form,email=String(f.email||'').trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){loginBusy(false,'Bitte eine gültige E-Mail-Adresse eingeben.');return;}

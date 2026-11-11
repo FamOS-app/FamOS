@@ -7,6 +7,7 @@ FamOS („Das Gehirn der Familie“): Familien-App als **Single-File-PWA** (`app
 - **Kein Konto-/Personenname im Code**: Links auf das eigene Repo werden zur Laufzeit aus `location` abgeleitet (siehe `ownGuide()`).
 - **Commit-Autor neutral, kein Personenname**: `git config user.name Claude` und `git config user.email noreply@anthropic.com` (so zeigt GitHub die Commits nicht als „Unverified“).
 - **DSGVO / CSP**: keine externen Ressourcen (Schrift Manrope ist eingebettet). Netzwerk nur zur konfigurierten Supabase-Adresse (`https` + `wss`), die CSP wird beim Build gesetzt. Kein `fetch` außerhalb von `sb()`, kein `eval`, kein `alert`.
+- **Datenschutz-Kontakt** nur über die Secrets `PRIVACY_NAME`/`PRIVACY_EMAIL` (Build setzt sie ein; der CI-Personendaten-Check nimmt genau diese Werte in `dist/index.html` aus). Ändert sich, was die App mit Daten tut, `renderPrivacyModal()` mitziehen.
 - **Supabase**: nur der Publishable Key (`sb_publishable_…`) gehört in die App; der Secret Key nie. Der Build verweigert ihn.
 - **Escaping**: jede Nutzereingabe beim Rendern durch `esc()`; alles aus localStorage, Import und Server durch die `sanitize*`-Funktionen.
 - Antworten an die Nutzerin auf **Deutsch**, präzise, mit Rückfragen bei Unklarheit.

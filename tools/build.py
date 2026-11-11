@@ -16,6 +16,9 @@ ist eine fehlende Liste ein Fehler (so läuft es in CI).
 Sync (optional): SUPABASE_URL und SUPABASE_PUBLISHABLE_KEY aus der Umgebung (in CI aus den
 GitHub-Variablen). Beide werden geprüft, eingesetzt und die CSP erlaubt dann genau diese Adresse.
 Fehlen sie, läuft die gebaute App nur lokal.
+
+Datenschutz (optional): PRIVACY_NAME und PRIVACY_EMAIL (in CI aus den gleichnamigen Secrets) setzen die
+verantwortliche Person in der Datenschutzerklärung. Fehlen sie, nennt die App keinen Namen.
 """
 import hashlib, json, os, re, shutil, sys
 
@@ -70,13 +73,35 @@ def supabase_config():
     return url, key
 
 
+def privacy_config():
+    """Name und E-Mail der verantwortlichen Person für die Datenschutzerklärung (Secrets PRIVACY_NAME, PRIVACY_EMAIL).
+    Beide oder keins. Werte erscheinen nie im Log."""
+    name = ' '.join(os.environ.get('PRIVACY_NAME', '').split())
+    mail = os.environ.get('PRIVACY_EMAIL', '').strip()
+    if not name and not mail:
+        return None
+    if not name or not mail:
+        fail('PRIVACY_NAME und PRIVACY_EMAIL nur zusammen setzen (gesetzt ist nur %s)' % ('PRIVACY_NAME' if name else 'PRIVACY_EMAIL'))
+    if len(name) > 80 or re.search(r'[<>"\'`\\]', name):
+        fail('PRIVACY_NAME: höchstens 80 Zeichen, ohne < > " \' ` \\ (eingetragen: %d Zeichen)' % len(name))
+    if len(mail) > 120 or not re.fullmatch(r'[^\s@<>"\'`\\]+@[^\s@<>"\'`\\]+\.[A-Za-z]{2,}', mail):
+        fail('PRIVACY_EMAIL ist keine gültige E-Mail-Adresse (eingetragen: %d Zeichen)' % len(mail))
+    return name, mail
+
+
 def check_personal(text, names):
     """Gibt die Anzahl der Treffer zurück, ohne die Namen selbst auszugeben."""
     return sum(text.count(n) for n in names)
 
 
-def build(src, out, sb=None):
+def build(src, out, sb=None, priv=None):
     s = open(src, encoding='utf-8').read()
+
+    if priv:
+        # als JSON-Zeichenkette mit \u-Escapes: sicher im <script>, auch bei Umlauten
+        for ph, val in (("'__PRIVACY_NAME__'", json.dumps(priv[0])), ("'__PRIVACY_EMAIL__'", json.dumps(priv[1]))):
+            assert s.count(ph) == 1, ph
+            s = s.replace(ph, val)
 
     if sb:
         url, key = sb
@@ -134,10 +159,12 @@ def main():
     if hits:
         fail(f'{hits} Personendaten-Treffer in {src}. Nichts gebaut.')
     sb = supabase_config()
-    build(src, out, sb)
+    priv = privacy_config()
+    build(src, out, sb, priv)
     print(f'Gebaut: {out}/ (index.html, manifest.webmanifest, sw.js, {len(ICONS)} Icons)'
           + (f' · Personendaten-Check: {len(names)} Namen, keine Treffer' if names else '')
-          + (' · Sync: ' + sb[0] if sb else ' · ohne Sync'))
+          + (' · Sync: ' + sb[0] if sb else ' · ohne Sync')
+          + (' · Datenschutz-Kontakt gesetzt' if priv else ' · ohne Datenschutz-Kontakt'))
 
 
 if __name__ == '__main__':
