@@ -636,32 +636,7 @@ test('Essen: Heute würfeln, nochmal würfeln wechselt, Festlegen sperrt', () =>
   assert.match(a.app(), /Festgelegt/);
 });
 
-test('Essen: Filter wirkt beim Würfeln, ohne Treffer gibt es einen Hinweis', () => {
-  const a = essApp();
-  a.run(`setEssTag('fisch');rollToday('abend')`);
-  assert.ok(a.get(`dishById(planSlot(today(),'abend').id).tags`).includes('fisch'));
-  a.run(`S.essen.dishes.forEach(d=>d.tags=d.tags.filter(t=>t!=='we'));setEssTag('we');S.essen.plan={};rollToday('abend')`);
-  assert.equal(a.get(`planSlot(today(),'abend')`), null);
-  assert.match(a.toast(), /Kein passendes Gericht/);
-});
 
-test('Essen: Gewichtung nach Bewertung, 👎 macht seltener statt auszuschließen', () => {
-  const a = essApp();
-  const [k1, k2] = a.get('S.kids').map(k => k.id);
-  const w = () => a.get(`dishWeight(dishById('g1'),'abend',today(),null)`);
-  assert.equal(w(), 1);
-  a.run(`UI.kid='${k1}';rateDish('g1',1)`);
-  assert.equal(w(), 1.6);
-  a.run(`UI.kid='${k2}';rateDish('g1',-1)`);
-  assert.ok(Math.abs(w() - 0.64) < 1e-9);
-  a.run(`rateDish('g1',-1)`); // nochmal tippen nimmt die Bewertung zurück
-  assert.equal(w(), 1.6);
-  a.run(`UI.kid='${k1}';rateDish('g1',-1);UI.kid='${k2}';rateDish('g1',-1)`);
-  assert.ok(w() > 0);
-  assert.equal(a.get(`dishWeight(dishById('g6'),'abend',today(),null)`), 0); // Müsli passt nicht zum Abend
-  a.run(`setEssTab('gerichte')`);
-  assert.match(a.app(), /👎 2/);
-});
 
 test('Essen: kürzlich gegessen kommt seltener dran', () => {
   const a = essApp();
@@ -769,7 +744,7 @@ test('Essen: Import validiert Gerichte, Plan und Bewertungen', () => {
 
 test('Essen: Export/Import enthält Gerichte, Bewertungen und Plan', () => {
   const a = essApp();
-  a.run(`rateDish('g2',1);rollToday('abend');togPin(today(),'abend')`);
+  a.run(`rateDish('g2',S.kids[0].id);rollToday('abend');togPin(today(),'abend')`);
   const b = load(VORLAGE);
   assert.equal(b.run(`applyImport(${JSON.stringify(a.get('buildExport()'))})`), true);
   assert.deepEqual(b.get('S.essen'), a.get('S.essen'));
@@ -1258,4 +1233,73 @@ test('Claude: Stundenplan vom Foto ersetzt nur die genannten Tage des gewählten
   assert.deepEqual(sp.di, []);
   assert.deepEqual(sp.fr.map(e => e.lbl), ['Schwimmen']); // nicht genannter Tag bleibt
   assert.deepEqual(a.get(`S.stundenplan['${k1}'].mo`), []);
+});
+
+// ─── Essen: Plan und Kochbuch, Bewertung für alle ─────────────
+test('Essen: zwei Bereiche Plan und Kochbuch, Kochbuch zeigt die Anzahl, kein Kinder-Umschalter', () => {
+  const a = household();
+  a.run(`setView('essen')`);
+  assert.doesNotMatch(a.app(), /kid-tabs/);
+  assert.match(a.app(), /Kochbuch <span class="seg-n">7</);
+  assert.match(a.app(), /class="s-lbl">Heute</);
+  assert.match(a.app(), /Woche würfeln/);
+  a.run(`setEssTab('gerichte')`); // alte Bezeichnung landet im Kochbuch
+  assert.equal(a.get('UI.essTab'), 'buch');
+  assert.match(a.app(), /Aus Link/);
+  a.run(`S.essen.dishes=[];setEssTab('plan')`);
+  assert.match(a.app(), /Kochbuch ist noch leer/);
+});
+
+test('Essen: Plan zeigt heute groß und nur die kommenden Tage', () => {
+  const a = household();
+  a.run(`setView('essen');setSlot(today(),'abend','g3',true)`);
+  const d = a.get('weekDates(0)'), t = a.get('today()');
+  a.run('render()');
+  assert.match(a.app(), /ess-today[\s\S]*Pizza/);
+  const shown = (a.app().match(/class="ess-day"/g) || []).length;
+  assert.equal(shown, d.filter(x => x > t).length || 0);
+  a.run(`setEssWeek(1)`);
+  assert.doesNotMatch(a.app(), /class="s-lbl">Heute</);
+  assert.equal((a.app().match(/class="ess-day"/g) || []).length, 7);
+});
+
+test('Essen: Kochbuch mit Suche (Name und Zutat) und Filter', () => {
+  const a = household();
+  a.run(`setView('essen');setEssTab('buch')`);
+  assert.match(a.app(), /id="essQ"/);
+  a.run(`UI.essQ='hack';render()`);
+  assert.match(a.app(), /Spaghetti Bolognese/);
+  assert.doesNotMatch(a.app(), /Pfannkuchen/);
+  a.run(`UI.essQ='';setEssTag('fisch')`);
+  assert.match(a.app(), /Fischstäbchen/);
+  assert.doesNotMatch(a.app(), /Pizza/);
+  a.run(`UI.essQ='gibtsnicht';render()`);
+  assert.match(a.app(), /Nichts gefunden/);
+});
+
+test('Bewerten: jedes Kind und jede/r Erwachsene direkt am Gericht, Antippen schaltet durch', () => {
+  const a = household();
+  a.run(`openAdmin();openAdultModal();adultQuick('Mama','👩');saveAdult();closeAdmin()`); a.flush();
+  const [k1, k2] = a.get('S.kids').map(k => k.id), mama = a.get('S.household.adults[0].id');
+  a.run(`setView('essen');setEssTab('buch')`);
+  const chips = (a.app().match(/rate-chip/g) || []).length;
+  assert.equal(chips, 7 * 3); // 7 Gerichte × (2 Kinder + 1 Erwachsene)
+  const w = () => a.get(`dishWeight(dishById('g1'),'abend',today(),null)`);
+  a.run(`rateDish('g1','${k1}')`); assert.equal(a.get(`dishById('g1').ratings['${k1}']`), 1);
+  a.run(`rateDish('g1','${k1}')`); assert.equal(a.get(`dishById('g1').ratings['${k1}']`), -1);
+  a.run(`rateDish('g1','${k1}')`); assert.equal(a.get(`dishById('g1').ratings['${k1}']`), undefined);
+  a.run(`rateDish('g1','${k2}');rateDish('g1','${mama}')`);
+  assert.ok(Math.abs(w() - 1.6 * 1.6) < 1e-9); // Erwachsene zählen mit
+  a.run(`rateDish('g1','${mama}')`);
+  assert.ok(Math.abs(w() - 1.6 * 0.4) < 1e-9);
+  a.run(`rateDish('g1','fremd')`);
+  assert.equal(a.get(`dishById('g1').ratings.fremd`), undefined);
+  assert.match(a.app(), /aria-label="Mama: mag es nicht\. Tippen zum Ändern"/);
+  // auch in der Rezeptansicht, Fenster bleibt offen
+  a.run(`openRecipe('g1');rateDish('g1','${k1}')`);
+  assert.equal(a.els.mb.classList.contains('open'), true);
+  assert.match(a.els.mc.innerHTML, /rate-chip up/);
+  // Bewertungen von Erwachsenen überstehen Neustart und Import
+  const b = load(VORLAGE, { storage: a.store });
+  assert.equal(b.get(`dishById('g1').ratings['${mama}']`), -1);
 });

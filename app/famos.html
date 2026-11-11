@@ -189,6 +189,24 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg2);border-radius:14px;padding:4px;margin-bottom:16px}
+.seg-b{background:none;border-radius:10px;min-height:44px;font-weight:800;font-size:.95rem;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:8px}
+.seg-b.on{background:var(--card);color:var(--text)}
+.seg-n{font-size:.75rem;font-weight:700;background:var(--bg2);border-radius:99px;padding:2px 8px;color:var(--muted)}
+.seg-b.on .seg-n{background:var(--text);color:var(--bg)}
+.ess-weekhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:18px 0 10px;flex-wrap:wrap}
+.ess-roll{background:var(--pri);color:var(--on);border-radius:99px;padding:0 16px;min-height:40px;font-weight:700;font-size:.85rem}
+.ess-book{padding:12px 14px}
+.ess-bk-head{display:flex;align-items:center;gap:12px;width:100%;background:none;padding:0;text-align:left;font:inherit;color:inherit}
+.ess-bk-head .ess-em{font-size:1.9rem}
+.ess-bk-t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ess-bk-t .ess-name{font-size:1.02rem}
+.rate-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rate-chip{display:flex;align-items:center;gap:4px;min-height:38px;padding:0 10px;border-radius:99px;border:1px solid var(--border);background:var(--bg);font-size:1rem}
+.rate-chip .rate-v{font-size:.9rem;min-width:16px;text-align:center;color:var(--subtle);font-weight:800}
+.rate-chip.up{border-color:var(--acc-c);background:color-mix(in srgb,var(--acc-c) 14%,var(--card))}
+.rate-chip.down{border-color:var(--acc-a);background:color-mix(in srgb,var(--acc-a) 12%,var(--card))}
+.modal .rate-row{margin:-4px 0 14px}
 .imp-row{display:flex;gap:8px}
 .imp-row .aa{flex:1;padding:12px 6px;margin:0}
 .ek-cat{font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:16px 2px 8px}
@@ -666,12 +684,12 @@ function sanitizeCfg(c){
   const modules={};MODULES.forEach(m=>{modules[m.id]=sObj(c.modules)[m.id]!==false;});
   if(!MODULES.some(m=>modules[m.id]))modules[MODULES[0].id]=true;
   const pin=c.pin&&typeof c.pin.s==='string'&&typeof c.pin.h==='string'&&/^[a-z0-9]{1,16}$/.test(c.pin.s)&&/^[0-9a-f]{8}$/.test(c.pin.h)?{s:c.pin.s,h:c.pin.h}:null;
-  const essen=sanitizeEssen(c.essen,kids),einkauf=sanitizeEinkauf(c.einkauf);
+  const essen=sanitizeEssen(c.essen,kids,household?.adults||[]),einkauf=sanitizeEinkauf(c.einkauf);
   return{household,kids,routines,wahlPool,stundenplan,taschengeld,modules,essen,einkauf,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
 }
-function sanitizeEssen(e,kids){
+function sanitizeEssen(e,kids,adults){
   if(!e||typeof e!=='object'||Array.isArray(e))e=clone(DEF.essen); // ältere Stände: Beispielgerichte
-  const kidIds=new Set(kids.map(k=>k.id)),mealIds=MEALS.map(m=>m.id),tagIds=TAGS.map(t=>t.id);
+  const kidIds=new Set([...kids,...(adults||[])].map(k=>k.id)),mealIds=MEALS.map(m=>m.id),tagIds=TAGS.map(t=>t.id);
   const meals={};mealIds.forEach(id=>{meals[id]=!!sObj(e.meals)[id];});
   if(!mealIds.some(id=>meals[id]))meals.abend=true;
   const ids=new Set();
@@ -765,7 +783,7 @@ function parseAmount(s){const v=parseFloat(String(s).trim().replace(/\s/g,'').re
 
 // ═══ STATE ════════════════════════════════════
 let S=loadCfg(),D=loadDay(),TGD=loadTgd(),SAVINGS=loadSavings(),TX=loadTx();
-let UI={kid:null,rt:null,view:'routine',essTab:'heute',essWeek:0,essTag:null,spDay:null,aTab:'kinder',aRt:'morgen',aSpKid:null,aSpDay:'mo',epCat:'dinos',form:{}};
+let UI={kid:null,rt:null,view:'routine',essTab:'plan',essQ:'',essWeek:0,essTag:null,spDay:null,aTab:'kinder',aRt:'morgen',aSpKid:null,aSpDay:'mo',epCat:'dinos',form:{}};
 
 // ═══ HELPERS ══════════════════════════════════
 function today(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
@@ -852,7 +870,7 @@ function buildApp(){
   if(UI.view==='routine') content=buildRoutineContent(kid,col);
   else if(UI.view==='stundenplan') content=buildSpContent(kid);
   else if(UI.view==='taschengeld') content=buildTgContent(kid);
-  else if(UI.view==='essen') content=buildEssenContent(kid);
+  else if(UI.view==='essen') content=buildEssenContent();
   else if(UI.view==='einkauf') content=buildEinkaufContent();
 
   const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',stundenplan:'Stundenplan',taschengeld:'Taschengeld'}[UI.view];
@@ -865,7 +883,7 @@ function buildApp(){
     <button class="gear-btn" aria-label="Einstellungen" onclick="openAdmin()">${IC.gear}</button>
   </div>
   ${canInstallHint()?`<div class="install-hint"><div style="font-size:1.4rem">📲</div><div class="install-hint-txt"><strong>Als App speichern</strong><br>Ohne Browserleiste, auch offline.</div><button class="m-save install-go" onclick="installNow()">${_bip?'Installieren':'So geht’s'}</button><button class="install-close" aria-label="Hinweis schließen" onclick="dismissInstall()">✕</button></div>`:''}
-  ${UI.view==='einkauf'?'':`<div class="kid-tabs" role="tablist" aria-label="Kind wählen">${S.kids.map(k=>`<button class="kid-tab${k.id===UI.kid?' on c'+k.col:''}" onclick="setKid('${k.id}')"><span class="av">${esc(k.icon)}</span>${esc(k.name)}</button>`).join('')}</div>`}
+  ${UI.view==='einkauf'||UI.view==='essen'?'':`<div class="kid-tabs" role="tablist" aria-label="Kind wählen">${S.kids.map(k=>`<button class="kid-tab${k.id===UI.kid?' on c'+k.col:''}" onclick="setKid('${k.id}')"><span class="av">${esc(k.icon)}</span>${esc(k.name)}</button>`).join('')}</div>`}
   ${content}
   </div>
   ${showNav?`<nav class="bot-nav"><div class="bot-nav-inner">
@@ -1084,7 +1102,8 @@ function weekIds(dates,skipDs,skipMeal){const ids=new Set();dates.forEach(ds=>Ob
 function dishWeight(d,meal,ds,avoid){
   if(!d.meals.includes(meal))return 0;
   let w=1;
-  Object.entries(d.ratings).forEach(([k,v])=>{if(S.kids.some(x=>x.id===k))w*=v>0?1.6:0.4;});
+  const who=new Set(raters().map(p=>p.id));
+  Object.entries(d.ratings).forEach(([k,v])=>{if(who.has(k))w*=v>0?1.6:0.4;});
   const last=lastPlanned(d.id,ds);
   if(last){const n=daysBetween(last,ds);w*=n<=3?0.1:n<=7?0.35:n<=14?0.7:1;}
   if(avoid&&avoid.has(d.id))w*=0.15;
@@ -1100,8 +1119,8 @@ function pickDish(meal,ds,avoid,tag,exclude){
 }
 function rollToday(meal){
   const td=today(),cur=planSlot(td,meal);if(cur?.pin)return;
-  const id=pickDish(meal,td,weekIds(weekDates(0),td,meal),UI.essTag,cur?.id);
-  if(!id){toast(`Kein passendes Gericht für ${mealOf(meal).l}${UI.essTag?' mit diesem Filter':''}.`);return;}
+  const id=pickDish(meal,td,weekIds(weekDates(0),td,meal),null,cur?.id);
+  if(!id){toast(`Noch kein Gericht für ${mealOf(meal).l} im Kochbuch.`);return;}
   setSlot(td,meal,id,false);pruneEssen();saveCfg();render();
 }
 function rollWeek(){
@@ -1112,43 +1131,53 @@ function rollWeek(){
   toast(n?`${n} ${n===1?'Mahlzeit':'Mahlzeiten'} gewürfelt`:'Nichts zu würfeln: alles festgelegt oder keine passenden Gerichte.');
 }
 function togPin(ds,meal){const sl=planSlot(ds,meal);if(!sl)return;sl.pin=!sl.pin;saveCfg();render();}
-function rateDish(id,v){const d=dishById(id),k=UI.kid;if(!d||!k)return;if(d.ratings[k]===v)delete d.ratings[k];else d.ratings[k]=v;saveCfg();render();}
-function setEssTab(t){UI.essTab=t;render();}
+// Alle, die bewerten dürfen: Kinder und Erwachsene des Haushalts
+function raters(){return[...S.kids.map(k=>({id:k.id,icon:k.icon,name:k.name})),...(S.household?.adults||[]).map(a=>({id:a.id,icon:a.icon,name:a.name}))];}
+// Antippen schaltet durch: keine Meinung → 👍 → 👎 → keine Meinung
+function rateDish(id,who){const d=dishById(id);if(!d||!raters().some(p=>p.id===who))return;
+  const v=d.ratings[who];if(v===1)d.ratings[who]=-1;else if(v===-1)delete d.ratings[who];else d.ratings[who]=1;
+  saveCfg();if(document.getElementById('mb').classList.contains('open')&&UI.form?.mode==='recipe')openModal();render();}
+function rateRow(d){const ps=raters();if(!ps.length)return'';
+  return`<div class="rate-row" role="group" aria-label="Bewertung">${ps.map(p=>{const v=d.ratings[p.id]||0,l=v>0?'mag es':v<0?'mag es nicht':'noch keine Meinung';
+    return`<button class="rate-chip${v>0?' up':v<0?' down':''}" aria-label="${esc(p.name)}: ${l}. Tippen zum Ändern" onclick="event.stopPropagation();rateDish('${d.id}','${p.id}')"><span class="rate-who">${esc(p.icon)}</span><span class="rate-v">${v>0?'👍':v<0?'👎':'·'}</span></button>`;}).join('')}</div>`;}
+function setEssTab(t){UI.essTab={heute:'plan',woche:'plan',gerichte:'buch'}[t]||t;render();}
 function setEssWeek(w){UI.essWeek=w;render();}
 function setEssTag(t){UI.essTag=t;render();}
 
-function buildEssenContent(kid){
-  const tabs=[['heute','Heute'],['woche','Woche'],['gerichte','Gerichte']];
-  const head=`<div class="rt-pills">${tabs.map(([id,l])=>`<button class="rt-pill${UI.essTab===id?' on':''}" onclick="setEssTab('${id}')">${l}</button>`).join('')}</div>`;
-  if(!S.essen.dishes.length)return head+`<div class="sp-empty">Noch keine Gerichte.<br>Legt eure Lieblingsgerichte an, dann kann gewürfelt werden.</div><button class="aa" onclick="openDishModal(null)">＋ Gericht hinzufügen</button>`;
-  if(UI.essTab==='woche')return head+buildEssWeek();
-  if(UI.essTab==='gerichte')return head+buildEssDishes(kid);
-  return head+buildEssToday();
+// Essen: zwei Bereiche. Plan (heute groß, Rest der Woche kompakt) und Kochbuch (eure Sammlung).
+function buildEssenContent(){
+  const n=S.essen.dishes.length,tab=UI.essTab==='buch'?'buch':'plan';
+  const head=`<div class="seg" role="tablist"><button class="seg-b${tab==='plan'?' on':''}" role="tab" aria-selected="${tab==='plan'}" onclick="setEssTab('plan')">Plan</button><button class="seg-b${tab==='buch'?' on':''}" role="tab" aria-selected="${tab==='buch'}" onclick="setEssTab('buch')">Kochbuch <span class="seg-n">${n}</span></button></div>`;
+  if(tab==='buch')return head+buildEssBook();
+  if(!n)return head+`<div class="sp-empty">Euer Kochbuch ist noch leer.<br>Legt Lieblingsgerichte an, dann kann gewürfelt werden.</div><button class="aa" onclick="setEssTab('buch')">Zum Kochbuch</button>`;
+  return head+buildEssPlan();
 }
 function essTagChips(){
   return`<div class="ess-tags">${[{id:null,em:'',l:'Alle'},...TAGS].map(t=>`<button class="ap${UI.essTag===t.id?' on':''}" onclick="setEssTag(${t.id?`'${t.id}'`:'null'})">${t.em} ${t.l}</button>`).join('')}</div>`;
 }
-function buildEssToday(){
-  const td=today();
-  return essTagChips()+activeMeals().map(m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
-    return`<div class="tg-card"><div class="ess-meal">${m.em} ${m.l}</div>
-    ${d?`<button class="ess-dish" onclick="openRecipe('${d.id}','${td}','${m.id}')"><span class="ess-em">${esc(d.em)}</span><span class="ess-name">${esc(d.name)}</span></button>${d.ingr.length?`<div class="ess-ingr">${d.ingr.map(x=>esc(x)).join(' · ')}</div>`:''}<button class="ess-rc" onclick="openRecipe('${d.id}','${td}','${m.id}')">Rezept ansehen${d.steps.length?` · ${d.steps.length} Schritte`:''} →</button>`:`<div class="ess-none">Noch nichts geplant</div>`}
-    <div class="ess-acts"><button class="tg-act ein" onclick="rollToday('${m.id}')" ${sl?.pin?'disabled':''}>${d?'Nochmal würfeln':'Würfeln'}</button><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Auswählen</button>${d?`<button class="tg-act ess-pinbtn${sl.pin?' pinned':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="${sl.pin?'Festgelegt, tippen zum Lösen':'Festlegen'}" onclick="togPin('${td}','${m.id}')">📌</button>`:''}</div></div>`;}).join('');
+function buildEssPlan(){
+  const dates=weekDates(UI.essWeek),meals=activeMeals(),td=today(),showToday=dates.includes(td);
+  const todayCard=m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
+    return`<div class="tg-card ess-today"><div class="ess-meal">${m.l}</div>
+    ${d?`<button class="ess-dish" onclick="openRecipe('${d.id}','${td}','${m.id}')"><span class="ess-em">${esc(d.em)}</span><span class="ess-name">${esc(d.name)}</span></button><button class="ess-rc" onclick="openRecipe('${d.id}','${td}','${m.id}')">Rezept ansehen${d.steps.length?` · ${d.steps.length} Schritte`:''} →</button>`:`<div class="ess-none">Noch nichts geplant</div>`}
+    <div class="ess-acts"><button class="tg-act ein" onclick="rollToday('${m.id}')" ${sl?.pin?'disabled':''}>${d?'Nochmal würfeln':'Würfeln'}</button><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Auswählen</button>${d?`<button class="tg-act ess-pinbtn${sl.pin?' pinned':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="${sl.pin?'Festgelegt, tippen zum Lösen':'Festlegen'}" onclick="togPin('${td}','${m.id}')">📌</button>`:''}</div></div>`;};
+  const rest=dates.filter(ds=>ds>td||(!showToday&&ds>=td));
+  return`${showToday?`<div class="s-lbl">Heute</div>${meals.map(todayCard).join('')}`:''}
+  <div class="ess-weekhead"><div class="rt-pills" style="margin:0"><button class="rt-pill${UI.essWeek===0?' on':''}" onclick="setEssWeek(0)">Diese Woche</button><button class="rt-pill${UI.essWeek===1?' on':''}" onclick="setEssWeek(1)">Nächste</button></div><button class="ess-roll" onclick="rollWeek()">Woche würfeln</button></div>
+  ${rest.length?rest.map(ds=>{const i=DAYS.findIndex(d=>d.id===['so','mo','di','mi','do','fr','sa'][pdate(ds).getDay()]);
+    return`<div class="ess-day"><div class="ess-dlbl">${DAYS[i].s}<span>${ds.slice(8,10)}.${ds.slice(5,7)}.</span></div><div class="ess-slots">${meals.map(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);
+    return`<div class="ess-slot"><button class="ess-pick" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${d?`${esc(d.em)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
+  <div class="ess-hint">📌 = festgelegt, bleibt beim Würfeln stehen.</div>`;
 }
-function buildEssWeek(){
-  const dates=weekDates(UI.essWeek),meals=activeMeals(),td=today();
-  return`<div class="rt-pills"><button class="rt-pill${UI.essWeek===0?' on':''}" onclick="setEssWeek(0)">Diese Woche</button><button class="rt-pill${UI.essWeek===1?' on':''}" onclick="setEssWeek(1)">Nächste Woche</button></div>
-  <button class="tg-act ein ess-rollweek" onclick="rollWeek()">Woche würfeln · Festgelegtes bleibt</button>
-  ${dates.map((ds,i)=>`<div class="ess-day${ds===td?' is-today':''}${ds<td?' past':''}"><div class="ess-dlbl">${DAYS[i].s}<span>${ds.slice(8,10)}.${ds.slice(5,7)}.</span></div><div class="ess-slots">${meals.map(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);
-    return`<div class="ess-slot"><button class="ess-pick" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${d?`${esc(d.em)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}</div></div>`).join('')}`;
-}
-function buildEssDishes(kid){
-  const list=S.essen.dishes.filter(d=>!UI.essTag||d.tags.includes(UI.essTag)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
-  return essTagChips()+`<div class="ess-hint">${esc(kid?.icon||'')} ${esc(kid?.name||'')} bewertet gerade. Oben ein anderes Kind wählen.</div>
-  <div class="al ess-list">${list.map(d=>{const r=d.ratings[kid?.id]||0,vals=Object.values(d.ratings),up=vals.filter(v=>v>0).length,down=vals.filter(v=>v<0).length;
-    return`<div class="ai"><button class="ess-open" aria-label="Rezept ${esc(d.name)}" onclick="openRecipe('${d.id}')"><span class="ai-em">${esc(d.em)}</span></button><div class="ai-info" onclick="openRecipe('${d.id}')"><div class="ai-main">${esc(d.name)}</div><div class="ai-sub">${d.meals.map(m=>mealOf(m).em).join(' ')}${d.tags.length?' · '+d.tags.map(t=>TAGS.find(x=>x.id===t).em).join(' '):''}${up?` · 👍 ${up}`:''}${down?` · 👎 ${down}`:''}</div></div>
-    <button class="ess-rate${r>0?' on':''}" aria-pressed="${r>0}" aria-label="Mag ich" onclick="rateDish('${d.id}',1)">👍</button><button class="ess-rate${r<0?' on':''}" aria-pressed="${r<0}" aria-label="Mag ich nicht" onclick="rateDish('${d.id}',-1)">👎</button><button class="ai-edit" aria-label="Bearbeiten" onclick="openDishModal('${d.id}')">✏️</button></div>`;}).join('')||'<div class="sp-empty">Kein Gericht mit diesem Filter.</div>'}</div>
-  <div class="imp-row"><button class="aa" onclick="openDishModal(null)">＋ Neu</button><button class="aa" onclick="openLinkImport()">Aus Link</button><button class="aa" onclick="openClaude('rezept')">Mit Claude</button></div>`;
+function buildEssBook(){
+  const q=String(UI.essQ||'').toLowerCase().trim();
+  const list=S.essen.dishes.filter(d=>(!UI.essTag||d.tags.includes(UI.essTag))&&(!q||d.name.toLowerCase().includes(q)||d.ingr.some(x=>x.toLowerCase().includes(q)))).sort((a,b)=>a.name.localeCompare(b.name,'de'));
+  const noAdults=!(S.household?.adults||[]).length;
+  return`<div class="imp-row"><button class="aa" onclick="openDishModal(null)">＋ Neu</button><button class="aa" onclick="openLinkImport()">Aus Link</button><button class="aa" onclick="openClaude('rezept')">Mit Claude</button></div>
+  ${S.essen.dishes.length>5?`<div class="ek-add" style="margin-top:10px"><label for="essQ" class="sr">Suchen</label><input id="essQ" type="search" placeholder="Gericht oder Zutat suchen" value="${esc(UI.essQ||'')}" oninput="UI.essQ=this.value;clearTimeout(UI._qT);UI._qT=setTimeout(()=>{render();const el=document.getElementById('essQ');if(el){el.focus();el.setSelectionRange?.(el.value.length,el.value.length);}},250)"></div>`:''}
+  ${essTagChips()}
+  <div class="ess-hint">Antippen, wer was mag: · → 👍 → 👎. ${noAdults?'Erwachsene unter ⚙️ → Haushalt anlegen, dann bewerten sie mit.':'Beim Würfeln kommt Beliebtes öfter.'}</div>
+  ${list.map(d=>`<div class="tg-card ess-book"><button class="ess-bk-head" onclick="openRecipe('${d.id}')"><span class="ess-em">${esc(d.em)}</span><span class="ess-bk-t"><span class="ess-name">${esc(d.name)}</span><span class="ai-sub">${d.meals.map(m=>mealOf(m).l).join(' · ')}${d.tags.length?' · '+d.tags.map(t=>TAGS.find(x=>x.id===t).l).join(', '):''}${d.ingr.length?` · ${d.ingr.length} Zutaten`:''}</span></span></button>${rateRow(d)}</div>`).join('')||'<div class="sp-empty">Nichts gefunden.</div>'}`;
 }
 
 // ─── Mengen: „500 g Mehl“ erkennen, umrechnen, zusammenzählen ───
@@ -1186,6 +1215,7 @@ function recipePersons(delta){UI.form.p=Math.min(20,Math.max(1,UI.form.p+delta))
 function renderRecipeModal(){const f=UI.form,d=dishById(f.id);if(!d)return'';const fac=dishFactor(d,f.p);
   return`<h3>${esc(d.em)} ${esc(d.name)}</h3>
   <div class="rc-persons"><span>Für</span><button class="rc-step" aria-label="Weniger Personen" onclick="recipePersons(-1)">−</button><strong>${f.p}</strong><button class="rc-step" aria-label="Mehr Personen" onclick="recipePersons(1)">＋</button><span>${f.p===1?'Person':'Personen'}</span><span class="rc-base">Rezept für ${d.portions}</span></div>
+  ${rateRow(d)}
   <div class="as-lbl">Zutaten</div>
   ${d.ingr.length?`<ul class="rc-ingr">${d.ingr.map(x=>`<li>${esc(fmtIngr(scaleIngr(parseIngr(x),fac)))}</li>`).join('')}</ul>`:'<div class="ins-why">Noch keine Zutaten eingetragen.</div>'}
   <div class="as-lbl">Zubereitung</div>
