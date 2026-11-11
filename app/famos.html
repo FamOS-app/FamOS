@@ -241,6 +241,9 @@ input{font-family:var(--font)}
 .cal-d.on .cal-dots i{background:var(--on)}
 .cal-times{display:flex;gap:8px;align-items:center}
 .cal-times input{flex:1;min-width:0}
+.cal-tsel{display:flex;gap:2px;align-items:center;flex:1;min-width:0;font-weight:800}
+.cal-tsel select{flex:1;min-width:0;min-height:46px;padding:8px 6px;border:1.5px solid var(--border);border-radius:10px;font:inherit;font-size:1rem;font-weight:700;color:var(--text);background:var(--bg);text-align:center}
+.cal-tsel select:focus{border-color:var(--pri);outline:none}
 .seg-n{font-size:.75rem;font-weight:700;background:var(--bg2);border-radius:99px;padding:2px 8px;color:var(--muted)}
 .seg-b.on .seg-n{background:var(--text);color:var(--bg)}
 .ess-weekhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:18px 0 10px;flex-wrap:wrap}
@@ -811,7 +814,8 @@ function sTime(v){return typeof v==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(v
 function sanitizeEvent(x,personIds){const id=sId(x?.id),title=sStr(x?.title,120).trim(),day=sDate(x?.day);if(!id||!title||!day)return null;
   const who=[...new Set(sArr(x.who,12).filter(w=>typeof w==='string'&&(!personIds||personIds.includes(w))))];
   const rep=['w','y'].includes(x.rep)?x.rep:'',end=rep?'':sDate(x.end),from=sTime(x.from),to=from?sTime(x.to):'';
-  return{id,title,day,end:end>day?end:'',from,to:to>from?to:'',place:sStr(x.place,80).trim(),note:sStr(x.note,300).trim(),who,rep};}
+  const skip=rep?[...new Set(sArr(x.skip,200).map(sDate).filter(d=>d&&d>=day))].sort().slice(-100):[];
+  return{id,title,day,end:end>day?end:'',from,to:to>from?to:'',place:sStr(x.place,80).trim(),note:sStr(x.note,300).trim(),who,rep,skip};}
 function sanitizeKalender(a,personIds){const ids=new Set();
   const items=sArr(sObj(a).items,500).map(x=>{const e=sanitizeEvent(x,personIds);if(!e||ids.has(e.id))return null;ids.add(e.id);return e;}).filter(Boolean);
   return{items};}
@@ -1736,7 +1740,7 @@ const CAL_REPS=[{id:'',l:'Einmalig'},{id:'w',l:'Wöchentlich'},{id:'y',l:'Jährl
 function calOp(op,e){if(!SYNC?.hid)return;SYNC.queue.push(op==='del'?{t:'events',op,id:e.id}:{t:'events',op,item:{...e}});if(SYNC.queue.length>500)SYNC.queue=SYNC.queue.slice(-500);saveSync();schedulePush();}
 function calFor(e,who){return!who||!e.who.length||e.who.includes(who);}
 // Findet der Termin an diesem Tag statt? Der 29.02. fällt in anderen Jahren auf den 28.02.
-function calOn(e,ds){if(ds<e.day)return false;
+function calOn(e,ds){if(ds<e.day||e.skip?.includes(ds))return false;
   if(e.rep==='w')return daysBetween(e.day,ds)%7===0;
   if(e.rep==='y'){const md=e.day.slice(5),x=ds.slice(5);return x===md||(md==='02-29'&&x==='02-28'&&addDays(ds,1).slice(5)==='03-01');}
   return ds<=(e.end||e.day);}
@@ -1747,11 +1751,11 @@ function calAgenda(from,days,who){const out=[];
   return out;}
 function fmtCalDay(ds){const td=today(),d=daysBetween(td,ds),dm=`${DAYS[(pdate(ds).getDay()+6)%7].s}, ${ds.slice(8,10)}.${ds.slice(5,7)}.${ds.slice(0,4)!==td.slice(0,4)?ds.slice(0,4):''}`;
   return d===0?`Heute · ${dm}`:d===1?`Morgen · ${dm}`:dm;}
-// o.ro: nur lesen (Kinder), o.day: Tag in der Zeile nennen (Startseite, Kinder)
+// o.ro: nur lesen (Kinder), o.day: Tag in der Zeile nennen (Startseite, Kinder), o.on: an welchem Tag die Zeile steht
 function calRow(e,o={}){const ps=e.who.map(personById).filter(Boolean),rp=CAL_REPS.find(r=>r.id===e.rep);
   const meta=[o.day?fmtDue(o.day):'',e.end?'bis '+fmtCalDay(e.end).replace(/^.* · /,''):'',o.ro?'':ps.length?ps.map(p=>p.icon).join(' '):'alle',e.place?'📍 '+e.place:'',e.rep?'↻ '+rp.l.toLowerCase():''].filter(Boolean).join(' · ');
   const inner=`<span class="cal-time">${e.from?esc(e.from)+(e.to?`<small>bis ${esc(e.to)}</small>`:''):'<small>ganztägig</small>'}</span><span class="todo-t"><span class="ek-name">${esc(e.title)}</span>${meta?`<span class="todo-m">${esc(meta)}</span>`:''}</span>`;
-  return`<div class="ek-row cal-row">${o.ro?`<div class="ek-item">${inner}</div>`:`<button class="ek-item" onclick="openCal('${e.id}')">${inner}</button>`}</div>`;}
+  return`<div class="ek-row cal-row">${o.ro?`<div class="ek-item">${inner}</div>`:`<button class="ek-item" onclick="openCal('${e.id}','${o.day||o.on||''}')">${inner}</button>`}</div>`;}
 function setCalWho(id){UI.calWho=id;render();}
 function setCalTab(t){UI.calTab=t;render();}
 function setCalSel(ds){UI.calSel=ds;UI.calMonth=ds.slice(0,7);render();}
@@ -1763,7 +1767,7 @@ function buildKalenderContent(){
   ${ps.length>1?`<div class="ess-tags">${[{id:'',icon:'',name:'Alle'},...ps].map(p=>`<button class="ap${who===p.id?' on':''}" aria-pressed="${who===p.id}" onclick="setCalWho('${p.id}')">${esc(p.icon)} ${esc(p.name)}</button>`).join('')}</div>`:''}`;
   if(!monat){const n=UI.calDays||30,ag=calAgenda(td,n,who);
     return`${head}<button class="aa" style="margin-bottom:6px" onclick="openCal()">＋ Termin</button>
-    ${ag.length?ag.map(g=>`<div class="ek-cat">${fmtCalDay(g.ds)}</div>${g.list.map(e=>calRow(e)).join('')}`).join(''):`<div class="sp-empty">${S.kalender.items.length?`In den nächsten ${n} Tagen steht nichts an.`:'Noch keine Termine. Tragt ein, was ansteht: Arzt, Verabredung, Geburtstag, Urlaub.'}</div>`}
+    ${ag.length?ag.map(g=>`<div class="ek-cat">${fmtCalDay(g.ds)}</div>${g.list.map(e=>calRow(e,{on:g.ds})).join('')}`).join(''):`<div class="sp-empty">${S.kalender.items.length?`In den nächsten ${n} Tagen steht nichts an.`:'Noch keine Termine. Tragt ein, was ansteht: Arzt, Verabredung, Geburtstag, Urlaub.'}</div>`}
     ${n<365?`<button class="reset-btn" onclick="calMore()">Weiter in die Zukunft schauen</button>`:''}`;}
   const ym=/^\d{4}-\d{2}$/.test(UI.calMonth||'')?UI.calMonth:td.slice(0,7),first=ym+'-01',off=(pdate(first).getDay()+6)%7,dim=pdate(addDays(addMonths(first,1),-1)).getDate();
   const sel=sDate(UI.calSel)&&UI.calSel.slice(0,7)===ym?UI.calSel:ym===td.slice(0,7)?td:first,cells=[];
@@ -1772,7 +1776,7 @@ function buildKalenderContent(){
   const list=calDay(sel,who);
   return`${head}<div class="cal-head"><button class="cal-nav" aria-label="Monat zurück" onclick="calShift(-1)">‹</button><strong>${esc(pdate(first).toLocaleDateString('de-DE',{month:'long',year:'numeric'}))}</strong>${ym!==td.slice(0,7)?`<button class="cal-nav" onclick="calShift(0)">Heute</button>`:''}<button class="cal-nav" aria-label="Monat vor" onclick="calShift(1)">›</button></div>
   <div class="cal-grid">${DAYS.map(d=>`<div class="cal-wd">${d.s}</div>`).join('')}${cells.join('')}</div>
-  <div class="ek-cat">${fmtCalDay(sel)}</div>${list.map(e=>calRow(e)).join('')||'<div class="field-hint" style="margin:0 2px 10px">Nichts eingetragen.</div>'}
+  <div class="ek-cat">${fmtCalDay(sel)}</div>${list.map(e=>calRow(e,{on:sel})).join('')||'<div class="field-hint" style="margin:0 2px 10px">Nichts eingetragen.</div>'}
   <button class="aa" onclick="openCal('','${sel}')">＋ Termin an diesem Tag</button>`;
 }
 // Für Kinder in der Routine: eigene und gemeinsame Termine der nächsten 7 Tage, nur zum Lesen
@@ -1780,19 +1784,43 @@ function kidEvents(kid){if(!kid)return'';const rows=calAgenda(today(),7,kid).fla
   return rows.length?`<div class="s-lbl" style="margin-top:14px">Meine Termine</div>${rows.join('')}`:'';}
 // Anlegen und Bearbeiten
 function openCal(id,day){const e=id?S.kalender.items.find(x=>x.id===id):null;if(id&&!e)return;
-  UI.form=e?{mode:'cal',id:e.id,title:e.title,day:e.day,end:e.end,from:e.from,to:e.to,place:e.place,note:e.note,who:e.who.slice(),rep:e.rep}:{mode:'cal',id:'',title:'',day:sDate(day)||today(),end:'',from:'',to:'',place:'',note:'',who:personById(UI.calWho)?[UI.calWho]:[],rep:''};openModal();}
+  // occ: der angetippte Termin einer Serie (nur wenn er an dem Tag wirklich stattfindet)
+  UI.form=e?{mode:'cal',id:e.id,title:e.title,day:e.day,end:e.end,from:e.from,to:e.to,place:e.place,note:e.note,who:e.who.slice(),rep:e.rep,occ:e.rep&&sDate(day)&&calOn(e,day)?day:''}:{mode:'cal',id:'',title:'',day:sDate(day)||today(),end:'',from:'',to:'',place:'',note:'',who:personById(UI.calWho)?[UI.calWho]:[],rep:''};openModal();}
+// Uhrzeit als zwei Auswahllisten (Stunde, Minute in 5er-Schritten) statt des System-Zeitfensters,
+// das je nach Handy anders aussieht und auf Android abgeschnitten sein kann. Gespeicherte „krumme“ Minuten bleiben wählbar.
+function calTimeSel(key,id,v){const[h,m]=sTime(v)?v.split(':'):['',''],pad=n=>String(n).padStart(2,'0');
+  const mins=[...Array(12)].map((_,i)=>pad(i*5));if(m&&!mins.includes(m)){mins.push(m);mins.sort();}
+  const lbl=key==='from'?'von':'bis';
+  return`<span class="cal-tsel"><select id="${id}h" aria-label="${lbl}, Stunde" onchange="calTime('${key}','h',this.value)"><option value="">––</option>${[...Array(24)].map((_,i)=>`<option${pad(i)===h?' selected':''}>${pad(i)}</option>`).join('')}</select>:<select id="${id}m" aria-label="${lbl}, Minute" onchange="calTime('${key}','m',this.value)" ${h?'':'disabled'}>${h?'':'<option value="">––</option>'}${mins.map(x=>`<option${x===m?' selected':''}>${x}</option>`).join('')}</select></span>`;}
+function calTime(key,part,val){const f=UI.form,[h,m]=sTime(f[key])?f[key].split(':'):['',''];
+  if(part==='h')f[key]=/^([01]\d|2[0-3])$/.test(val)?`${val}:${m||'00'}`:'';
+  else if(h&&/^[0-5]\d$/.test(val))f[key]=`${h}:${val}`;
+  if(key==='from'&&!f.from)f.to=''; // ohne Beginn kein Ende
+  openModal();}
 function calTogWho(id){const w=UI.form.who,i=w.indexOf(id);if(i>=0)w.splice(i,1);else w.push(id);openModal();}
-function renderCalModal(){const f=UI.form;
+function renderCalModal(){const f=UI.form,ex=f.id?S.kalender.items.find(x=>x.id===f.id):null;
   return`<h3>${f.id?'Termin':'Neuer Termin'}</h3>
+  ${calSkipBox(f)}
   <div class="field"><label for="calT">Was</label><input id="calT" maxlength="120" value="${esc(f.title)}" placeholder="z.B. Kinderarzt, Verabredung, Geburtstag" oninput="UI.form.title=this.value"></div>
   <div class="field"><label for="calD">Wann</label><input id="calD" type="date" value="${esc(f.day)}" onchange="UI.form.day=this.value"></div>
-  <div class="field"><label for="calF">Uhrzeit (optional)</label><div class="cal-times"><input id="calF" type="time" aria-label="von" value="${esc(f.from)}" onchange="UI.form.from=this.value"><span>bis</span><input type="time" aria-label="bis" value="${esc(f.to)}" onchange="UI.form.to=this.value"></div><div class="field-hint">Ohne Uhrzeit gilt der Termin ganztägig.</div></div>
+  <div class="field"><label for="calFh">Uhrzeit (optional)</label><div class="cal-times">${calTimeSel('from','calF',f.from)}<span>bis</span>${calTimeSel('to','calT2',f.to)}</div><div class="field-hint">Ohne Uhrzeit gilt der Termin ganztägig.</div></div>
   <div class="field"><label>Wer</label><div class="ap-wrap">${raters().map(p=>`<button class="ap${f.who.includes(p.id)?' on':''}" aria-pressed="${f.who.includes(p.id)}" onclick="calTogWho('${p.id}')">${esc(p.icon)} ${esc(p.name)}</button>`).join('')}</div><div class="field-hint">${f.who.length?'':'Niemand gewählt: betrifft alle.'}</div></div>
   <div class="field"><label>Wiederholen</label><div class="ap-wrap">${CAL_REPS.map(r=>`<button class="ap${f.rep===r.id?' on':''}" aria-pressed="${f.rep===r.id}" onclick="UI.form.rep='${r.id}';openModal()">${r.l}</button>`).join('')}</div></div>
   ${f.rep?'':`<div class="field"><label for="calE">Letzter Tag (optional, z.B. Urlaub)</label><input id="calE" type="date" value="${esc(f.end)}" onchange="UI.form.end=this.value"></div>`}
   <div class="field"><label for="calP">Ort (optional)</label><input id="calP" maxlength="80" value="${esc(f.place)}" oninput="UI.form.place=this.value"></div>
   <div class="field"><label for="calN">Notiz (optional)</label><textarea id="calN" rows="2" maxlength="300" oninput="UI.form.note=this.value">${esc(f.note)}</textarea></div>
-  <div class="m-btns">${f.id?`<button class="m-cancel" onclick="delCal()">Löschen</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveCal()">Speichern</button></div>`;}
+  <div class="m-btns">${f.id?`<button class="m-cancel" onclick="delCal()">${ex?.rep?'Serie löschen':'Löschen'}</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveCal()">Speichern</button></div>`;}
+// Serie: einzelnen Termin ausfallen lassen, Ausfälle wieder aufnehmen
+function calSkipBox(f){const ex=f.id?S.kalender.items.find(x=>x.id===f.id):null;if(!ex?.rep)return'';const td=today(),past=ex.skip.filter(d=>d<td).length,next=ex.skip.filter(d=>d>=td);
+  return`<div class="field"><label>Einzelne Termine</label>
+  ${f.occ?`<button class="aa" style="margin:0 0 8px" onclick="calSkip()">🚫 Nur ${esc(fmtCalDay(f.occ))} ausfallen lassen</button>`:'<div class="field-hint" style="margin:0 0 8px">Um einen einzelnen Termin ausfallen zu lassen, ihn in der Liste oder im Monat antippen.</div>'}
+  ${next.length?`<div class="ap-wrap">${next.map(d=>`<button class="ap" aria-label="${esc(fmtCalDay(d))} wieder aufnehmen" onclick="calUnskip('${d}')">${esc(fmtCalDay(d))} fällt aus · ↩︎</button>`).join('')}</div><div class="field-hint">Antippen nimmt den Termin wieder auf.</div>`:''}
+  ${past?`<div class="field-hint">${past} ${past===1?'früherer Ausfall':'frühere Ausfälle'}</div>`:''}</div>`;}
+function calSkip(){const f=UI.form,ex=S.kalender.items.find(x=>x.id===f.id);if(!ex?.rep||!f.occ||!calOn(ex,f.occ))return closeModal();
+  const d=f.occ,e=sanitizeEvent({...ex,skip:[...ex.skip,d]},null);if(!e)return;
+  Object.assign(ex,{skip:e.skip});calOp('up',ex);saveCfg();closeModal();render();toast(`Fällt aus: ${fmtCalDay(d)}`);}
+function calUnskip(d){const f=UI.form,ex=S.kalender.items.find(x=>x.id===f.id);if(!ex)return;
+  ex.skip=ex.skip.filter(x=>x!==d);calOp('up',ex);saveCfg();if(!f.occ)f.occ=d;openModal();render();toast(`Wieder aufgenommen: ${fmtCalDay(d)}`);}
 function saveCal(){const f=UI.form,ex=f.id?S.kalender.items.find(x=>x.id===f.id):null;if(f.id&&!ex)return closeModal();
   if(!sStr(f.title,120).trim()){toast('Bitte eintragen, was ansteht.');return;}
   if(!sDate(f.day)){toast('Bitte einen Tag wählen.');return;}
@@ -1800,7 +1828,7 @@ function saveCal(){const f=UI.form,ex=f.id?S.kalender.items.find(x=>x.id===f.id)
   if(f.to&&!sTime(f.from)){toast('Bitte auch die Anfangszeit eintragen.');return;}
   if(f.from&&f.to&&f.to<=f.from){toast('Die Endzeit liegt vor dem Beginn.');return;}
   if(!ex&&S.kalender.items.length>=500){toast('Zu viele Termine. Bitte erst alte löschen.');return;}
-  const e=sanitizeEvent({...f,id:f.id||uid()},raters().map(p=>p.id));if(!e)return;
+  const e=sanitizeEvent({...f,id:f.id||uid(),skip:ex?ex.skip:[]},raters().map(p=>p.id));if(!e)return;
   if(ex)Object.assign(ex,e);else S.kalender.items.push(e);
   calOp('up',e);saveCfg();UI.calSel=e.day;UI.calMonth=e.day.slice(0,7);closeModal();render();toast(`Gespeichert: ${fmtCalDay(e.day)}`);}
 function delCal(){const f=UI.form,e=S.kalender.items.find(x=>x.id===f.id);if(!e)return closeModal();
@@ -2344,11 +2372,12 @@ async function flushQueue(){
       }catch(e){if(e.status!==404)throw e;SYNC.imgMissing=true;} // Tabelle fehlt noch (005): Fotos bleiben lokal
       SYNC.queue.shift();saveSync();continue;}
     const tbl=q.t==='tasks'?'tasks':q.t==='events'?'events':'shopping_items';
-    const body=q.op==='up'?(tbl==='events'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,day:q.item.day,end_day:q.item.end||null,t_from:q.item.from,t_to:q.item.to,place:q.item.place,note:q.item.note,who:q.item.who,rep:q.item.rep}:tbl==='tasks'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,note:q.item.note,who:q.item.who,due:q.item.due||null,rep:q.item.rep,done:q.item.done,done_by:q.item.doneBy,done_at:q.item.doneAt||null}:{household_id:SYNC.hid,...q.item}):null;
+    const body=q.op==='up'?(tbl==='events'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,day:q.item.day,end_day:q.item.end||null,t_from:q.item.from,t_to:q.item.to,place:q.item.place,note:q.item.note,who:q.item.who,rep:q.item.rep,...(evNoSkip()?{}:{skip:q.item.skip||[]})}:tbl==='tasks'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,note:q.item.note,who:q.item.who,due:q.item.due||null,rep:q.item.rep,done:q.item.done,done_by:q.item.doneBy,done_at:q.item.doneAt||null}:{household_id:SYNC.hid,...q.item}):null;
     try{
       if(q.op==='up')await sb(`/rest/v1/${tbl}?on_conflict=household_id,id`,{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body});
       else await sb(`/rest/v1/${tbl}?household_id=eq.${SYNC.hid}&id=eq.${encodeURIComponent(q.id)}`,{method:'DELETE'});
-    }catch(e){if(tbl==='shopping_items'||e.status!==404)throw e;if(tbl==='tasks')SYNC.tasksMissing=true;else SYNC.eventsMissing=true;} // Tabelle fehlt noch: Aufgaben bzw. Termine bleiben lokal, Rest läuft weiter
+    }catch(e){if(tbl==='events'&&q.op==='up'&&!evNoSkip()&&evSkipErr(e)){evNoSkipNow();continue;} // nochmal ohne Ausfälle
+      if(tbl==='shopping_items'||e.status!==404)throw e;if(tbl==='tasks')SYNC.tasksMissing=true;else SYNC.eventsMissing=true;} // Tabelle fehlt noch: Aufgaben bzw. Termine bleiben lokal, Rest läuft weiter
     SYNC.queue.shift();saveSync();}
 }
 async function pullItems(){
@@ -2372,15 +2401,23 @@ async function pullTasks(){
   return JSON.stringify(S.aufgaben.items)!==before;
 }
 const EV_SEL='id,title,day,end_day,t_from,t_to,place,note,who,rep';
+// Spalte skip fehlt (006 noch nicht eingespielt): 10 Minuten lang ohne sie abgleichen, dann neu versuchen
+function evNoSkip(){return!!SYNC.evNoSkip&&Date.now()-SYNC.evNoSkip<6e5;}
+function evSkipErr(e){return e.status===400&&/skip/.test(e.message||'');}
+function evNoSkipNow(){SYNC.evNoSkip=Date.now();SYNC.evSkipLost=true;saveSync();}
 async function pullEvents(){
   if(!modOn('kalender'))return false;
-  const get=()=>sb(`/rest/v1/events?select=${EV_SEL}&household_id=eq.${SYNC.hid}&order=created_at.asc`);
+  const q=sel=>sb(`/rest/v1/events?select=${sel}&household_id=eq.${SYNC.hid}&order=created_at.asc`);
+  const get=async()=>{if(!evNoSkip()){try{return await q(EV_SEL+',skip');}catch(e){if(!evSkipErr(e))throw e;evNoSkipNow();}}return q(EV_SEL);};
   let rows;try{rows=await get()||[];}
   catch(e){if(e.status===404){SYNC.eventsMissing=true;return false;}throw e;} // Tabelle noch nicht angelegt (004 fehlt): Termine bleiben lokal
   if(SYNC.eventsMissing){SYNC.eventsMissing=false;S.kalender.items.forEach(e=>SYNC.queue.push({t:'events',op:'up',item:{...e}}));saveSync();await flushQueue();rows=await get()||[];}
   // Sofort-Übertragung erst mit vorhandener Tabelle abonnieren, sonst lehnt der Server die ganze Verbindung ab
   if(!SYNC.eventsOk){SYNC.eventsOk=true;saveSync();if(RT.ws){rtStop();rtStart();}}
-  let items=rows.map(r=>({id:r.id,title:r.title,day:r.day,end:r.end_day||'',from:r.t_from,to:r.t_to,place:r.place,note:r.note,who:r.who,rep:r.rep}));
+  // Spalte skip ist (wieder) da: Ausfälle, die nur auf dem Gerät liegen, nachliefern
+  if(!evNoSkip()&&SYNC.evSkipLost){SYNC.evSkipLost=false;S.kalender.items.filter(e=>e.skip?.length).forEach(e=>SYNC.queue.push({t:'events',op:'up',item:{...e}}));saveSync();await flushQueue();rows=await get()||[];}
+  const mine=id=>S.kalender.items.find(x=>x.id===id)?.skip||[];
+  let items=rows.map(r=>({id:r.id,title:r.title,day:r.day,end:r.end_day||'',from:r.t_from,to:r.t_to,place:r.place,note:r.note,who:r.who,rep:r.rep,skip:Array.isArray(r.skip)?r.skip:mine(r.id)}));
   SYNC.queue.filter(q=>q.t==='events').forEach(q=>{if(q.op==='del')items=items.filter(x=>x.id!==q.id);else{const i=items.findIndex(x=>x.id===q.item.id);if(i>=0)items[i]={...q.item};else items.push({...q.item});}});
   const before=JSON.stringify(S.kalender.items);
   S.kalender=sanitizeKalender({items},raters().map(p=>p.id));lsSet('ra_cfg3',JSON.stringify(S));

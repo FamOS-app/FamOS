@@ -209,13 +209,16 @@ class FakeSupabase {
     }
     if (path === '/rest/v1/events') {
       if (this.noEvents) return res(404, { code: 'PGRST205', message: "Could not find the table 'public.events' in the schema cache" });
-      const hid = eq('household_id');
-      if (method === 'GET') return res(200, mine(this.events).filter(r => r.household_id === hid).sort((a, b) => a.created - b.created).map(({ created, household_id, ...r }) => r));
+      const hid = eq('household_id'), sel = (q.get('select') || '').split(',');
+      // Spalte skip kommt mit 006; ohne sie antwortet PostgREST bei Lesen und Schreiben mit 400
+      if (this.noEventSkip && method === 'GET' && sel.includes('skip')) return res(400, { code: '42703', message: 'column events.skip does not exist' });
+      if (this.noEventSkip && method === 'POST' && 'skip' in data) return res(400, { code: 'PGRST204', message: "Could not find the 'skip' column of 'events' in the schema cache" });
+      if (method === 'GET') return res(200, mine(this.events).filter(r => r.household_id === hid).sort((a, b) => a.created - b.created).map(r => Object.fromEntries(sel.map(k => [k, k === 'skip' ? (r.skip || []) : r[k]]))));
       if (method === 'POST') {
         if (!this.isMember(uid, data.household_id)) return denied();
         // wie die Prüfregeln in 004_termine.sql
         const time = /^$|^([01][0-9]|2[0-3]):[0-5][0-9]$/, date = /^\d{4}-\d{2}-\d{2}$/;
-        if (!date.test(data.day) || (data.end_day !== null && !(date.test(data.end_day) && data.end_day > data.day)) || !time.test(data.t_from) || !time.test(data.t_to) || !['', 'w', 'y'].includes(data.rep) || !data.title || data.title.length > 120)
+        if (!date.test(data.day) || (data.end_day !== null && !(date.test(data.end_day) && data.end_day > data.day)) || !time.test(data.t_from) || !time.test(data.t_to) || !['', 'w', 'y'].includes(data.rep) || !data.title || data.title.length > 120 || ('skip' in data && !(Array.isArray(data.skip) && data.skip.length <= 100)))
           return res(400, { code: '23514', message: 'new row for relation "events" violates check constraint' });
         const ex = this.events.find(r => r.household_id === data.household_id && r.id === data.id);
         if (ex) Object.assign(ex, data); else this.events.push({ ...data, created: ++seq });

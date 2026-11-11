@@ -704,3 +704,64 @@ test('Sync: Haushalt anlegen lädt vorhandene Fotos hoch, Beitritt ersetzt lokal
   await sync(c); await settle(c);
   assert.deepEqual(c.get('IMG.t'), {});
 });
+
+test('Sync: Ausfall eines Serientermins kommt auf dem anderen Handy an, Wiederaufnehmen auch', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server, live(server));
+  const b = await partner(server, a, live(server));
+  await settle(a, b);
+  const td = a.get('today()'), d7 = a.get('addDays(today(),7)');
+  a.run(`openCal();Object.assign(UI.form,{title:'Turnen',day:'${td}',from:'16:00',rep:'w'});saveCal()`);
+  await settle(a, b);
+  const id = a.get('S.kalender.items[0].id');
+  b.run(`setView('kalender');openCal('${id}','${d7}');calSkip()`);
+  await settle(a, b);
+  assert.deepEqual(server.events[0].skip, [d7]);
+  assert.deepEqual(a.get('S.kalender.items[0].skip'), [d7]);
+  // A ändert danach die Uhrzeit: der Ausfall bleibt erhalten
+  a.run(`openCal('${id}','${td}');UI.form.from='17:00';saveCal()`);
+  await settle(a, b);
+  assert.deepEqual(b.get('S.kalender.items[0].skip'), [d7]);
+  assert.equal(b.get('S.kalender.items[0].from'), '17:00');
+  a.run(`openCal('${id}');calUnskip('${d7}')`);
+  await settle(a, b);
+  assert.deepEqual(server.events[0].skip, []);
+  assert.deepEqual(b.get('S.kalender.items[0].skip'), []);
+});
+
+test('Sync: ohne Spalte für Ausfälle (006 fehlt) läuft der Kalender weiter, Ausfälle werden nachgeliefert', async () => {
+  const server = new FakeSupabase();
+  server.noEventSkip = true;
+  const a = await founder(server);
+  const b = await partner(server, a);
+  const td = a.get('today()'), d7 = a.get('addDays(today(),7)');
+  a.run(`openCal();Object.assign(UI.form,{title:'Turnen',day:'${td}',rep:'w'});saveCal()`);
+  await sync(a);
+  assert.equal(a.get('SYNC.status'), 'ok');
+  assert.equal(server.events.length, 1); // Termin selbst kommt an
+  assert.ok(!('skip' in server.events[0]));
+  const id = a.get('S.kalender.items[0].id');
+  a.run(`openCal('${id}','${d7}');calSkip();openCal();Object.assign(UI.form,{title:'Arzt',day:'${td}'});saveCal()`);
+  await sync(a); await sync(a);
+  assert.equal(a.get('SYNC.status'), 'ok');
+  assert.deepEqual(server.events.map(e => e.title).sort(), ['Arzt', 'Turnen']);
+  assert.deepEqual(a.get(`S.kalender.items.find(e=>e.id==='${id}').skip`), [d7]); // bleibt auf dem Gerät
+  await sync(b);
+  assert.deepEqual(b.get('S.kalender.items.map(e=>e.title).sort()'), ['Arzt', 'Turnen']);
+  assert.deepEqual(b.get(`S.kalender.items.find(e=>e.id==='${id}').skip`), []);
+  // Wartezeit abgelaufen, Spalte fehlt noch, zuerst wird hochgeladen: Termin geht trotzdem ohne Ausfälle hoch
+  a.run(`SYNC.evNoSkip=Date.now()-7e5;openCal('${id}','${td}');UI.form.place='Halle';saveCal()`);
+  await sync(a);
+  assert.equal(a.get('SYNC.status'), 'ok');
+  assert.equal(server.events.find(e => e.id === id).place, 'Halle');
+  assert.deepEqual(a.get(`S.kalender.items.find(e=>e.id==='${id}').skip`), [d7]);
+  // 006 eingespielt; nach Ablauf der Wartezeit wird nachgeliefert
+  server.noEventSkip = false;
+  a.run('SYNC.evNoSkip=Date.now()-7e5');
+  await sync(a);
+  assert.deepEqual(server.events.find(e => e.id === id).skip, [d7]);
+  assert.deepEqual(a.get(`S.kalender.items.find(e=>e.id==='${id}').skip`), [d7]);
+  b.run('SYNC.evNoSkip=0');
+  await sync(b);
+  assert.deepEqual(b.get(`S.kalender.items.find(e=>e.id==='${id}').skip`), [d7]);
+});

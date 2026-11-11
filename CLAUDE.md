@@ -17,7 +17,7 @@ FamOS („Das Gehirn der Familie“): Familien-App als **Single-File-PWA** (`app
 | `app/famos.html` | die App (CSS, HTML, JS in einer Datei) |
 | `app/icons/` | Logo (`logo.svg`) und PNG-Icons (`node tools/make_icons.js`) |
 | `tools/build.py` | baut `dist/` (Seite, Manifest, Service Worker, Icons), Personendaten-Check, Supabase-Konfiguration aus Umgebung |
-| `supabase/migrations/` | SQL, **von der Nutzerin manuell** im Supabase SQL Editor ausgeführt (001, 002, 003, 004, 005 …). Neue Änderungen immer als neue nummerierte Datei, nie alte ändern. |
+| `supabase/migrations/` | SQL, **von der Nutzerin manuell** im Supabase SQL Editor ausgeführt (001, 002, 003, 004, 005, 006 …). Neue Änderungen immer als neue nummerierte Datei, nie alte ändern. |
 | `supabase/functions/recipe-import/index.ts` | Edge Function (manuell im Dashboard deployt, „Verify JWT“ an) |
 | `tests/` | `famos.test.js` (App im node:vm-Harness, `fake-idb.js` als Gerätespeicher für Fotos), `sync.test.js` (zwei Geräte gegen `fake-supabase.js`), `db.test.js` (SQL in PGlite, Supabase-Umgebung nachgebaut), `recipe-import.test.js` |
 | `.github/workflows/ci.yml` | Tests → Build → Personendaten-Check → Deploy `dist/` auf GitHub Pages |
@@ -35,5 +35,6 @@ FamOS („Das Gehirn der Familie“): Familien-App als **Single-File-PWA** (`app
 - Login-Mails ohne eigenes SMTP: nur Link → App akzeptiert eingefügten Link. Optional Brevo-SMTP für Code in der Mail.
 - Wünsche gleichen sich über `cfg` ab (bei gleichzeitigen Änderungen gewinnt die Cloud); bei Bedarf auf eigene Tabelle umstellen.
 - Gericht-Fotos: nur JPEG-Data-URLs, immer durch `sImg()`; Vorschauen als CSS-Regeln in `#dishCss` (`imgCss()`), Bilddaten in IndexedDB bzw. `dish_images`, nie in `localStorage`, `cfg` oder der Warteschlange (dort nur die Gericht-ID). Bild beim Import (Link/Claude) noch nicht gebaut.
+- Kalender-Serien: Ausfälle als `skip` (Datumsliste) am Termin, Spalte aus 006; fehlt sie, gleicht die App 10 Minuten ohne `skip` ab (`evNoSkip()`) und liefert danach nach. Einzelne Termine verschieben ist noch nicht gebaut.
 - Kalender: eigene Termine in FamOS; Abgleich mit Google/Outlook/iCloud und `.ics`-Export bewusst noch nicht gebaut.
 - Erinnerungen/Push-Benachrichtigungen: bewusst noch nicht gebaut.
