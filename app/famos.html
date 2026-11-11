@@ -1141,7 +1141,7 @@ function rateDish(id,who){const d=dishById(id);if(!d||!raters().some(p=>p.id===w
 function rateRow(d){const ps=raters();if(!ps.length)return'';
   return`<div class="rate-row" role="group" aria-label="Bewertung">${ps.map(p=>{const v=d.ratings[p.id]||0,l=v>0?'mag es':v<0?'mag es nicht':'noch keine Meinung';
     return`<button class="rate-chip${v>0?' up':v<0?' down':''}" aria-label="${esc(p.name)}: ${l}. Tippen zum Ändern" onclick="event.stopPropagation();rateDish('${d.id}','${p.id}')"><span class="rate-who">${esc(p.icon)}</span><span class="rate-v">${v>0?'👍':v<0?'👎':'·'}</span></button>`;}).join('')}</div>`;}
-function setEssTab(t){UI.essTab={heute:'plan',woche:'plan',gerichte:'buch'}[t]||t;render();}
+function setEssTab(t){UI.essTab={heute:'plan',woche:'plan',gerichte:'buch'}[t]||t;saveUiState();render();}
 function setEssWeek(w){UI.essWeek=w;render();}
 function setEssTag(t){UI.essTag=t;render();}
 
@@ -1583,9 +1583,28 @@ function savePin(){const f=UI.form;
 function removePin(){if(!confirm('Eltern-PIN entfernen?'))return;S.pin=null;saveCfg();renderAdmin();}
 
 // ═══ ACTIONS ══════════════════════════════════
-function setKid(id){UI.kid=id;render();}
+function setKid(id){UI.kid=id;saveUiState();render();}
 function setRt(id){UI.rt=id;render();}
-function setView(v){UI.view=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();render();}
+function setView(v){UI.view=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
+// ─── Wo war ich? (pro Gerät) ───
+function saveUiState(){try{localStorage.setItem('famos_ui',JSON.stringify({view:UI.view,essTab:UI.essTab,kid:UI.kid}));}catch(e){}}
+function restoreUiState(){const u=lsGet('famos_ui');if(!u||typeof u!=='object')return;
+  if(MODULES.some(m=>m.id===u.view)&&modOn(u.view))UI.view=u.view;
+  if(u.essTab==='plan'||u.essTab==='buch')UI.essTab=u.essTab;
+  if(S.kids.some(k=>k.id===u.kid))UI.kid=u.kid;}
+// ─── Zurück-Taste (Android): erst Offenes schließen, auf der Startebene zweimal drücken zum Beenden ───
+// Ein einziger Merk-Eintrag im Verlauf; jedes Zurück landet hier und wird in der App behandelt.
+let _lastBack=0;
+function navGuard(){try{W?.history?.pushState?.({famos:1},'');}catch(e){}}
+function onBack(){
+  const open=id=>document.getElementById(id).classList.contains('open');
+  if(open('epBg')){epClose();navGuard();return;}
+  if(open('mb')){closeModal();navGuard();return;}
+  if(open('adm')){closeAdmin();navGuard();return;}
+  if(document.getElementById('doneOv').classList.contains('show')){closeDone();navGuard();return;}
+  if(Date.now()-_lastBack<2500){try{W?.history?.back?.();}catch(e){}return;}
+  _lastBack=Date.now();toast('Zum Schließen nochmal zurück');navGuard();
+}
 function setSpDay(d){UI.spDay=d;render();}
 
 function toggleTask(rtId,kidId,taskId){dayGuard();if(!D.chk[rtId])D.chk[rtId]={};if(!D.chk[rtId][kidId])D.chk[rtId][kidId]={};D.chk[rtId][kidId][taskId]=!D.chk[rtId][kidId][taskId];saveDay();render();checkDone(rtId,kidId);}
@@ -1978,6 +1997,8 @@ applyLook();
 UI.kid=S.kids[0]?.id;
 UI.rt=firstActiveRt();
 UI.spDay=todayDow();
+restoreUiState();
+if(W?.history?.replaceState){try{W.history.replaceState({famos:0},'');}catch(e){}navGuard();W.addEventListener('popstate',onBack);}
 UI.aSpKid=S.kids[0]?.id;
 W?.addEventListener?.('beforeinstallprompt',e=>{e.preventDefault();_bip=e;render();});
 W?.addEventListener?.('appinstalled',()=>{_bip=null;S.installHintDone=true;saveCfg();closeModal();render();toast('FamOS ist installiert');});

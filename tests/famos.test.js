@@ -1326,3 +1326,37 @@ test('Rezept-Formular: Portionen ändern rechnet die Zutaten mit um, ohne Rundun
   a.run(`openDishModal('${d.id}');dishPortions('2')`);
   assert.deepEqual(ingr(), ['1 Ei', '100 g Käse']);
 });
+
+// ─── Navigation: Ansicht merken, Zurück-Taste ─────────────────
+test('Navigation: App öffnet wieder dort, wo man war (Bereich, Kochbuch, Kind)', () => {
+  const a = household();
+  const k2 = a.get('S.kids[1].id');
+  a.run(`setView('essen');setEssTab('buch');setKid('${k2}')`);
+  const b = load(VORLAGE, { storage: a.store });
+  assert.equal(b.get('UI.view'), 'essen');
+  assert.equal(b.get('UI.essTab'), 'buch');
+  assert.equal(b.get('UI.kid'), k2);
+  assert.match(b.app(), /Kochbuch/);
+  // ausgeschaltetes Modul oder Unsinn: zurück zum Start
+  b.run(`togModule('essen')`);
+  const c = load(VORLAGE, { storage: { ...b.store, famos_ui: JSON.stringify({ view: 'essen', essTab: '<x>', kid: 'weg' }) } });
+  assert.notEqual(c.get('UI.view'), 'essen');
+  assert.equal(c.get('UI.essTab'), 'plan');
+});
+
+test('Navigation: Zurück schließt erst Fenster, dann Einstellungen, dann zweimal zum Beenden', () => {
+  let pushes = 0, backs = 0, pop = null;
+  const window = { location: { protocol: 'file:' }, history: { replaceState() {}, pushState() { pushes++; }, back() { backs++; } },
+    addEventListener: (ev, fn) => { if (ev === 'popstate') pop = fn; }, matchMedia: () => ({ matches: false }), navigator: {} };
+  const a = load(VORLAGE, { globals: { window } });
+  a.run(`openKidModal(null);UI.form.name='Emma';saveKid();obFinish()`); a.flush();
+  a.run('closeModal()');
+  assert.equal(typeof pop, 'function');
+  const p0 = pushes;
+  a.run(`openAdmin();setATab('module');openTgMoveModal('ein')`);
+  pop(); assert.equal(a.els.mb.classList.contains('open'), false); assert.equal(a.els.adm.classList.contains('open'), true);
+  pop(); assert.equal(a.els.adm.classList.contains('open'), false);
+  assert.equal(pushes, p0 + 2); // Merk-Eintrag jeweils erneuert, App bleibt offen
+  pop(); assert.match(a.toast(), /nochmal zurück/); assert.equal(backs, 0);
+  pop(); assert.equal(backs, 1); // zweites Zurück kurz danach: App darf schließen
+});
