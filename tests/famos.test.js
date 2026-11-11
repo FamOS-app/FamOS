@@ -131,13 +131,13 @@ test('Build: in CI ist eine fehlende Sperrliste ein Fehler', () => {
 });
 
 // ─── Erststart-Onboarding der Vorlage ─────────────────────────
-test('Vorlage: Erststart zeigt Onboarding, kein Haushalt ohne Kind', () => {
+test('Vorlage: Erststart zeigt Onboarding, kein Haushalt ohne Person', () => {
   const a = load(VORLAGE);
   assert.equal(a.get('S.household'), null);
   assert.match(a.app(), /Haushalt anlegen/);
   a.run('obFinish()');
   assert.equal(a.get('S.household'), null);
-  assert.match(a.toast(), /mindestens ein Kind/);
+  assert.match(a.toast(), /mindestens eine Person/);
 });
 
 test('Vorlage: Haushalt mit Kindern und Erwachsenen anlegen', () => {
@@ -1359,4 +1359,35 @@ test('Navigation: Zurück schließt erst Fenster, dann Einstellungen, dann zweim
   assert.equal(pushes, p0 + 2); // Merk-Eintrag jeweils erneuert, App bleibt offen
   pop(); assert.match(a.toast(), /nochmal zurück/); assert.equal(backs, 0);
   pop(); assert.equal(backs, 1); // zweites Zurück kurz danach: App darf schließen
+});
+
+// ─── Navigation: Kinder-Bereich, Haushalte ohne Kinder ────────
+test('Navigation: unten Kinder · Essen · Einkauf, Kinder bündelt Routine, Stundenplan, Geld', () => {
+  const a = household();
+  const nav = () => [...a.app().matchAll(/<button class="bni[^"]*" onclick="([^"]+)"><span class="bni-ic">[\s\S]*?<\/span>([^<]+)<\/button>/g)].map(m => m[2]);
+  assert.deepEqual(nav(), ['Kinder', 'Essen', 'Einkauf']);
+  assert.equal(a.get('UI.view'), 'routine'); // nach dem Onboarding mit Kindern: Routine
+  assert.match(a.app(), /class="seg seg-3"/);
+  assert.match(a.app(), />Stundenplan</);
+  a.run(`setView('taschengeld');setView('essen');goKinder()`);
+  assert.equal(a.get('UI.view'), 'taschengeld'); // Kinder merkt sich den Unterbereich
+  assert.match(a.app(), /class="bni on" onclick="goKinder\(\)"/);
+  a.run(`togModule('stundenplan');togModule('taschengeld');goKinder()`);
+  assert.doesNotMatch(a.app(), /class="seg seg-/); // nur ein Kinder-Bereich: kein Umschalter
+});
+
+test('Haushalt ohne Kinder: Onboarding nur mit Erwachsenen, kein Kinder-Reiter', () => {
+  const a = load(VORLAGE);
+  a.run(`openAdultModal();adultQuick('Alex','🙂');saveAdult();ob().name='WG';obFinish()`);
+  assert.equal(a.get('S.household.name'), 'WG');
+  assert.deepEqual(a.get('S.kids'), []);
+  assert.equal(a.get('UI.view'), 'essen');
+  assert.doesNotMatch(a.app(), /goKinder|kid-tabs/);
+  a.run(`setView('routine')`); // per altem Link/Speicherstand: wird umgeleitet
+  assert.equal(a.get('UI.view'), 'essen');
+  // letzte Person lässt sich nicht entfernen, erstes Kind schaltet Kinder-Reiter frei
+  a.run(`openAdmin();delAdult(S.household.adults[0].id)`);
+  assert.match(a.toast(), /Mindestens eine Person/);
+  a.run(`openKidModal(null);UI.form.name='Mia';saveKid();render()`);
+  assert.match(a.app(), /goKinder/);
 });

@@ -190,6 +190,8 @@ input{font-family:var(--font)}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
 .field-hint{font-size:.75rem;color:var(--muted);font-weight:600;margin-top:6px}
+.seg-3{grid-template-columns:repeat(3,1fr)!important}.seg-4{grid-template-columns:repeat(4,1fr)!important}
+.seg-3 .seg-b,.seg-4 .seg-b{font-size:.82rem}
 .seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg2);border-radius:14px;padding:4px;margin-bottom:16px}
 .seg-b{background:none;border-radius:10px;min-height:44px;font-weight:800;font-size:.95rem;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:8px}
 .seg-b.on{background:var(--card);color:var(--text)}
@@ -552,6 +554,8 @@ const IC={
   taschengeld:'<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></svg>',
   essen:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3v6a2 2 0 0 0 4 0V3M8.5 11v10M17.5 21V3c-2.2 1.2-3.5 4-3.5 8h3.5"/></svg>',
   einkauf:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8z"/><path d="M9 10V6.5a3 3 0 0 1 6 0V10"/></svg>',
+  kinder:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7.5" r="3"/><path d="M3.5 20c0-3.3 2.5-6 5.5-6s5.5 2.7 5.5 6"/><circle cx="17" cy="10" r="2.2"/><path d="M15.2 15.1c.6-.3 1.2-.4 1.8-.4 2.4 0 4.3 2.1 4.3 4.8"/></svg>',
+  aufgaben:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.3 1.3L7 5M3.5 12l1.3 1.3L7 11"/><circle cx="5" cy="18" r="1.4"/></svg>',
   gear:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>',
 };
 const DAYS=[{id:'mo',s:'Mo',l:'Montag'},{id:'di',s:'Di',l:'Dienstag'},{id:'mi',s:'Mi',l:'Mittwoch'},{id:'do',s:'Do',l:'Donnerstag'},{id:'fr',s:'Fr',l:'Freitag'},{id:'sa',s:'Sa',l:'Samstag'},{id:'so',s:'So',l:'Sonntag'}];
@@ -633,15 +637,24 @@ const EK_WORDS={
 const EK_DICT=Object.entries(EK_WORDS).flatMap(([cat,w])=>w.split(' ').map(k=>[k,cat]));
 const EK_SIGNAL={passiert:'vorrat',passierte:'vorrat',dose:'vorrat',konserve:'vorrat',tk:'tk',tiefkühl:'tk',gefroren:'tk'};
 const MODULES=[
-  {id:'routine',em:'✅',lbl:'Routine',nav:'Routine',desc:'Tägliche Aufgaben, Brot-Check, Haushalts-Wahl'},
-  {id:'stundenplan',em:'📅',lbl:'Stundenplan',nav:'Plan',desc:'Schule und Kita pro Wochentag'},
-  {id:'taschengeld',em:'🐷',lbl:'Taschengeld',nav:'Geld',desc:'Wochengeld, Sparschwein, Ein- und Auszahlungen'},
+  {id:'routine',kid:true,em:'✅',lbl:'Routine',nav:'Routine',desc:'Tägliche Aufgaben, Brot-Check, Haushalts-Wahl'},
+  {id:'stundenplan',kid:true,em:'📅',lbl:'Stundenplan',nav:'Plan',desc:'Schule und Kita pro Wochentag'},
+  {id:'taschengeld',kid:true,em:'🐷',lbl:'Taschengeld',nav:'Geld',desc:'Wochengeld, Sparschwein, Ein- und Auszahlungen'},
   {id:'essen',em:'🍽️',lbl:'Essen',nav:'Essen',desc:'Lieblingsgerichte, Würfeln, Wochenplan'},
   {id:'einkauf',em:'🛒',lbl:'Einkauf',nav:'Einkauf',desc:'Einkaufsliste, auch aus dem Wochenplan'},
 ];
 function modOn(id){return S.modules?.[id]!==false;}
 function enabledMods(){return MODULES.filter(m=>modOn(m.id));}
-function ensureView(){if(!modOn(UI.view))UI.view=enabledMods()[0]?.id||'routine';}
+// Navigation unten: „Kinder“ bündelt alle Kinder-Bereiche (nur wenn es Kinder gibt), danach die übrigen Bereiche
+function kidMods(){return S.kids.length?MODULES.filter(m=>m.kid&&modOn(m.id)):[];}
+function isKidView(v){return MODULES.some(m=>m.kid&&m.id===v);}
+function navItems(){const k=kidMods(),out=[];
+  if(k.length)out.push({id:'kinder',lbl:'Kinder',on:isKidView(UI.view),go:'goKinder()'});
+  MODULES.filter(m=>!m.kid&&modOn(m.id)).forEach(m=>out.push({id:m.id,lbl:m.nav||m.lbl,on:UI.view===m.id,go:`setView('${m.id}')`}));
+  return out;}
+function goKinder(){const k=kidMods();setView(k.some(m=>m.id===UI.lastKid)?UI.lastKid:k[0]?.id||'routine');}
+function ensureView(){const ok=v=>modOn(v)&&(!isKidView(v)||S.kids.length);
+  if(!ok(UI.view))UI.view=kidMods()[0]?.id||MODULES.find(m=>!m.kid&&modOn(m.id))?.id||'routine';}
 
 // ═══ STORAGE ══════════════════════════════════
 function lsSet(k,v){try{localStorage.setItem(k,v);return true;}catch(e){toast('Speichern fehlgeschlagen. Speicher voll oder gesperrt?');return false;}}
@@ -812,19 +825,19 @@ function buildOnboarding(){
   const o=ob();
   const kidRows=S.kids.map(k=>`<div class="ai"><div class="ai-em">${esc(k.icon)}</div><div class="ai-info"><div class="ai-main">${esc(k.name)}</div><div class="ai-sub">Kind</div></div><button class="ai-edit" aria-label="Bearbeiten" onclick="openKidModal('${k.id}')">✏️</button><button class="ai-del" aria-label="Löschen" onclick="obDelKid('${k.id}')">🗑️</button></div>`).join('');
   const adRows=o.adults.map(a=>`<div class="ai"><div class="ai-em">${esc(a.icon)}</div><div class="ai-info"><div class="ai-main">${esc(a.name)}</div><div class="ai-sub">Erwachsene/r</div></div><button class="ai-del" aria-label="Löschen" onclick="obDelAdult('${a.id}')">🗑️</button></div>`).join('');
-  const ready=S.kids.length>0;
+  const ready=S.kids.length>0||o.adults.length>0;
   return`<div class="wrap no-nav">
   <div class="hdr"><div><div class="hdr-title">FamOS</div><div class="hdr-date">Das Gehirn der Familie · Haushalt anlegen</div></div></div>
   <div class="tg-card">
     <div class="field" style="margin-bottom:0"><label>Name des Haushalts</label><input value="${esc(o.name)}" placeholder="z.B. Familie Müller" oninput="ob().name=this.value"></div>
   </div>
   <div class="tg-card">
-    <div class="as-lbl">Kinder</div>
-    <div class="al">${kidRows||'<div style="font-size:.78rem;color:var(--muted);font-weight:700">Noch keins angelegt. Mindestens ein Kind wird gebraucht.</div>'}</div>
+    <div class="as-lbl">Kinder <span style="font-weight:700;color:var(--subtle)">(optional)</span></div>
+    <div class="al">${kidRows||'<div style="font-size:.78rem;color:var(--muted);font-weight:700">Ohne Kinder blendet FamOS die Kinder-Bereiche aus.</div>'}</div>
     <button class="aa" onclick="openKidModal(null)">＋ Kind hinzufügen</button>
   </div>
   <div class="tg-card">
-    <div class="as-lbl">Erwachsene <span style="font-weight:700;color:var(--subtle)">(optional)</span></div>
+    <div class="as-lbl">Erwachsene</div>
     <div class="al">${adRows}</div>
     <button class="aa" onclick="openAdultModal()">＋ Mama, Papa, … hinzufügen</button>
   </div>
@@ -835,10 +848,10 @@ function buildOnboarding(){
   </div>`;
 }
 function obFinish(){
-  if(!S.kids.length){toast('Bitte lege mindestens ein Kind an.');return;}
   const o=ob();
+  if(!S.kids.length&&!o.adults.length){toast('Bitte lege mindestens eine Person an, Kind oder Erwachsene/r.');return;}
   S.household={name:(o.name||'').trim()||'Unser Haushalt',adults:o.adults.slice()};
-  UI.ob=null;UI.kid=S.kids[0].id;saveCfg();render();
+  UI.ob=null;UI.kid=S.kids[0]?.id||null;saveCfg();render();
   if(AUTH&&!SYNC.hid)createHousehold();else maybeAskInstall();
 }
 function obDelKid(id){S.kids=S.kids.filter(k=>k.id!==id);if(UI.kid===id)UI.kid=S.kids[0]?.id||null;saveCfg();render();}
@@ -856,12 +869,12 @@ function saveAdult(){const f=UI.form;if(!f.name.trim()){toast('Bitte einen Namen
   const a={id:uid(),name:f.name.trim(),icon:f.icon};
   if(S.household){S.household.adults.push(a);saveCfg();closeModal();renderAdmin();}
   else{ob().adults.push(a);closeModal();render();}}
-function delAdult(id){if(!confirm('Entfernen?'))return;S.household.adults=S.household.adults.filter(a=>a.id!==id);saveCfg();renderAdmin();}
+function delAdult(id){if(!S.kids.length&&(S.household?.adults||[]).length<=1){toast('Mindestens eine Person muss im Haushalt bleiben!');return;}if(!confirm('Entfernen?'))return;S.household.adults=S.household.adults.filter(a=>a.id!==id);saveCfg();renderAdmin();}
 function saveHhName(v){if(S.household){S.household.name=v.trim()||'Unser Haushalt';saveCfg();}}
 
 function buildApp(){
-  ensureView();
   if(!S.household)return buildOnboarding();
+  ensureView();
   const kid=S.kids.find(k=>k.id===UI.kid);
   const col=kid?.col||'b';
   const dateStr=new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});
@@ -876,7 +889,8 @@ function buildApp(){
 
   const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',stundenplan:'Stundenplan',taschengeld:'Taschengeld'}[UI.view];
 
-  const showNav=enabledMods().length>1;
+  const nav=navItems(),showNav=nav.length>1,km=kidMods();
+  const kidSeg=isKidView(UI.view)&&km.length>1?`<div class="seg seg-${km.length}" role="tablist">${km.map(m=>`<button class="seg-b${UI.view===m.id?' on':''}" role="tab" aria-selected="${UI.view===m.id}" onclick="setView('${m.id}')">${esc(m.nav==='Plan'?'Stundenplan':m.nav||m.lbl)}</button>`).join('')}</div>`:'';
 
   return`<div class="wrap${showNav?'':' no-nav'}">
   <div class="hdr">
@@ -884,11 +898,12 @@ function buildApp(){
     <button class="gear-btn" aria-label="Einstellungen" onclick="openAdmin()">${IC.gear}</button>
   </div>
   ${canInstallHint()?`<div class="install-hint"><div style="font-size:1.4rem">📲</div><div class="install-hint-txt"><strong>Als App speichern</strong><br>Ohne Browserleiste, auch offline.</div><button class="m-save install-go" onclick="installNow()">${_bip?'Installieren':'So geht’s'}</button><button class="install-close" aria-label="Hinweis schließen" onclick="dismissInstall()">✕</button></div>`:''}
-  ${UI.view==='einkauf'||UI.view==='essen'?'':`<div class="kid-tabs" role="tablist" aria-label="Kind wählen">${S.kids.map(k=>`<button class="kid-tab${k.id===UI.kid?' on c'+k.col:''}" onclick="setKid('${k.id}')"><span class="av">${esc(k.icon)}</span>${esc(k.name)}</button>`).join('')}</div>`}
+  ${kidSeg}
+  ${!isKidView(UI.view)||!S.kids.length?'':`<div class="kid-tabs" role="tablist" aria-label="Kind wählen">${S.kids.map(k=>`<button class="kid-tab${k.id===UI.kid?' on c'+k.col:''}" onclick="setKid('${k.id}')"><span class="av">${esc(k.icon)}</span>${esc(k.name)}</button>`).join('')}</div>`}
   ${content}
   </div>
   ${showNav?`<nav class="bot-nav"><div class="bot-nav-inner">
-    ${enabledMods().map(m=>`<button class="bni${UI.view===m.id?' on':''}" onclick="setView('${m.id}')"><span class="bni-ic">${IC[m.id]||''}</span>${esc(m.nav||m.lbl)}</button>`).join('')}
+    ${nav.map(n=>`<button class="bni${n.on?' on':''}" onclick="${n.go}"><span class="bni-ic">${IC[n.id]||''}</span>${esc(n.lbl)}</button>`).join('')}
   </div></nav>`:''}`;
 }
 
@@ -1500,7 +1515,7 @@ function openKidModal(kidId){const ex=kidId?S.kids.find(k=>k.id===kidId):null;UI
 function renderKidModal(){const f=UI.form;return`<h3>${f.kidId?'Kind bearbeiten':'Neues Kind'}</h3><div class="field"><label>Icon</label><button class="em-btn" id="emK" onclick="epOpen(e=>{UI.form.icon=e;document.getElementById('emK').textContent=e;})">${esc(f.icon)}</button></div><div class="field"><label>Name</label><input value="${esc(f.name)}" placeholder="z.B. Emma" oninput="UI.form.name=this.value"></div><div class="field"><label>Akzentfarbe</label><div class="cp-wrap">${Object.entries(COLORS).map(([id,c])=>`<button type="button" aria-label="${esc(colorLabel(id))}" class="color-dot${f.col===id?' sel':''}" style="background:var(--acc-${id})" onclick="setKidCol('${id}',this)"></button>`).join('')}</div></div><div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveKid()">Speichern</button></div>`;}
 function setKidCol(id,el){UI.form.col=id;el.closest('.cp-wrap').querySelectorAll('.color-dot').forEach(d=>d.classList.remove('sel'));el.classList.add('sel');}
 function saveKid(){const f=UI.form;if(!f.name.trim()){toast('Bitte einen Namen eingeben!');return;}const kid={id:f.kidId||uid(),icon:f.icon,name:f.name.trim(),col:f.col};if(f.kidId){const i=S.kids.findIndex(k=>k.id===f.kidId);if(i>=0)S.kids[i]=kid;}else{S.kids.push(kid);if(!S.stundenplan)S.stundenplan={};S.stundenplan[kid.id]=Object.fromEntries(DAYS.map(d=>[d.id,[]]));if(!S.taschengeld)S.taschengeld={};S.taschengeld[kid.id]={betrag:1,aktiv:false};if(!UI.kid)UI.kid=kid.id;}saveCfg();closeModal();renderAdmin();render();}
-function delKid(kidId){if(S.kids.length<=1){toast('Mindestens ein Kind muss vorhanden sein!');return;}if(!confirm('Kind löschen?'))return;S.kids=S.kids.filter(k=>k.id!==kidId);if(UI.kid===kidId)UI.kid=S.kids[0]?.id;saveCfg();renderAdmin();}
+function delKid(kidId){if(S.kids.length<=1&&!(S.household?.adults||[]).length){toast('Mindestens eine Person muss im Haushalt bleiben!');return;}if(!confirm('Kind löschen?'))return;S.kids=S.kids.filter(k=>k.id!==kidId);if(UI.kid===kidId)UI.kid=S.kids[0]?.id;saveCfg();renderAdmin();}
 
 // Haushalt modal
 function openWahlModal(){UI.form={mode:'wahl',em:'🏠',lbl:''};openModal();}
@@ -1585,13 +1600,14 @@ function removePin(){if(!confirm('Eltern-PIN entfernen?'))return;S.pin=null;save
 // ═══ ACTIONS ══════════════════════════════════
 function setKid(id){UI.kid=id;saveUiState();render();}
 function setRt(id){UI.rt=id;render();}
-function setView(v){UI.view=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
+function setView(v){UI.view=v;if(isKidView(v))UI.lastKid=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
 // ─── Wo war ich? (pro Gerät) ───
-function saveUiState(){try{localStorage.setItem('famos_ui',JSON.stringify({view:UI.view,essTab:UI.essTab,kid:UI.kid}));}catch(e){}}
+function saveUiState(){try{localStorage.setItem('famos_ui',JSON.stringify({view:UI.view,essTab:UI.essTab,kid:UI.kid,lastKid:UI.lastKid}));}catch(e){}}
 function restoreUiState(){const u=lsGet('famos_ui');if(!u||typeof u!=='object')return;
   if(MODULES.some(m=>m.id===u.view)&&modOn(u.view))UI.view=u.view;
   if(u.essTab==='plan'||u.essTab==='buch')UI.essTab=u.essTab;
-  if(S.kids.some(k=>k.id===u.kid))UI.kid=u.kid;}
+  if(S.kids.some(k=>k.id===u.kid))UI.kid=u.kid;
+  if(isKidView(u.lastKid))UI.lastKid=u.lastKid;}
 // ─── Zurück-Taste (Android): erst Offenes schließen, auf der Startebene zweimal drücken zum Beenden ───
 // Ein einziger Merk-Eintrag im Verlauf; jedes Zurück landet hier und wird in der App behandelt.
 let _lastBack=0;
