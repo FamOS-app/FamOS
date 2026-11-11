@@ -219,6 +219,23 @@ input{font-family:var(--font)}
 .seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg2);border-radius:14px;padding:4px;margin-bottom:16px}
 .seg-b{background:none;border-radius:10px;min-height:44px;font-weight:800;font-size:.95rem;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:8px}
 .seg-b.on{background:var(--card);color:var(--text)}
+.cal-row .ek-item{align-items:flex-start}
+.cal-time{flex:0 0 64px;display:flex;flex-direction:column;font-weight:800;font-size:.88rem;color:var(--pri);padding-top:1px;font-variant-numeric:tabular-nums}
+.cal-time small{font-weight:700;font-size:.72rem;color:var(--muted)}
+.cal-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.cal-head strong{flex:1;text-align:center;font-size:1rem;font-weight:800}
+.cal-nav{min-width:44px;min-height:44px;padding:0 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);font-weight:800;font-size:.9rem;color:var(--text)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px}
+.cal-wd{text-align:center;font-size:.68rem;font-weight:700;color:var(--muted);letter-spacing:.08em;padding-bottom:2px}
+.cal-d{min-height:46px;border-radius:10px;border:1.5px solid transparent;background:var(--card);font:inherit;font-weight:700;font-size:.9rem;color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:4px 0}
+.cal-d.out{background:none;color:var(--subtle)}
+.cal-d.is-today{border-color:var(--acc-a);color:var(--acc-a)}
+.cal-d.on{background:var(--pri);border-color:var(--pri);color:var(--on)}
+.cal-dots{display:flex;gap:2px;height:5px}
+.cal-dots i{width:5px;height:5px;border-radius:50%;background:var(--pri)}
+.cal-d.on .cal-dots i{background:var(--on)}
+.cal-times{display:flex;gap:8px;align-items:center}
+.cal-times input{flex:1;min-width:0}
 .seg-n{font-size:.75rem;font-weight:700;background:var(--bg2);border-radius:99px;padding:2px 8px;color:var(--muted)}
 .seg-b.on .seg-n{background:var(--text);color:var(--bg)}
 .ess-weekhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:18px 0 10px;flex-wrap:wrap}
@@ -589,6 +606,7 @@ const IC={
   einkauf:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8z"/><path d="M9 10V6.5a3 3 0 0 1 6 0V10"/></svg>',
   heute:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 19z"/><path d="M9.5 20.5V14h5v6.5"/></svg>',
   kinder:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7.5" r="3"/><path d="M3.5 20c0-3.3 2.5-6 5.5-6s5.5 2.7 5.5 6"/><circle cx="17" cy="10" r="2.2"/><path d="M15.2 15.1c.6-.3 1.2-.4 1.8-.4 2.4 0 4.3 2.1 4.3 4.8"/></svg>',
+  kalender:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="8" cy="14.5" r=".9"/><circle cx="12" cy="14.5" r=".9"/><circle cx="16" cy="14.5" r=".9"/></svg>',
   aufgaben:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.3 1.3L7 5M3.5 12l1.3 1.3L7 11"/><circle cx="5" cy="18" r="1.4"/></svg>',
   gear:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>',
 };
@@ -635,8 +653,9 @@ const DEF={
   },
   einkauf:{items:[],recent:[],cats:{},order:[],std:[]},
   aufgaben:{items:[]},
+  kalender:{items:[]},
   wuensche:{items:[]},
-  modules:{heute:true,routine:true,stundenplan:true,taschengeld:true,wuensche:true,aufgaben:true,essen:true,einkauf:true},
+  modules:{heute:true,routine:true,stundenplan:true,taschengeld:true,wuensche:true,aufgaben:true,kalender:true,essen:true,einkauf:true},
   installHintDone:false,
   _mv:4,
 };
@@ -679,6 +698,7 @@ const MODULES=[
   {id:'taschengeld',kid:true,em:'🐷',lbl:'Taschengeld',nav:'Geld',desc:'Wochengeld, Sparschwein, Ein- und Auszahlungen'},
   {id:'wuensche',kid:true,em:'🎁',lbl:'Wünsche',nav:'Wünsche',desc:'Wunschliste pro Kind für Geburtstag und Weihnachten'},
   {id:'aufgaben',em:'📝',lbl:'Aufgaben',nav:'Aufgaben',desc:'To-dos für alle: wer, bis wann, Wiederholung'},
+  {id:'kalender',em:'🗓️',lbl:'Kalender',nav:'Kalender',desc:'Familientermine und Verabredungen: wer, wann, wo'},
   {id:'essen',em:'🍽️',lbl:'Essen',nav:'Essen',desc:'Lieblingsgerichte, Würfeln, Wochenplan'},
   {id:'einkauf',em:'🛒',lbl:'Einkauf',nav:'Einkauf',desc:'Einkaufsliste, auch aus dem Wochenplan'},
 ];
@@ -738,9 +758,9 @@ function sanitizeCfg(c){
   const modules={};MODULES.forEach(m=>{modules[m.id]=sObj(c.modules)[m.id]!==false;});
   if(!MODULES.some(m=>modules[m.id]))modules[MODULES[0].id]=true;
   const pin=c.pin&&typeof c.pin.s==='string'&&typeof c.pin.h==='string'&&/^[a-z0-9]{1,16}$/.test(c.pin.s)&&/^[0-9a-f]{8}$/.test(c.pin.h)?{s:c.pin.s,h:c.pin.h}:null;
-  const essen=sanitizeEssen(c.essen,kids,household?.adults||[]),einkauf=sanitizeEinkauf(c.einkauf),wuensche=sanitizeWuensche(c.wuensche,kids.map(k=>k.id)),aufgaben=sanitizeAufgaben(c.aufgaben,[...kids,...(household?.adults||[])].map(p=>p.id));
+  const essen=sanitizeEssen(c.essen,kids,household?.adults||[]),einkauf=sanitizeEinkauf(c.einkauf),wuensche=sanitizeWuensche(c.wuensche,kids.map(k=>k.id)),aufgaben=sanitizeAufgaben(c.aufgaben,[...kids,...(household?.adults||[])].map(p=>p.id)),kalender=sanitizeKalender(c.kalender,[...kids,...(household?.adults||[])].map(p=>p.id));
   const tgPay=Number.isInteger(c.tgPay)&&c.tgPay>=0&&c.tgPay<=6?c.tgPay:-1,tgPaySince=tgPay>=0&&/^\d{4}-\d{2}-\d{2}$/.test(c.tgPaySince||'')?c.tgPaySince:'';
-  return{household,kids,routines,wahlPool,stundenplan,taschengeld,tgPay,tgPaySince,modules,essen,einkauf,aufgaben,wuensche,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
+  return{household,kids,routines,wahlPool,stundenplan,taschengeld,tgPay,tgPaySince,modules,essen,einkauf,aufgaben,kalender,wuensche,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
 }
 function sanitizeEssen(e,kids,adults){
   if(!e||typeof e!=='object'||Array.isArray(e))e=clone(DEF.essen); // ältere Stände: Beispielgerichte
@@ -778,6 +798,16 @@ function sanitizeTask(x,personIds){const id=sId(x?.id),title=sStr(x?.title,120).
   return{id,title,note:sStr(x.note,300).trim(),who,due,rep:['d','w','m'].includes(x.rep)?x.rep:'',done:!!x.done,doneBy:sId(x.doneBy)||'',doneAt:Number.isFinite(Number(x.doneAt))?Number(x.doneAt)||0:0};}
 function sanitizeAufgaben(a,personIds){const ids=new Set();
   const items=sArr(sObj(a).items,500).map(x=>{const t=sanitizeTask(x,personIds);if(!t||ids.has(t.id))return null;ids.add(t.id);return t;}).filter(Boolean);
+  return{items};}
+// Termine: Datum muss es wirklich geben (kein 31.02.), sonst lehnt die Datenbank die Zeile ab
+function sDate(v){return typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&dstr(pdate(v))===v?v:'';}
+function sTime(v){return typeof v==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(v)?v:'';}
+function sanitizeEvent(x,personIds){const id=sId(x?.id),title=sStr(x?.title,120).trim(),day=sDate(x?.day);if(!id||!title||!day)return null;
+  const who=[...new Set(sArr(x.who,12).filter(w=>typeof w==='string'&&(!personIds||personIds.includes(w))))];
+  const rep=['w','y'].includes(x.rep)?x.rep:'',end=rep?'':sDate(x.end),from=sTime(x.from),to=from?sTime(x.to):'';
+  return{id,title,day,end:end>day?end:'',from,to:to>from?to:'',place:sStr(x.place,80).trim(),note:sStr(x.note,300).trim(),who,rep};}
+function sanitizeKalender(a,personIds){const ids=new Set();
+  const items=sArr(sObj(a).items,500).map(x=>{const e=sanitizeEvent(x,personIds);if(!e||ids.has(e.id))return null;ids.add(e.id);return e;}).filter(Boolean);
   return{items};}
 const OCC=[{id:'geb',em:'🎂',l:'Geburtstag'},{id:'weih',em:'🎄',l:'Weihnachten'}];
 function safeLink(v){const t=sStr(v,300).trim();if(!t)return'';try{const u=new URL(t);return/^https?:$/.test(u.protocol)&&!u.username&&!u.password?u.href:'';}catch(e){return'';}}
@@ -944,10 +974,11 @@ function buildApp(){
   else if(UI.view==='essen') content=buildEssenContent();
   else if(UI.view==='einkauf') content=buildEinkaufContent();
   else if(UI.view==='aufgaben') content=buildAufgabenContent();
+  else if(UI.view==='kalender') content=buildKalenderContent();
   else if(UI.view==='heute') content=buildHeute();
   else if(UI.view==='wuensche') content=buildWishContent(kid);
 
-  const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',aufgaben:'Aufgaben',heute:'Heute',stundenplan:'Stundenplan',taschengeld:'Taschengeld',wuensche:'Wünsche'}[UI.view];
+  const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',aufgaben:'Aufgaben',kalender:'Kalender',heute:'Heute',stundenplan:'Stundenplan',taschengeld:'Taschengeld',wuensche:'Wünsche'}[UI.view];
 
   const nav=navItems(),showNav=nav.length>1,km=kidMods();
   const kidSeg=isKidView(UI.view)&&km.length>1?`<div class="seg seg-${km.length}" role="tablist">${km.map(m=>`<button class="seg-b${UI.view===m.id?' on':''}" role="tab" aria-selected="${UI.view===m.id}" onclick="setView('${m.id}')">${esc(m.nav==='Plan'?'Stundenplan':m.nav||m.lbl)}</button>`).join('')}</div>`:'';
@@ -983,7 +1014,8 @@ function buildRoutineContent(kid,col){
   ${tasks.map(t=>`<button type="button" class="tc${chks[t.id]?' done c'+col:''}" aria-pressed="${chks[t.id]?'true':'false'}" onclick="toggleTask('${UI.rt}','${UI.kid}','${t.id}')"><span class="t-em">${esc(t.em)}</span><span class="t-body"><span class="t-lbl">${esc(t.lbl)}</span>${t.sub?`<span class="t-sub">${esc(t.sub)}</span>`:''}</span><span class="t-chk">${chks[t.id]?'✓':''}</span></button>`).join('')}
   ${rt.wahl?buildWahlWidget(UI.rt,UI.kid,wahlId,chks):''}
   <button class="add-tc" onclick="openTaskModal('${UI.rt}',null)">＋ Aufgabe hinzufügen</button>
-  ${modOn('aufgaben')?kidTodos(UI.kid):''}`;
+  ${modOn('aufgaben')?kidTodos(UI.kid):''}
+  ${modOn('kalender')?kidEvents(UI.kid):''}`;
 }
 
 function buildWahlWidget(rtId,kidId,wahlId,chks){
@@ -1634,6 +1666,84 @@ function saveTodo(){const f=UI.form,t=S.aufgaben.items.find(x=>x.id===f.id);if(!
   todoOp('up',t);saveCfg();closeModal();render();}
 function delTodo(){const f=UI.form;if(!confirm('Aufgabe löschen?'))return;S.aufgaben.items=S.aufgaben.items.filter(x=>x.id!==f.id);todoOp('del',{id:f.id});saveCfg();closeModal();render();}
 
+// ═══ KALENDER ═════════════════════════════════
+// Familientermine und Verabredungen: Tag, optional Uhrzeit, mehrtägig oder wiederkehrend (wöchentlich, jährlich).
+// Abgleich zeilenweise über die Tabelle events (wie Aufgaben).
+const CAL_REPS=[{id:'',l:'Einmalig'},{id:'w',l:'Wöchentlich'},{id:'y',l:'Jährlich'}];
+function calOp(op,e){if(!SYNC?.hid)return;SYNC.queue.push(op==='del'?{t:'events',op,id:e.id}:{t:'events',op,item:{...e}});if(SYNC.queue.length>500)SYNC.queue=SYNC.queue.slice(-500);saveSync();schedulePush();}
+function calFor(e,who){return!who||!e.who.length||e.who.includes(who);}
+// Findet der Termin an diesem Tag statt? Der 29.02. fällt in anderen Jahren auf den 28.02.
+function calOn(e,ds){if(ds<e.day)return false;
+  if(e.rep==='w')return daysBetween(e.day,ds)%7===0;
+  if(e.rep==='y'){const md=e.day.slice(5),x=ds.slice(5);return x===md||(md==='02-29'&&x==='02-28'&&addDays(ds,1).slice(5)==='03-01');}
+  return ds<=(e.end||e.day);}
+function calDay(ds,who){return S.kalender.items.filter(e=>calFor(e,who)&&calOn(e,ds)).sort((a,b)=>a.from.localeCompare(b.from)||a.title.localeCompare(b.title,'de'));}
+// Liste ab einem Tag: Mehrtägiges steht einmal (am Beginn, oder am ersten Tag der Liste, wenn es schon läuft), Wiederholungen an jedem Termin
+function calAgenda(from,days,who){const out=[];
+  for(let i=0;i<days;i++){const ds=addDays(from,i),list=calDay(ds,who).filter(e=>!e.end||ds===e.day||i===0);if(list.length)out.push({ds,list});}
+  return out;}
+function fmtCalDay(ds){const td=today(),d=daysBetween(td,ds),dm=`${DAYS[(pdate(ds).getDay()+6)%7].s}, ${ds.slice(8,10)}.${ds.slice(5,7)}.${ds.slice(0,4)!==td.slice(0,4)?ds.slice(0,4):''}`;
+  return d===0?`Heute · ${dm}`:d===1?`Morgen · ${dm}`:dm;}
+// o.ro: nur lesen (Kinder), o.day: Tag in der Zeile nennen (Startseite, Kinder)
+function calRow(e,o={}){const ps=e.who.map(personById).filter(Boolean),rp=CAL_REPS.find(r=>r.id===e.rep);
+  const meta=[o.day?fmtDue(o.day):'',e.end?'bis '+fmtCalDay(e.end).replace(/^.* · /,''):'',o.ro?'':ps.length?ps.map(p=>p.icon).join(' '):'alle',e.place?'📍 '+e.place:'',e.rep?'↻ '+rp.l.toLowerCase():''].filter(Boolean).join(' · ');
+  const inner=`<span class="cal-time">${e.from?esc(e.from)+(e.to?`<small>bis ${esc(e.to)}</small>`:''):'<small>ganztägig</small>'}</span><span class="todo-t"><span class="ek-name">${esc(e.title)}</span>${meta?`<span class="todo-m">${esc(meta)}</span>`:''}</span>`;
+  return`<div class="ek-row cal-row">${o.ro?`<div class="ek-item">${inner}</div>`:`<button class="ek-item" onclick="openCal('${e.id}')">${inner}</button>`}</div>`;}
+function setCalWho(id){UI.calWho=id;render();}
+function setCalTab(t){UI.calTab=t;render();}
+function setCalSel(ds){UI.calSel=ds;UI.calMonth=ds.slice(0,7);render();}
+function calShift(n){const td=today(),m=n?addMonths((UI.calMonth||td.slice(0,7))+'-01',n).slice(0,7):td.slice(0,7);UI.calMonth=m;UI.calSel=m===td.slice(0,7)?td:m+'-01';render();}
+function calMore(){UI.calDays=Math.min(365,(UI.calDays||30)+60);render();}
+function buildKalenderContent(){
+  const who=personById(UI.calWho)?UI.calWho:'',ps=raters(),monat=UI.calTab==='monat',td=today();
+  const head=`<div class="seg" role="tablist"><button class="seg-b${monat?'':' on'}" role="tab" aria-selected="${!monat}" onclick="setCalTab('liste')">Liste</button><button class="seg-b${monat?' on':''}" role="tab" aria-selected="${monat}" onclick="setCalTab('monat')">Monat</button></div>
+  ${ps.length>1?`<div class="ess-tags">${[{id:'',icon:'',name:'Alle'},...ps].map(p=>`<button class="ap${who===p.id?' on':''}" aria-pressed="${who===p.id}" onclick="setCalWho('${p.id}')">${esc(p.icon)} ${esc(p.name)}</button>`).join('')}</div>`:''}`;
+  if(!monat){const n=UI.calDays||30,ag=calAgenda(td,n,who);
+    return`${head}<button class="aa" style="margin-bottom:6px" onclick="openCal()">＋ Termin</button>
+    ${ag.length?ag.map(g=>`<div class="ek-cat">${fmtCalDay(g.ds)}</div>${g.list.map(e=>calRow(e)).join('')}`).join(''):`<div class="sp-empty">${S.kalender.items.length?`In den nächsten ${n} Tagen steht nichts an.`:'Noch keine Termine. Tragt ein, was ansteht: Arzt, Verabredung, Geburtstag, Urlaub.'}</div>`}
+    ${n<365?`<button class="reset-btn" onclick="calMore()">Weiter in die Zukunft schauen</button>`:''}`;}
+  const ym=/^\d{4}-\d{2}$/.test(UI.calMonth||'')?UI.calMonth:td.slice(0,7),first=ym+'-01',off=(pdate(first).getDay()+6)%7,dim=pdate(addDays(addMonths(first,1),-1)).getDate();
+  const sel=sDate(UI.calSel)&&UI.calSel.slice(0,7)===ym?UI.calSel:ym===td.slice(0,7)?td:first,cells=[];
+  for(let i=0;i<Math.ceil((off+dim)/7)*7;i++){const ds=addDays(first,i-off),n=calDay(ds,who).length;
+    cells.push(`<button class="cal-d${ds.slice(0,7)!==ym?' out':''}${ds===td?' is-today':''}${ds===sel?' on':''}" aria-pressed="${ds===sel}" aria-label="${Number(ds.slice(8,10))}.${Number(ds.slice(5,7))}., ${n===1?'1 Termin':n+' Termine'}" onclick="setCalSel('${ds}')">${Number(ds.slice(8,10))}<span class="cal-dots">${'<i></i>'.repeat(Math.min(3,n))}</span></button>`);}
+  const list=calDay(sel,who);
+  return`${head}<div class="cal-head"><button class="cal-nav" aria-label="Monat zurück" onclick="calShift(-1)">‹</button><strong>${esc(pdate(first).toLocaleDateString('de-DE',{month:'long',year:'numeric'}))}</strong>${ym!==td.slice(0,7)?`<button class="cal-nav" onclick="calShift(0)">Heute</button>`:''}<button class="cal-nav" aria-label="Monat vor" onclick="calShift(1)">›</button></div>
+  <div class="cal-grid">${DAYS.map(d=>`<div class="cal-wd">${d.s}</div>`).join('')}${cells.join('')}</div>
+  <div class="ek-cat">${fmtCalDay(sel)}</div>${list.map(e=>calRow(e)).join('')||'<div class="field-hint" style="margin:0 2px 10px">Nichts eingetragen.</div>'}
+  <button class="aa" onclick="openCal('','${sel}')">＋ Termin an diesem Tag</button>`;
+}
+// Für Kinder in der Routine: eigene und gemeinsame Termine der nächsten 7 Tage, nur zum Lesen
+function kidEvents(kid){if(!kid)return'';const rows=calAgenda(today(),7,kid).flatMap(g=>g.list.map(e=>calRow(e,{ro:true,day:g.ds})));
+  return rows.length?`<div class="s-lbl" style="margin-top:14px">Meine Termine</div>${rows.join('')}`:'';}
+// Anlegen und Bearbeiten
+function openCal(id,day){const e=id?S.kalender.items.find(x=>x.id===id):null;if(id&&!e)return;
+  UI.form=e?{mode:'cal',id:e.id,title:e.title,day:e.day,end:e.end,from:e.from,to:e.to,place:e.place,note:e.note,who:e.who.slice(),rep:e.rep}:{mode:'cal',id:'',title:'',day:sDate(day)||today(),end:'',from:'',to:'',place:'',note:'',who:personById(UI.calWho)?[UI.calWho]:[],rep:''};openModal();}
+function calTogWho(id){const w=UI.form.who,i=w.indexOf(id);if(i>=0)w.splice(i,1);else w.push(id);openModal();}
+function renderCalModal(){const f=UI.form;
+  return`<h3>${f.id?'Termin':'Neuer Termin'}</h3>
+  <div class="field"><label for="calT">Was</label><input id="calT" maxlength="120" value="${esc(f.title)}" placeholder="z.B. Kinderarzt, Verabredung, Geburtstag" oninput="UI.form.title=this.value"></div>
+  <div class="field"><label for="calD">Wann</label><input id="calD" type="date" value="${esc(f.day)}" onchange="UI.form.day=this.value"></div>
+  <div class="field"><label for="calF">Uhrzeit (optional)</label><div class="cal-times"><input id="calF" type="time" aria-label="von" value="${esc(f.from)}" onchange="UI.form.from=this.value"><span>bis</span><input type="time" aria-label="bis" value="${esc(f.to)}" onchange="UI.form.to=this.value"></div><div class="field-hint">Ohne Uhrzeit gilt der Termin ganztägig.</div></div>
+  <div class="field"><label>Wer</label><div class="ap-wrap">${raters().map(p=>`<button class="ap${f.who.includes(p.id)?' on':''}" aria-pressed="${f.who.includes(p.id)}" onclick="calTogWho('${p.id}')">${esc(p.icon)} ${esc(p.name)}</button>`).join('')}</div><div class="field-hint">${f.who.length?'':'Niemand gewählt: betrifft alle.'}</div></div>
+  <div class="field"><label>Wiederholen</label><div class="ap-wrap">${CAL_REPS.map(r=>`<button class="ap${f.rep===r.id?' on':''}" aria-pressed="${f.rep===r.id}" onclick="UI.form.rep='${r.id}';openModal()">${r.l}</button>`).join('')}</div></div>
+  ${f.rep?'':`<div class="field"><label for="calE">Letzter Tag (optional, z.B. Urlaub)</label><input id="calE" type="date" value="${esc(f.end)}" onchange="UI.form.end=this.value"></div>`}
+  <div class="field"><label for="calP">Ort (optional)</label><input id="calP" maxlength="80" value="${esc(f.place)}" oninput="UI.form.place=this.value"></div>
+  <div class="field"><label for="calN">Notiz (optional)</label><textarea id="calN" rows="2" maxlength="300" oninput="UI.form.note=this.value">${esc(f.note)}</textarea></div>
+  <div class="m-btns">${f.id?`<button class="m-cancel" onclick="delCal()">Löschen</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveCal()">Speichern</button></div>`;}
+function saveCal(){const f=UI.form,ex=f.id?S.kalender.items.find(x=>x.id===f.id):null;if(f.id&&!ex)return closeModal();
+  if(!sStr(f.title,120).trim()){toast('Bitte eintragen, was ansteht.');return;}
+  if(!sDate(f.day)){toast('Bitte einen Tag wählen.');return;}
+  if(!f.rep&&f.end&&(!sDate(f.end)||f.end<f.day)){toast('Der letzte Tag liegt vor dem Beginn.');return;}
+  if(f.to&&!sTime(f.from)){toast('Bitte auch die Anfangszeit eintragen.');return;}
+  if(f.from&&f.to&&f.to<=f.from){toast('Die Endzeit liegt vor dem Beginn.');return;}
+  if(!ex&&S.kalender.items.length>=500){toast('Zu viele Termine. Bitte erst alte löschen.');return;}
+  const e=sanitizeEvent({...f,id:f.id||uid()},raters().map(p=>p.id));if(!e)return;
+  if(ex)Object.assign(ex,e);else S.kalender.items.push(e);
+  calOp('up',e);saveCfg();UI.calSel=e.day;UI.calMonth=e.day.slice(0,7);closeModal();render();toast(`Gespeichert: ${fmtCalDay(e.day)}`);}
+function delCal(){const f=UI.form,e=S.kalender.items.find(x=>x.id===f.id);if(!e)return closeModal();
+  if(!confirm(e.rep?'Termin mit allen Wiederholungen löschen?':'Termin löschen?'))return;
+  S.kalender.items=S.kalender.items.filter(x=>x.id!==f.id);calOp('del',{id:f.id});saveCfg();closeModal();render();}
+
 // ═══ WÜNSCHE ══════════════════════════════════
 // Wunschliste pro Kind. Kinder tragen selbst ein; „besorgt“ und „wer schenkt“ nur in der Eltern-Ansicht (Eltern-PIN).
 function wishParentOn(){requirePin(()=>{UI.wishParent=true;render();});}
@@ -1689,6 +1799,9 @@ function buildHeute(){
     const tg=me==='family'?'':tgDueRows();
     cards.todo=homeCard('todo',mp?'Meine Aufgaben':'Aufgaben heute',tg+list.slice(0,5).map(t=>todoRow(t)).join('')+(list.length>5?`<button class="home-more" onclick="setView('aufgaben')">+ ${list.length-5} weitere</button>`:''),"setView('aufgaben')");}
   else if(me!=='family')cards.todo=homeCard('todo','Taschengeld',tgDueRows(),"goKinder()");
+  // Termine heute und morgen
+  if(modOn('kalender')){const rows=calAgenda(td,2,mp?mp.id:'').flatMap(g=>g.list.map(e=>calRow(e,{day:g.ds})));
+    cards.termine=homeCard('termine',mp?'Meine Termine':'Termine',rows.slice(0,6).join('')+(rows.length>6?`<button class="home-more" onclick="setView('kalender')">+ ${rows.length-6} weitere</button>`:''),"setView('kalender')");}
   // Kinder heute
   if(S.kids.length&&kidMods().length){const rt=late&&S.routines.abend?.active?'abend':S.routines.morgen?.active?'morgen':firstActiveRt();
     cards.kinder=homeCard('kinder','Kinder heute',S.kids.map(k=>{const done=doneCount(rt,k.id),tot=totalCount(rt,k.id),brot=S.routines[rt]?.brot&&D.brot?.[rt]?.[k.id]==='ja';
@@ -1706,7 +1819,7 @@ function buildHeute(){
     if(modOn('essen'))activeMeals().forEach(m=>{const sl=planSlot(tm,m.id),d=sl&&dishById(sl.id);if(d)rows.push(`<div class="home-kid"><span class="wish-em">${esc(d.em)}</span><span class="todo-t"><span class="todo-m">${m.l}</span><span class="ek-name">${esc(d.name)}</span></span></div>`);});
     if(modOn('aufgaben')){const n=S.aufgaben.items.filter(t=>!t.done&&t.due===tm&&todoFor(t,mp?.id||'')).length;if(n)rows.push(`<div class="home-kid"><span class="wish-em">📝</span><span class="todo-t"><span class="ek-name">${n} ${n===1?'Aufgabe':'Aufgaben'}</span></span></div>`);}
     cards.morgen=homeCard('morgen','Morgen',rows.join(''),modOn('aufgaben')?"setView('aufgaben')":"goKinder()");}
-  const order=late?['todo','essen','morgen','einkauf','kinder']:['kinder','todo','essen','einkauf'];
+  const order=late?['termine','todo','essen','morgen','einkauf','kinder']:['termine','kinder','todo','essen','einkauf'];
   const greet=hour()<11?'Guten Morgen':hour()<17?'Hallo':'Guten Abend';
   const body=order.map(k=>cards[k]||'').join('');
   return`<div class="home-greet">${greet}${mp?`, ${esc(mp.name)}`:''}</div>${body||'<div class="sp-empty">Heute steht nichts an. 🌿</div>'}`;
@@ -1729,7 +1842,7 @@ function epOwnOk(v){const t=sEm(String(v||'').trim(),'');return t&&/\p{Extended_
 function epOwnPick(){const el=document.getElementById('epOwn'),e=epOwnOk(el?.value);if(!e){toast('Bitte ein Emoji eintippen (Emoji-Tastatur).');return;}if(el)el.value='';epPick(e);}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,cal:renderCalModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 
@@ -2041,10 +2154,11 @@ async function connectHousehold(h,role,{upload=false,replace=false}={}){
     if(!replace&&S.household&&!confirm('In der Cloud gibt es schon Daten für diesen Haushalt. Sie ersetzen die Daten auf diesem Gerät. Fortfahren?')){
       SYNC=emptySync();saveSync();throw new Error('abgebrochen');}
     docs.forEach(d=>applyRemote(d.key,d.data,d.version));
-    S.einkauf.items=[];S.aufgaben.items=[];
+    S.einkauf.items=[];S.aufgaben.items=[];S.kalender.items=[];
   }else{SYNC_KEYS.forEach(k=>{SYNC.dirty[k]=true;});
     S.einkauf.items.forEach(it=>SYNC.queue.push({op:'up',item:{...it}}));
-    S.aufgaben.items.forEach(t=>SYNC.queue.push({t:'tasks',op:'up',item:{...t}}));}
+    S.aufgaben.items.forEach(t=>SYNC.queue.push({t:'tasks',op:'up',item:{...t}}));
+    S.kalender.items.forEach(e=>SYNC.queue.push({t:'events',op:'up',item:{...e}}));}
   saveSync();await syncNow(true);
   UI.kid=S.kids[0]?.id||null;UI.rt=firstActiveRt();UI.ob=null;refreshAll();rtStop();rtStart();
 }
@@ -2065,11 +2179,11 @@ function fmtInvite(c){return String(c||'').replace(/^(.{4})(.{4})$/,'$1 $2');}
 
 // ─── Dokumente: was geht in welchen Bereich ───
 function docOf(k){
-  if(k==='cfg'){const c=JSON.parse(JSON.stringify(S));delete c.installHintDone;c.einkauf={recent:S.einkauf.recent,cats:S.einkauf.cats,order:S.einkauf.order,std:S.einkauf.std};delete c.aufgaben;return c;}
+  if(k==='cfg'){const c=JSON.parse(JSON.stringify(S));delete c.installHintDone;c.einkauf={recent:S.einkauf.recent,cats:S.einkauf.cats,order:S.einkauf.order,std:S.einkauf.std};delete c.aufgaben;delete c.kalender;return c;}
   return k==='day'?D:k==='tgd'?TGD:k==='savings'?SAVINGS:TX;
 }
 function applyRemote(k,data,version){
-  if(k==='cfg'){const c=sanitizeCfg({...data,installHintDone:S.installHintDone,einkauf:{...sObj(data?.einkauf),items:S.einkauf.items},aufgaben:S.aufgaben});if(c){S=c;lsSet('ra_cfg3',JSON.stringify(S));}}
+  if(k==='cfg'){const c=sanitizeCfg({...data,installHintDone:S.installHintDone,einkauf:{...sObj(data?.einkauf),items:S.einkauf.items},aufgaben:S.aufgaben,kalender:S.kalender});if(c){S=c;lsSet('ra_cfg3',JSON.stringify(S));}}
   else if(k==='day'){const d=sanitizeDay(data);if(d.date===today()){D=d;lsSet('ra_day3',JSON.stringify(D));}}
   else if(k==='tgd'){TGD=sanitizeTgd(data);lsSet('ra_tgd',JSON.stringify(TGD));}
   else if(k==='savings'){SAVINGS=sanitizeSavings(data);lsSet('ra_savings',JSON.stringify(SAVINGS));}
@@ -2117,18 +2231,18 @@ async function pullDocs(){
 // ─── Einkaufsliste: Operationen in Warteschlange, Server-Liste plus offene Operationen ───
 function ekOp(op,item){if(!SYNC?.hid)return;SYNC.queue.push(op==='del'?{op,id:item.id}:{op,item:{id:item.id,name:item.name,n:item.n,done:!!item.done}});if(SYNC.queue.length>500)SYNC.queue=SYNC.queue.slice(-500);saveSync();schedulePush();}
 async function flushQueue(){
-  while(SYNC.queue.length){const q=SYNC.queue[0],tbl=q.t==='tasks'?'tasks':'shopping_items';
-    const body=q.op==='up'?(tbl==='tasks'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,note:q.item.note,who:q.item.who,due:q.item.due||null,rep:q.item.rep,done:q.item.done,done_by:q.item.doneBy,done_at:q.item.doneAt||null}:{household_id:SYNC.hid,...q.item}):null;
+  while(SYNC.queue.length){const q=SYNC.queue[0],tbl=q.t==='tasks'?'tasks':q.t==='events'?'events':'shopping_items';
+    const body=q.op==='up'?(tbl==='events'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,day:q.item.day,end_day:q.item.end||null,t_from:q.item.from,t_to:q.item.to,place:q.item.place,note:q.item.note,who:q.item.who,rep:q.item.rep}:tbl==='tasks'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,note:q.item.note,who:q.item.who,due:q.item.due||null,rep:q.item.rep,done:q.item.done,done_by:q.item.doneBy,done_at:q.item.doneAt||null}:{household_id:SYNC.hid,...q.item}):null;
     try{
       if(q.op==='up')await sb(`/rest/v1/${tbl}?on_conflict=household_id,id`,{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body});
       else await sb(`/rest/v1/${tbl}?household_id=eq.${SYNC.hid}&id=eq.${encodeURIComponent(q.id)}`,{method:'DELETE'});
-    }catch(e){if(tbl!=='tasks'||e.status!==404)throw e;SYNC.tasksMissing=true;} // Tabelle fehlt noch: Aufgaben bleiben lokal, Rest läuft weiter
+    }catch(e){if(tbl==='shopping_items'||e.status!==404)throw e;if(tbl==='tasks')SYNC.tasksMissing=true;else SYNC.eventsMissing=true;} // Tabelle fehlt noch: Aufgaben bzw. Termine bleiben lokal, Rest läuft weiter
     SYNC.queue.shift();saveSync();}
 }
 async function pullItems(){
   const rows=await sb(`/rest/v1/shopping_items?select=id,name,n,done&household_id=eq.${SYNC.hid}&order=created_at.asc`)||[];
   let items=rows.map(r=>({id:r.id,name:r.name,n:r.n,done:!!r.done}));
-  SYNC.queue.filter(q=>q.t!=='tasks').forEach(q=>{if(q.op==='del')items=items.filter(x=>x.id!==q.id);else{const i=items.findIndex(x=>x.id===q.item.id);if(i>=0)items[i]={...q.item};else items.push({...q.item});}});
+  SYNC.queue.filter(q=>!q.t).forEach(q=>{if(q.op==='del')items=items.filter(x=>x.id!==q.id);else{const i=items.findIndex(x=>x.id===q.item.id);if(i>=0)items[i]={...q.item};else items.push({...q.item});}});
   const before=JSON.stringify(S.einkauf.items);
   S.einkauf=sanitizeEinkauf({...S.einkauf,items});lsSet('ra_cfg3',JSON.stringify(S));
   return JSON.stringify(S.einkauf.items)!==before;
@@ -2145,6 +2259,21 @@ async function pullTasks(){
   S.aufgaben=sanitizeAufgaben({items},raters().map(p=>p.id));lsSet('ra_cfg3',JSON.stringify(S));
   return JSON.stringify(S.aufgaben.items)!==before;
 }
+const EV_SEL='id,title,day,end_day,t_from,t_to,place,note,who,rep';
+async function pullEvents(){
+  if(!modOn('kalender'))return false;
+  const get=()=>sb(`/rest/v1/events?select=${EV_SEL}&household_id=eq.${SYNC.hid}&order=created_at.asc`);
+  let rows;try{rows=await get()||[];}
+  catch(e){if(e.status===404){SYNC.eventsMissing=true;return false;}throw e;} // Tabelle noch nicht angelegt (004 fehlt): Termine bleiben lokal
+  if(SYNC.eventsMissing){SYNC.eventsMissing=false;S.kalender.items.forEach(e=>SYNC.queue.push({t:'events',op:'up',item:{...e}}));saveSync();await flushQueue();rows=await get()||[];}
+  // Sofort-Übertragung erst mit vorhandener Tabelle abonnieren, sonst lehnt der Server die ganze Verbindung ab
+  if(!SYNC.eventsOk){SYNC.eventsOk=true;saveSync();if(RT.ws){rtStop();rtStart();}}
+  let items=rows.map(r=>({id:r.id,title:r.title,day:r.day,end:r.end_day||'',from:r.t_from,to:r.t_to,place:r.place,note:r.note,who:r.who,rep:r.rep}));
+  SYNC.queue.filter(q=>q.t==='events').forEach(q=>{if(q.op==='del')items=items.filter(x=>x.id!==q.id);else{const i=items.findIndex(x=>x.id===q.item.id);if(i>=0)items[i]={...q.item};else items.push({...q.item});}});
+  const before=JSON.stringify(S.kalender.items);
+  S.kalender=sanitizeKalender({items},raters().map(p=>p.id));lsSet('ra_cfg3',JSON.stringify(S));
+  return JSON.stringify(S.kalender.items)!==before;
+}
 // ─── Sofort-Übertragung (Supabase Realtime, Phoenix-Protokoll) ───
 // Die Meldung löst nur ein Abholen aus; Daten kommen weiter über die REST-Schnittstelle mit RLS.
 const RT={ws:null,ref:0,joinRef:null,joined:false,hb:null,timer:null,retry:0,poke:null};
@@ -2159,7 +2288,7 @@ function rtStart(){
   RT.ws=ws;RT.joined=false;
   ws.onopen=()=>{
     rtSend({topic:rtTopic(),event:'phx_join',payload:{access_token:AUTH.access_token,config:{broadcast:{self:false},presence:{key:''},private:false,
-      postgres_changes:[{event:'*',schema:'public',table:'docs',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'shopping_items',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'tasks',filter:'household_id=eq.'+SYNC.hid}]}}},true);
+      postgres_changes:[{event:'*',schema:'public',table:'docs',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'shopping_items',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'tasks',filter:'household_id=eq.'+SYNC.hid},...(SYNC.eventsOk?[{event:'*',schema:'public',table:'events',filter:'household_id=eq.'+SYNC.hid}]:[])]}}},true);
     clearInterval(RT.hb);RT.hb=setInterval(()=>rtSend({topic:'phoenix',event:'heartbeat',payload:{}}),25000);
   };
   ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
@@ -2189,6 +2318,7 @@ async function syncNow(force){
     if(force||now-_lastDocPull>15000||UI.view==='einkauf'){_lastDocPull=now;if(await pullDocs())changed=true;}
     if(await pullItems())changed=true;
     if(await pullTasks())changed=true;
+    if(await pullEvents())changed=true;
     SYNC.status='ok';SYNC.err='';SYNC.at=now;
   }catch(e){
     SYNC.status=!e.status?'offline':e.status===401?'out':'err';SYNC.err=e.message||'';

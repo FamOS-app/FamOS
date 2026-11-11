@@ -174,7 +174,7 @@ test('Module: aus- und einschalten, mindestens eins bleibt an', () => {
   assert.equal(a.get('S.modules.taschengeld'), false);
   a.run('render()');
   assert.doesNotMatch(a.app(), /setView\('taschengeld'\)/);
-  a.run(`togModule('stundenplan');togModule('essen');togModule('einkauf');togModule('aufgaben');togModule('wuensche');togModule('heute')`);
+  a.run(`togModule('stundenplan');togModule('essen');togModule('einkauf');togModule('aufgaben');togModule('kalender');togModule('wuensche');togModule('heute')`);
   a.run('render()');
   assert.doesNotMatch(a.app(), /bot-nav/); // nur ein Modul: keine Navigation
   a.run(`togModule('routine')`);
@@ -535,7 +535,7 @@ test('Migration: alter Stand ohne household/modules/_mv wird ergänzt, Daten ble
   const a = load(VORLAGE, { storage: { ra_cfg3: JSON.stringify(old) } });
   const S = a.get('S');
   assert.deepEqual(S.household, { name: 'Unsere Familie', adults: [] });
-  assert.deepEqual(S.modules, { heute: true, routine: true, stundenplan: true, taschengeld: true, wuensche: true, aufgaben: true, essen: true, einkauf: true });
+  assert.deepEqual(S.modules, { heute: true, routine: true, stundenplan: true, taschengeld: true, wuensche: true, aufgaben: true, kalender: true, essen: true, einkauf: true });
   assert.deepEqual(S.einkauf.items, []);
   assert.deepEqual(S.einkauf.std, []);
   assert.equal(S.einkauf.order[0], 'obst');
@@ -1368,7 +1368,7 @@ test('Navigation: Zurück schließt erst Fenster, dann Einstellungen, dann zweim
 test('Navigation: unten Kinder · Essen · Einkauf, Kinder bündelt Routine, Stundenplan, Geld', () => {
   const a = household();
   const nav = () => [...a.app().matchAll(/<button class="bni[^"]*" onclick="([^"]+)"><span class="bni-ic">[\s\S]*?<\/span>([^<]+)<\/button>/g)].map(m => m[2]);
-  assert.deepEqual(nav(), ['Heute', 'Kinder', 'Aufgaben', 'Essen', 'Einkauf']);
+  assert.deepEqual(nav(), ['Heute', 'Kinder', 'Aufgaben', 'Kalender', 'Essen', 'Einkauf']);
   assert.equal(a.get('UI.view'), 'routine'); // nach dem Onboarding mit Kindern: Routine
   assert.match(a.app(), /class="seg seg-4"/);
   assert.match(a.app(), />Stundenplan</);
@@ -1693,4 +1693,145 @@ test('Emoji-Auswahl: viele Kategorien, alles gültig, eigenes Emoji über die Ta
   a.run(`epOpen(e=>{UI.form.icon=e});document.getElementById('epOwn').value='Hallo';epOwnPick()`);
   assert.match(a.toast(), /Emoji eintippen/);
   assert.equal(a.get('UI.form.icon'), '🦩');
+});
+
+// ─── Kalender ───
+function cal() {
+  const a = household();
+  a.run(`setView('kalender')`);
+  const add = f => { a.run(`openCal();Object.assign(UI.form,${JSON.stringify(f)});saveCal()`); return a.get('S.kalender.items.at(-1).id'); };
+  return { a, add, td: a.get('today()'), day: n => a.get(`addDays(today(),${n})`) };
+}
+
+test('Kalender: Termin anlegen, Liste nach Tagen, bearbeiten, löschen', () => {
+  const { a, add, td, day } = cal();
+  assert.match(a.app(), /Noch keine Termine/);
+  a.run('openCal();saveCal()');
+  assert.match(a.toast(), /was ansteht/);
+  const id = add({ title: 'Kinderarzt', day: day(2), from: '15:30', to: '16:00', place: 'Praxis', who: [a.get('S.kids[0].id')] });
+  add({ title: 'Oma kommt', day: td });
+  assert.deepEqual(a.get('S.kalender.items[0]'), { id, title: 'Kinderarzt', day: day(2), end: '', from: '15:30', to: '16:00', place: 'Praxis', note: '', who: [a.get('S.kids[0].id')], rep: '' });
+  const html = a.app();
+  assert.match(html, /Heute · [\s\S]*Oma kommt[\s\S]*ganztägig|Heute · [\s\S]*ganztägig[\s\S]*Oma kommt/);
+  assert.ok(html.indexOf('Oma kommt') < html.indexOf('Kinderarzt')); // nach Tagen sortiert
+  assert.match(html, /15:30<small>bis 16:00<\/small>/);
+  assert.match(html, /📍 Praxis/);
+  assert.equal(a.saved('ra_cfg3').kalender.items.length, 2);
+  a.run(`openCal('${id}');UI.form.title='Zahnarzt';UI.form.to='';saveCal()`);
+  assert.deepEqual(a.get('[S.kalender.items[0].title,S.kalender.items[0].to]'), ['Zahnarzt', '']);
+  a.run(`openCal('${id}');delCal()`);
+  assert.deepEqual(a.get('S.kalender.items.map(e=>e.title)'), ['Oma kommt']);
+  // Vergangenes steht nicht in der Liste, Fernes erst nach „Weiter schauen“
+  add({ title: 'War gestern', day: day(-1) });
+  add({ title: 'In 50 Tagen', day: day(50) });
+  assert.doesNotMatch(a.app(), /War gestern|In 50 Tagen/);
+  a.run('calMore()');
+  assert.match(a.app(), /In 50 Tagen/);
+});
+
+test('Kalender: Eingaben werden geprüft und bereinigt', () => {
+  const { a, add, td, day } = cal();
+  const bad = (f, re) => { a.run(`openCal();Object.assign(UI.form,${JSON.stringify(f)});saveCal()`); assert.match(a.toast(), re); assert.equal(a.get('S.kalender.items.length'), 0); };
+  bad({ title: 'x', day: '2026-02-31' }, /Tag wählen/);
+  bad({ title: 'x', day: '' }, /Tag wählen/);
+  bad({ title: 'x', day: td, end: day(-1) }, /letzte Tag/);
+  bad({ title: 'x', day: td, from: '10:00', to: '09:00' }, /Endzeit/);
+  bad({ title: 'x', day: td, to: '09:00' }, /Anfangszeit/);
+  const S = a.get(`sanitizeKalender({items:[
+    {id:'a',title:'<b>ok</b>',day:'2026-03-01',end:'2026-03-01',from:'25:00',to:'10:00',who:['fremd'],rep:'x',place:'p'.repeat(200)},
+    {id:'a',title:'doppelt',day:'2026-03-01'},{id:'b',title:'',day:'2026-03-01'},{id:'c',title:'kein Tag',day:'2026-13-01'},
+    {id:'__proto__',title:'x',day:'2026-03-01'},{id:'d',title:'jährlich',day:'2026-03-01',end:'2026-03-05',rep:'y'}]},['k1'])`);
+  assert.deepEqual(S.items.map(e => e.id), ['a', 'd']);
+  assert.deepEqual([S.items[0].end, S.items[0].from, S.items[0].to, S.items[0].who, S.items[0].rep, S.items[0].place.length], ['', '', '', [], '', 80]);
+  assert.equal(S.items[1].end, ''); // Wiederholung und mehrtägig schließen sich aus
+  // Titel wird beim Anzeigen maskiert
+  add({ title: '<img src=x onerror=1>', day: td, place: '"><script>' });
+  assert.doesNotMatch(a.app(), /<img src=x|<script>/);
+  assert.match(a.app(), /&lt;img src=x/);
+});
+
+test('Kalender: Wiederholung wöchentlich und jährlich, mehrtägig, 29. Februar', () => {
+  const { a, add, td, day } = cal();
+  const on = (e, ds) => a.get(`calOn(${JSON.stringify(e)},'${ds}')`);
+  const w = { day: '2026-11-04', rep: 'w', end: '' };
+  assert.deepEqual(['2026-11-04', '2026-11-11', '2026-11-12', '2026-10-28', '2027-03-31'].map(d => on(w, d)), [true, true, false, false, true]); // auch über die Zeitumstellung
+  const y = { day: '2020-02-29', rep: 'y', end: '' };
+  assert.deepEqual(['2024-02-29', '2025-02-28', '2024-02-28', '2025-03-01', '2019-02-28'].map(d => on(y, d)), [true, true, false, false, false]);
+  const m = { day: '2026-12-30', rep: '', end: '2027-01-02' };
+  assert.deepEqual(['2026-12-29', '2026-12-30', '2027-01-01', '2027-01-02', '2027-01-03'].map(d => on(m, d)), [false, true, true, true, false]);
+  // Liste: Wöchentliches an jedem Termin, Mehrtägiges nur einmal
+  add({ title: 'Turnen', day: td, from: '16:00', rep: 'w' });
+  add({ title: 'Urlaub', day: day(-2), end: day(5) });
+  const html = a.app();
+  assert.equal(html.match(/Turnen/g).length, 5); // 30 Tage: heute + 4 Wochen
+  assert.equal(html.match(/Urlaub/g).length, 1);
+  assert.match(html, /Heute · [\s\S]*Urlaub/);
+  assert.match(html, /↻ wöchentlich/);
+});
+
+test('Kalender: Monatsansicht mit Punkten, Tag wählen, Monat wechseln', () => {
+  const { a, add } = cal();
+  a.run(`UI.calMonth='2027-02';UI.calSel='2027-02-10';setCalTab('monat')`);
+  add({ title: 'Fasching', day: '2027-02-09' });
+  a.run(`setCalSel('2027-02-10')`);
+  let html = a.app();
+  assert.match(html, /Februar 2027/);
+  assert.equal(html.match(/class="cal-d[ "]/g).length, 28); // Februar 2027 beginnt montags: genau 4 Wochen
+  assert.match(html, /aria-label="9\.2\., 1 Termin"[^>]*>9<span class="cal-dots"><i><\/i><\/span>/);
+  assert.match(html, /Nichts eingetragen/);
+  a.run(`setCalSel('2027-02-09')`);
+  assert.match(a.app(), /class="ek-cat">Di, 09\.02\.2027<\/div>[\s\S]*Fasching/);
+  a.run('calShift(1)');
+  html = a.app();
+  assert.match(html, /März 2027/);
+  assert.equal(html.match(/class="cal-d[ "]/g).length, 35);
+  assert.match(html, /openCal\('','2027-03-01'\)/); // neuer Termin am gewählten Tag
+  a.run('calShift(0)');
+  assert.equal(a.get('UI.calMonth'), a.get('today().slice(0,7)'));
+  a.run('calShift(-1);calShift(-1)');
+  assert.equal(a.get('UI.calMonth'), a.get(`addMonths(today().slice(0,8)+'01',-2).slice(0,7)`));
+});
+
+test('Kalender: Filter nach Person, Kinder sehen ihre Termine nur zum Lesen, Startseite zeigt heute und morgen', () => {
+  const { a, add, td, day } = cal();
+  const [emma, ben] = a.get('S.kids.map(k=>k.id)');
+  add({ title: 'Emma Flöte', day: td, from: '14:00', who: [emma] });
+  add({ title: 'Ben Fußball', day: day(1), who: [ben] });
+  add({ title: 'Familienfest', day: day(3) });
+  add({ title: 'Emma später', day: day(9), who: [emma] });
+  a.run(`setCalWho('${ben}')`);
+  assert.doesNotMatch(a.app(), /Emma Flöte/);
+  assert.match(a.app(), /Ben Fußball[\s\S]*Familienfest/); // Termine ohne Person betreffen alle
+  // Kinder-Bereich: eigene + gemeinsame der nächsten 7 Tage, ohne Bearbeiten
+  a.run(`setView('routine');setKid('${emma}')`);
+  let html = a.app();
+  assert.match(html, /Meine Termine[\s\S]*Emma Flöte[\s\S]*Familienfest/);
+  assert.doesNotMatch(html, /Ben Fußball|Emma später|openCal\(/);
+  // Startseite
+  a.run(`setView('heute')`);
+  html = a.app();
+  assert.match(html, /Termine[\s\S]*Emma Flöte[\s\S]*Ben Fußball/);
+  assert.match(html, /heute · [\s\S]*morgen · /);
+  assert.doesNotMatch(html, /Familienfest/);
+  // Modul aus: nirgends mehr sichtbar, Daten bleiben
+  a.run(`togModule('kalender');render()`);
+  assert.doesNotMatch(a.app(), /Emma Flöte|setView\('kalender'\)/);
+  a.run(`setView('routine')`);
+  assert.doesNotMatch(a.app(), /Meine Termine/);
+  assert.equal(a.get('S.kalender.items.length'), 4);
+});
+
+test('Kalender: Backup enthält Termine, gelöschte Person verschwindet aus dem Termin', () => {
+  const { a, add, td } = cal();
+  const ben = a.get('S.kids[1].id');
+  add({ title: 'Ben Schwimmen', day: td, who: [ben] });
+  const backup = a.get('buildExport()');
+  assert.equal(backup.cfg.kalender.items[0].title, 'Ben Schwimmen');
+  const b = load(VORLAGE);
+  assert.equal(b.get(`applyImport(${JSON.stringify(backup)})`), true);
+  assert.deepEqual(b.get('S.kalender.items.map(e=>[e.title,e.who.length])'), [['Ben Schwimmen', 1]]);
+  a.run(`delKid('${ben}');setView('kalender')`);
+  assert.match(a.app(), /Ben Schwimmen[\s\S]*?alle/); // Anzeige sofort ohne die Person
+  const c = load(VORLAGE, { storage: a.store }); // beim nächsten Start bereinigt
+  assert.deepEqual(c.get('S.kalender.items[0].who'), []);
 });
