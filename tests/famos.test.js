@@ -1303,3 +1303,26 @@ test('Bewerten: jedes Kind und jede/r Erwachsene direkt am Gericht, Antippen sch
   const b = load(VORLAGE, { storage: a.store });
   assert.equal(b.get(`dishById('g1').ratings['${mama}']`), -1);
 });
+
+test('Rezept-Formular: Portionen ändern rechnet die Zutaten mit um, ohne Rundungsfehler', () => {
+  const a = household();
+  a.run(`openDishPrefilled({name:'Rührei',portions:2,ingr:['2 Eier','250 g Mehl','2 Dosen Tomaten','½ Bund Dill','1,5 kg Kartoffeln','Salz','  3 EL Öl']})`);
+  const ingr = () => a.get('UI.form.ingr').split('\n');
+  a.run(`dishPortions('4')`);
+  assert.deepEqual(ingr(), ['4 Eier', '500 g Mehl', '4 Dosen Tomaten', '1 Bund Dill', '3 kg Kartoffeln', 'Salz', '6 EL Öl']); // Leerzeichen am Anfang entfernt schon die Übernahme
+  a.run(`dishPortions('3')`);
+  assert.deepEqual(ingr().slice(0, 4), ['3 Eier', '375 g Mehl', '3 Dosen Tomaten', '0,75 Bund Dill']);
+  a.run(`dishPortions('')`); // beim Tippen kurz leer: nichts verändern
+  assert.equal(ingr()[0], '3 Eier');
+  a.run(`dishPortions('2')`);
+  assert.deepEqual(ingr(), ['2 Eier', '250 g Mehl', '2 Dosen Tomaten', '1 Bund Dill'.replace('1', '0,5'), '1,5 kg Kartoffeln', 'Salz', '3 EL Öl']);
+  // von Hand geändert: das ist die neue Grundlage
+  a.run(`UI.form.ingr='1 Ei\\n100 g Käse';dishIngrBase();dishPortions('6')`);
+  assert.deepEqual(ingr(), ['3 Ei', '300 g Käse']);
+  a.run('saveDish()');
+  const d = a.get('S.essen.dishes.at(-1)');
+  assert.deepEqual([d.portions, d.ingr], [6, ['3 Ei', '300 g Käse']]);
+  // bestehendes Gericht bearbeiten: Grundlage ist der gespeicherte Stand
+  a.run(`openDishModal('${d.id}');dishPortions('2')`);
+  assert.deepEqual(ingr(), ['1 Ei', '100 g Käse']);
+});

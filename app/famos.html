@@ -189,6 +189,7 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.field-hint{font-size:.75rem;color:var(--muted);font-weight:600;margin-top:6px}
 .seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg2);border-radius:14px;padding:4px;margin-bottom:16px}
 .seg-b{background:none;border-radius:10px;min-height:44px;font-weight:800;font-size:.95rem;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:8px}
 .seg-b.on{background:var(--card);color:var(--text)}
@@ -1223,16 +1224,27 @@ function renderRecipeModal(){const f=UI.form,d=dishById(f.id);if(!d)return'';con
   <div class="m-btns">${f.ds?`<button class="m-cancel" onclick="openEssPick('${f.ds}','${f.meal}')">Anderes Gericht</button>`:''}<button class="m-cancel" onclick="openDishModal('${d.id}')">✏️ Bearbeiten</button><button class="m-save" onclick="closeModal()">Fertig</button></div>`;}
 function setPersons(delta){S.essen.persons=Math.min(20,Math.max(1,(S.essen.persons||4)+delta));saveCfg();renderAdmin();}
 
+// Portionen im Formular ändern rechnet die Zutaten mit um. Gerechnet wird immer vom Ausgangsstand
+// (keine Rundungsfehler beim Hin- und Herschalten); nur die Zahl am Zeilenanfang ändert sich.
+function scaleLine(line,f){return line.replace(/^(\s*)(\d+(?:[.,]\d+)?|\d+\/\d+|[½¼¾⅓⅔])/,(m,sp,raw)=>{
+  const q=FRAC[raw]??(raw.includes('/')?raw.split('/').reduce((a,b)=>a/b):parseFloat(raw.replace(',','.')));
+  return Number.isFinite(q)&&q>0?sp+fmtNum(q*f):m;});}
+function dishIngrBase(){const f=UI.form,n=Math.round(Number(f.portions));if(n>=1&&n<=20){f.baseIngr=f.ingr;f.basePort=n;}}
+function dishPortions(v){const f=UI.form;f.portions=v;const n=Math.round(Number(v));
+  if(!(n>=1&&n<=20)||!f.basePort)return;
+  f.ingr=String(f.baseIngr||'').split('\n').map(l=>scaleLine(l,n/f.basePort)).join('\n');
+  const el=document.getElementById('dIngr');if(el)el.value=f.ingr;}
+
 // Gericht anlegen / bearbeiten
-function openDishModal(id){const ex=id?dishById(id):null;UI.form={mode:'dish',id:ex?id:null,em:ex?.em||'🍽️',name:ex?.name||'',meals:ex?ex.meals.slice():[activeMeals()[0]?.id||'abend'],tags:ex?ex.tags.slice():[],ingr:ex?ex.ingr.join('\n'):'',portions:ex?.portions||4,steps:ex?ex.steps.join('\n'):''};openModal();}
+function openDishModal(id){const ex=id?dishById(id):null;UI.form={mode:'dish',id:ex?id:null,em:ex?.em||'🍽️',name:ex?.name||'',meals:ex?ex.meals.slice():[activeMeals()[0]?.id||'abend'],tags:ex?ex.tags.slice():[],ingr:ex?ex.ingr.join('\n'):'',portions:ex?.portions||4,steps:ex?ex.steps.join('\n'):''};dishIngrBase();openModal();}
 function renderDishModal(){const f=UI.form,chip=(key,x)=>`<button class="ap${f[key].includes(x.id)?' on':''}" aria-pressed="${f[key].includes(x.id)}" onclick="dishTog('${key}','${x.id}',this)">${x.em} ${x.l}</button>`;
   return`<h3>${f.id?'Gericht bearbeiten':'Neues Gericht'}</h3>
   <div class="field"><label>Emoji</label><button class="em-btn" id="emD" onclick="epOpen(e=>{UI.form.em=e;document.getElementById('emD').textContent=e;})">${esc(f.em)}</button></div>
   <div class="field"><label>Name</label><input value="${esc(f.name)}" maxlength="60" placeholder="z.B. Spaghetti Bolognese" oninput="UI.form.name=this.value"></div>
   <div class="field"><label>Passt zu</label><div class="ap-wrap">${MEALS.map(m=>chip('meals',m)).join('')}</div></div>
   <div class="field"><label>Eigenschaften</label><div class="ap-wrap">${TAGS.map(t=>chip('tags',t)).join('')}</div></div>
-  <div class="field"><label>Zutaten (eine pro Zeile)</label><textarea rows="5" placeholder="500 g Nudeln&#10;1 Dose Tomaten" oninput="UI.form.ingr=this.value">${esc(f.ingr)}</textarea></div>
-  <div class="field"><label for="dPort">Rezept ergibt Portionen</label><input id="dPort" type="number" inputmode="numeric" min="1" max="20" value="${esc(f.portions)}" oninput="UI.form.portions=this.value" style="max-width:110px"></div>
+  <div class="field"><label for="dIngr">Zutaten (eine pro Zeile)</label><textarea id="dIngr" rows="5" placeholder="500 g Nudeln&#10;1 Dose Tomaten" oninput="UI.form.ingr=this.value;dishIngrBase()">${esc(f.ingr)}</textarea></div>
+  <div class="field"><label for="dPort">Rezept ergibt Portionen</label><input id="dPort" type="number" inputmode="numeric" min="1" max="20" value="${esc(f.portions)}" oninput="dishPortions(this.value)" style="max-width:110px"><div class="field-hint">Ändern rechnet die Mengen bei den Zutaten mit um.</div></div>
   <div class="field"><label>Zubereitung (ein Schritt pro Zeile, optional)</label><textarea rows="5" placeholder="Nudeln kochen&#10;Zwiebel anbraten&#10;Tomaten dazu, 15 Minuten köcheln" oninput="UI.form.steps=this.value">${esc(f.steps||'')}</textarea></div>
   <div class="m-btns">${f.id?`<button class="m-cancel" onclick="delDish()">Löschen</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveDish()">Speichern</button></div>`;}
 function dishTog(key,id,btn){const a=UI.form[key],i=a.indexOf(id);if(i>=0)a.splice(i,1);else a.push(id);if(btn){btn.classList.toggle('on');btn.setAttribute?.('aria-pressed',String(i<0));}}
@@ -1380,7 +1392,7 @@ function openDishPrefilled(r){openDishModal(null);const f=UI.form;
   f.name=sStr(r.name,60).trim();f.em=sEm(r.em,'🍽️');f.ingr=sArr(r.ingr,60).map(x=>sStr(x,80).trim()).filter(Boolean).join('\n');
   f.steps=sArr(r.steps,30).map(x=>sStr(x,300).trim()).filter(Boolean).join('\n');f.portions=Math.min(20,Math.max(1,Math.round(Number(r.portions))||4));
   const ms=MEALS.map(m=>m.id).filter(id=>sArr(r.meals,3).includes(id));if(ms.length)f.meals=ms;
-  f.tags=TAGS.map(t=>t.id).filter(id=>sArr(r.tags,5).includes(id));openModal();}
+  f.tags=TAGS.map(t=>t.id).filter(id=>sArr(r.tags,5).includes(id));dishIngrBase();openModal();}
 
 // ─── Per Link ───
 function openLinkImport(){UI.form={mode:'linkImp',url:'',busy:false,err:''};openModal();}
