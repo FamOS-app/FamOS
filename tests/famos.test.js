@@ -1651,3 +1651,43 @@ test('Taschengeld: Auszahlungstag wird beim Import geprüft und gleicht sich ab'
   a.run(`applyImport(${JSON.stringify({ cfg: { kids: [{ id: 'k1', name: 'E' }], household: { name: 'X' }, tgPay: 5, tgPaySince: '2026-11-01' } })})`);
   assert.deepEqual([a.get('S.tgPay'), a.get('S.tgPaySince')], [5, '2026-11-01']);
 });
+
+// ─── Erwachsene mit Name und Emoji, Emoji-Auswahl ─────────────
+test('Erwachsene: eigener Name und Emoji, Vorschläge optional, nachträglich bearbeiten', () => {
+  const a = load(VORLAGE);
+  a.run(`openAdultModal()`);
+  assert.match(a.els.mc.innerHTML, /id="emA"/);
+  assert.match(a.els.mc.innerHTML, /Vorschläge/);
+  a.run(`UI.form.name='  Sam  ';UI.form.icon='🧑‍🍳';saveAdult()`);
+  assert.deepEqual(a.get('ob().adults.map(x=>[x.name,x.icon])'), [['Sam', '🧑‍🍳']]);
+  a.run(`openAdultModal(ob().adults[0].id);UI.form.name='Sam K.';saveAdult()`);
+  assert.equal(a.get('ob().adults.length'), 1);
+  assert.equal(a.get('ob().adults[0].name'), 'Sam K.');
+  a.run(`ob().name='WG';obFinish()`);
+  const id = a.get('S.household.adults[0].id');
+  a.run(`openAdmin();setATab('kinder')`);
+  assert.match(a.adm(), new RegExp(`openAdultModal\\('${id}'\\)`));
+  a.run(`openAdultModal('${id}');UI.form.icon='🦸';UI.form.name='Sam';saveAdult()`);
+  assert.deepEqual(a.saved('ra_cfg3').household.adults.map(x => [x.name, x.icon]), [['Sam', '🦸']]);
+  a.run(`openAdultModal('${id}')`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /Vorschläge/); // beim Bearbeiten keine Vorschläge
+  a.run(`UI.form.name='';saveAdult()`);
+  assert.match(a.toast(), /Namen/);
+});
+
+test('Emoji-Auswahl: viele Kategorien, alles gültig, eigenes Emoji über die Tastatur', () => {
+  const a = household();
+  const EC = a.get('EC');
+  assert.ok(EC.length >= 15, String(EC.length));
+  assert.ok(EC.reduce((n, c) => n + c.e.length, 0) >= 500);
+  for (const c of EC) {
+    assert.equal(new Set(c.e).size, c.e.length, `Doppelt in ${c.id}`);
+    for (const e of c.e) assert.equal(a.get(`epOwnOk(${JSON.stringify(e)})`), e, `${c.id}: ${e}`);
+  }
+  for (const bad of ['abc', '<b>', '1', '', 'A🙂', '"><img']) assert.equal(a.get(`epOwnOk(${JSON.stringify(bad)})`), '', bad);
+  a.run(`openKidModal(S.kids[0].id);epOpen(e=>{UI.form.icon=e});document.getElementById('epOwn').value='🦩';epOwnPick()`);
+  assert.equal(a.get('UI.form.icon'), '🦩');
+  a.run(`epOpen(e=>{UI.form.icon=e});document.getElementById('epOwn').value='Hallo';epOwnPick()`);
+  assert.match(a.toast(), /Emoji eintippen/);
+  assert.equal(a.get('UI.form.icon'), '🦩');
+});

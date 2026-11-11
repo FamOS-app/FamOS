@@ -189,6 +189,9 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.ep-own{display:flex;gap:8px;margin-bottom:10px}
+.ep-own input{flex:1;min-width:0;min-height:44px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);font:inherit;font-size:1rem;color:var(--text)}
+.ep-own .m-save{flex:0 0 64px}
 .home-greet{font-size:1.05rem;font-weight:700;color:var(--muted);margin:-8px 0 14px}
 .home-card{padding:12px 14px}
 .home-h{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;padding:2px 0 10px;font:inherit;font-weight:800;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);min-height:36px}
@@ -543,7 +546,7 @@ button,input,textarea{font-family:var(--font)}
   <button class="done-cls" onclick="closeDone()">Weiter so! 🚀</button>
 </div>
 <div class="ep-bg" id="epBg" onclick="epBgClick(event)">
-  <div class="ep"><div class="ep-cats" id="epCats"></div><div class="ep-grid" id="epGrid"></div></div>
+  <div class="ep"><div class="ep-own"><label for="epOwn" class="sr">Eigenes Emoji</label><input id="epOwn" maxlength="12" autocomplete="off" placeholder="Eigenes Emoji über die Tastatur 😀" onkeydown="if(event.key==='Enter'){event.preventDefault();epOwnPick()}"><button class="m-save" onclick="epOwnPick()">OK</button></div><div class="ep-cats" id="epCats"></div><div class="ep-grid" id="epGrid"></div></div>
 </div>
 <div class="mb" id="mb" onclick="mbBgClick(event)"><div class="modal" id="mc" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -551,14 +554,21 @@ button,input,textarea{font-family:var(--font)}
 <script>
 // ═══ CONSTANTS ════════════════════════════════
 const EC=[
-  {id:'dinos',l:'🦕 Dinos',e:['🦕','🦖','🐉','🐲','🦎','🐊','🐢','🦏','🐍','🦴','🥚','🌋','🪨','🌿','💀','👾','🔮','⚔️','🛡️','🌑','🌪️','🔥','💥','✨','🌊','🏔️','🦋','🕷️','🦂','🐛']},
-  {id:'haus',l:'🏠 Haus',e:['🧹','🧺','🫧','🧴','🗑️','🍽️','🥄','🍴','🧽','🪣','🛒','🛏️','🪥','🧻','🪞','🪑','🚪','🪟','🌿','🪴']},
-  {id:'schul',l:'🎒 Schule',e:['📚','📖','✏️','🎒','📐','📏','✂️','🖊️','📓','📝','🖍️','🔬','🎨','📎','📌','📒','🗒️','📋','🖼️','🔭','🔤','➕','➗','✖️','🌍','🎵','⚽','🏊','🤸','🎤']},
-  {id:'koerp',l:'🦷 Körper',e:['🦷','🚽','🛁','💊','😴','💪','🏃','🚿','🧖','👣','💤','🩺','🤸','🧘','🏊','🚴','🏋️','🤺','⛹️','🤾']},
-  {id:'essen',l:'🍳 Essen',e:['🍳','🥣','🍞','🥤','🍎','🥛','🧃','🍌','🥐','🍓','🍉','🥦','🥕','🫐','🍇','🥚','🧇','🥞','🍪','🍫']},
-  {id:'kleid',l:'👕 Kleidung',e:['👕','👖','🧥','👟','🧦','👗','🎩','🧤','👒','🧣','👚','🩴','👜','🕶️','⌚','🎽','🩳','🩱','👘','🎀']},
-  {id:'tiere',l:'🐶 Tiere',e:['🐶','🐱','🐸','🦊','🐻','🐼','🦁','🐯','🐨','🐮','🐷','🐙','🦈','🦜','🦔','🐧','🦢','🦩','🐺','🦝']},
-  {id:'mehr',l:'⭐ Mehr',e:['⭐','🌟','🏆','💪','🚀','🌈','☀️','🎉','❤️','💛','💚','💙','🦄','🌸','🌺','🌻','🍀','🌙','⚡','💫','✨','🎊','🎈','🎁','🪄','💎','🔑','🎵','🎶','🏠']},
+  {id:'personen',l:'🙂 Personen',e:['🙂','😊','😎','🤓','🥳','😴','🤗','🧑','👩','👨','👧','👦','👶','🧒','👵','👴','🧔','👱‍♀️','👱','👩‍🦰','👨‍🦰','👩‍🦱','👨‍🦱','👩‍🦳','👨‍🦳','👩‍🦲','👨‍🦲','🧕','👸','🤴','🦸','🦸‍♀️','🦹','🧙','🧚','🧜‍♀️','🧛','🥷','🧑‍🍳','🧑‍🏫','🧑‍🔧','🧑‍🚒','🧑‍⚕️','🧑‍🚀','🧑‍🎨','🧑‍💻','🧑‍🌾','👮','🕵️','🤖','👽','👻','🎃','🐵']},
+  {id:'haus',l:'🏠 Haus',e:['🧹','🧺','🫧','🧴','🗑️','🍽️','🥄','🍴','🧽','🪣','🛒','🛏️','🪥','🧻','🪞','🪑','🚪','🪟','🌿','🪴','🧼','🧸','🛋️','🧯','🔑','💡','🔌','🧰','🪛','🔨','🪚','🧲','📦','✉️','📮','🧾','💶','💳','🗓️','📅','⏰','📞','💻','📺','🎮']},
+  {id:'schul',l:'🎒 Schule',e:['📚','📖','✏️','🎒','📐','📏','✂️','🖊️','📓','📝','🖍️','🔬','🎨','📎','📌','📒','🗒️','📋','🖼️','🔭','🔤','🔢','➕','➗','✖️','🌍','🗺️','🎵','🎻','🎹','🥁','🎤','🧮','🧪','🧬','🏫','🚸','🧑‍🏫']},
+  {id:'koerp',l:'🦷 Körper',e:['🦷','🚽','🛁','💊','😴','💪','🏃','🚿','🧖','👣','💤','🩺','🩹','🤧','🤒','🧘','👁️','👂','👃','💇','💅','🧴','🪒','🪮','🧼','🩲','🩳']},
+  {id:'essen',l:'🍝 Gerichte',e:['🍝','🍕','🍔','🌭','🥪','🌮','🌯','🥙','🧆','🥗','🥘','🍲','🍛','🍜','🍣','🍱','🥟','🍤','🍙','🍚','🥠','🍳','🥞','🧇','🥓','🥩','🍗','🍖','🐟','🦐','🥚','🧀','🥨','🥯','🥖','🍞','🥐','🫓','🥔','🍟','🫕','🥣','🍿','🧈','🥫','🍮','🍰','🎂','🧁','🍪','🍩','🍫','🍦','🍨','🥧']},
+  {id:'obst',l:'🍎 Obst & Gemüse',e:['🍎','🍏','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🫛','🥦','🥬','🥒','🌶️','🫑','🌽','🥕','🫒','🧄','🧅','🥔','🍠','🫚','🥜','🌰','🍄','🫘','🌿','🥗']},
+  {id:'trinken',l:'🥤 Getränke',e:['🥛','🧃','🥤','🧋','☕','🍵','🫖','🧉','🍶','🍺','🍻','🍷','🥂','🍾','🍹','🍸','🧊','💧','🫗']},
+  {id:'kleid',l:'👕 Kleidung',e:['👕','👖','🧥','👟','🧦','👗','🎩','🧤','👒','🧣','👚','🩴','👜','🕶️','⌚','🎽','🩳','🩱','👘','🎀','👔','🥼','🦺','👙','🥾','👞','👠','👢','🧢','⛑️','🎒','💍']},
+  {id:'tiere',l:'🐶 Tiere',e:['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐢','🐙','🦑','🦀','🐠','🐬','🐳','🦈','🐊','🦒','🦓','🐘','🦛','🦘','🦔','🦦','🦥','🦩','🦜','🐿️','🦝']},
+  {id:'dinos',l:'🦕 Dinos & Fantasie',e:['🦕','🦖','🐉','🐲','🦎','🐊','🐢','🦏','🐍','🦴','🥚','🌋','🪨','🌿','💀','👾','🔮','⚔️','🛡️','🌑','🌪️','🔥','💥','✨','🌊','🏔️','🦋','🕷️','🦂','🐛','🧌','🧞','🪄','🏰','🗡️','🐧']},
+  {id:'sport',l:'⚽ Sport & Freizeit',e:['⚽','🏀','🏈','⚾','🎾','🏐','🏓','🏸','🥅','⛳','🏒','🥊','🥋','🛹','🛼','🚲','🛴','⛸️','🎿','🏂','🏊','🤸','🧗','🚴','🏇','🤿','🎣','🏕️','⛺','🎯','🎳','🎲','🧩','♟️','🎮','🎨','🎭','🎬','📷','🎸','🪁','🪀','🛝','🎪']},
+  {id:'natur',l:'🌳 Natur & Wetter',e:['🌳','🌲','🌴','🌵','🌱','🌿','🍀','🍁','🍂','🌷','🌹','🌻','🌼','🌸','💐','🌞','☀️','🌤️','⛅','🌧️','⛈️','🌩️','❄️','⛄','🌈','🌙','⭐','🌊','🏖️','⛰️','🏞️','🌍']},
+  {id:'fahr',l:'🚗 Fahrzeuge',e:['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍️','🛵','🚲','🛴','🚂','🚆','🚇','🚊','🚝','✈️','🚁','🚀','🛸','⛵','🚤','🛳️','⚓','🚦','⛽','🅿️']},
+  {id:'feste',l:'🎉 Feste',e:['🎉','🎊','🎈','🎁','🎂','🎄','🎅','🤶','⛄','🐰','🥚','🎃','👻','🦃','🕯️','🎆','🎇','🧨','🎏','🎐','🪅','🎗️','💝','💌','🥳','👑','🏆','🥇','🎖️']},
+  {id:'mehr',l:'⭐ Symbole',e:['⭐','🌟','🏆','💪','🚀','🌈','☀️','🎉','❤️','🧡','💛','💚','💙','💜','🤍','🦄','🌸','🌺','🌻','🍀','🌙','⚡','💫','✨','🎊','🎈','🎁','🪄','💎','🔑','🎵','🎶','🏠','✅','☑️','❗','❓','💯','🔔','📣','💬','🕐','♻️','🔒','🔓']},
 ];
 const COLOR_LABELS={petrol:{a:'Terracotta',b:'Petrol',c:'Oliv',d:'Senf',e:'Kastanie'},pop:{a:'Orange',b:'Pink',c:'Grün',d:'Gelb',e:'Violett'}};
 const COLORS={a:{},b:{},c:{},d:{},e:{}};
@@ -839,7 +849,7 @@ function parseAmount(s){const v=parseFloat(String(s).trim().replace(/\s/g,'').re
 
 // ═══ STATE ════════════════════════════════════
 let S=loadCfg(),D=loadDay(),TGD=loadTgd(),SAVINGS=loadSavings(),TX=loadTx();
-let UI={kid:null,rt:null,view:'routine',essTab:'plan',essQ:'',essWeek:0,essTag:null,spDay:null,aTab:'kinder',aRt:'morgen',aSpKid:null,aSpDay:'mo',epCat:'dinos',form:{}};
+let UI={kid:null,rt:null,view:'routine',essTab:'plan',essQ:'',essWeek:0,essTag:null,spDay:null,aTab:'kinder',aRt:'morgen',aSpKid:null,aSpDay:'mo',epCat:'personen',form:{}};
 
 // ═══ HELPERS ══════════════════════════════════
 function today(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
@@ -867,7 +877,7 @@ function ob(){if(!UI.ob)UI.ob={name:'',adults:[]};return UI.ob;}
 function buildOnboarding(){
   const o=ob();
   const kidRows=S.kids.map(k=>`<div class="ai"><div class="ai-em">${esc(k.icon)}</div><div class="ai-info"><div class="ai-main">${esc(k.name)}</div><div class="ai-sub">Kind</div></div><button class="ai-edit" aria-label="Bearbeiten" onclick="openKidModal('${k.id}')">✏️</button><button class="ai-del" aria-label="Löschen" onclick="obDelKid('${k.id}')">🗑️</button></div>`).join('');
-  const adRows=o.adults.map(a=>`<div class="ai"><div class="ai-em">${esc(a.icon)}</div><div class="ai-info"><div class="ai-main">${esc(a.name)}</div><div class="ai-sub">Erwachsene/r</div></div><button class="ai-del" aria-label="Löschen" onclick="obDelAdult('${a.id}')">🗑️</button></div>`).join('');
+  const adRows=o.adults.map(a=>`<div class="ai"><div class="ai-em">${esc(a.icon)}</div><div class="ai-info"><div class="ai-main">${esc(a.name)}</div><div class="ai-sub">Erwachsene/r</div></div><button class="ai-edit" aria-label="Bearbeiten" onclick="openAdultModal('${a.id}')">✏️</button><button class="ai-del" aria-label="Löschen" onclick="obDelAdult('${a.id}')">🗑️</button></div>`).join('');
   const ready=S.kids.length>0||o.adults.length>0;
   return`<div class="wrap no-nav">
   <div class="hdr"><div><div class="hdr-title">FamOS</div><div class="hdr-date">Das Gehirn der Familie · Haushalt anlegen</div></div></div>
@@ -882,7 +892,7 @@ function buildOnboarding(){
   <div class="tg-card">
     <div class="as-lbl">Erwachsene</div>
     <div class="al">${adRows}</div>
-    <button class="aa" onclick="openAdultModal()">＋ Mama, Papa, … hinzufügen</button>
+    <button class="aa" onclick="openAdultModal()">＋ Erwachsene/n hinzufügen</button>
   </div>
   <button class="m-save" style="width:100%;${ready?'':'opacity:.45'}" onclick="obFinish()">Haushalt anlegen</button>
   ${SYNC_ON?`<button class="aa" style="margin-top:12px" onclick="openLogin()">☁️ Schon ein FamOS-Konto? Anmelden</button>`:''}
@@ -902,16 +912,18 @@ function obDelAdult(id){const o=ob();o.adults=o.adults.filter(a=>a.id!==id);rend
 
 // Erwachsene (Modal; im Erststart im Entwurf, danach direkt im Haushalt)
 const ADULT_QUICK=[{n:'Mama',i:'👩'},{n:'Papa',i:'👨'},{n:'Oma',i:'👵'},{n:'Opa',i:'👴'}];
-function openAdultModal(){UI.form={mode:'adult',name:'',icon:'🙂'};openModal();}
-function renderAdultModal(){const f=UI.form;return`<h3>Erwachsene/r hinzufügen</h3>
-  <div class="field"><label>Schnellauswahl</label><div style="display:flex;gap:8px;flex-wrap:wrap">${ADULT_QUICK.map(q=>`<button class="aa" style="width:auto;padding:8px 14px;margin:0" onclick="adultQuick('${esc(q.n)}','${esc(q.i)}')">${esc(q.i)} ${esc(q.n)}</button>`).join('')}</div></div>
-  <div class="field"><label>Name</label><input id="adName" value="${esc(f.name)}" placeholder="z.B. Mama oder Alex" oninput="UI.form.name=this.value"></div>
+function adultList(){return S.household?S.household.adults:ob().adults;}
+function openAdultModal(id){const ex=id?adultList().find(a=>a.id===id):null;UI.form={mode:'adult',id:ex?id:null,name:ex?.name||'',icon:ex?.icon||'🙂'};openModal();setTimeout(()=>{if(!ex)document.getElementById('adName')?.focus();},50);}
+function renderAdultModal(){const f=UI.form;return`<h3>${f.id?'Erwachsene/n bearbeiten':'Erwachsene/r'}</h3>
+  <div class="field"><label>Emoji</label><button class="em-btn" id="emA" onclick="epOpen(e=>{UI.form.icon=e;document.getElementById('emA').textContent=e;})">${esc(f.icon)}</button></div>
+  <div class="field"><label for="adName">Name</label><input id="adName" maxlength="40" value="${esc(f.name)}" placeholder="z.B. Alex, Mama oder Sam" oninput="UI.form.name=this.value"></div>
+  ${f.id?'':`<div class="field"><label>Vorschläge</label><div class="ap-wrap">${ADULT_QUICK.map(q=>`<button class="ap" onclick="adultQuick('${esc(q.n)}','${esc(q.i)}')">${esc(q.i)} ${esc(q.n)}</button>`).join('')}</div></div>`}
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveAdult()">Speichern</button></div>`;}
-function adultQuick(n,i){UI.form.name=n;UI.form.icon=i;const el=document.getElementById('adName');if(el)el.value=n;}
-function saveAdult(){const f=UI.form;if(!f.name.trim()){toast('Bitte einen Namen eingeben!');return;}
-  const a={id:uid(),name:f.name.trim(),icon:f.icon};
-  if(S.household){S.household.adults.push(a);saveCfg();closeModal();renderAdmin();}
-  else{ob().adults.push(a);closeModal();render();}}
+function adultQuick(n,i){UI.form.name=n;UI.form.icon=i;const el=document.getElementById('adName');if(el)el.value=n;const em=document.getElementById('emA');if(em)em.textContent=i;}
+function saveAdult(){const f=UI.form,name=String(f.name||'').trim().slice(0,40);if(!name){toast('Bitte einen Namen eingeben!');return;}
+  const list=adultList(),ex=f.id?list.find(a=>a.id===f.id):null;
+  if(ex)Object.assign(ex,{name,icon:sEm(f.icon,'🙂')});else list.push({id:uid(),name,icon:sEm(f.icon,'🙂')});
+  if(S.household){saveCfg();closeModal();renderAdmin();render();}else{closeModal();render();}}
 function delAdult(id){if(!S.kids.length&&(S.household?.adults||[]).length<=1){toast('Mindestens eine Person muss im Haushalt bleiben!');return;}if(!confirm('Entfernen?'))return;S.household.adults=S.household.adults.filter(a=>a.id!==id);saveCfg();renderAdmin();}
 function saveHhName(v){if(S.household){S.household.name=v.trim()||'Unser Haushalt';saveCfg();}}
 
@@ -1062,7 +1074,7 @@ function admKinder(){const me=getMe(),mp=meAdult();return`<div class="as-lbl">Di
   <div class="look-pick">${LOOKS.map(l=>`<button class="look-opt${getLook()===l.id?' on':''}" aria-pressed="${getLook()===l.id}" onclick="setLook('${l.id}')"><span class="look-sw">${l.sw.map(c=>`<i style="background:${c}"></i>`).join('')}</span><strong>${l.l}</strong><span>${l.d}</span></button>`).join('')}</div>
   <div class="tg-card"><div class="field" style="margin-bottom:0"><label>Name des Haushalts</label><input value="${esc(S.household?.name||'')}" placeholder="z.B. Familie Müller" onchange="saveHhName(this.value)"></div></div>
   <div class="as-lbl">Erwachsene</div>
-  <div class="al">${(S.household?.adults||[]).map(a=>`<div class="ai"><div class="ai-em">${esc(a.icon)}</div><div class="ai-info"><div class="ai-main">${esc(a.name)}</div><div class="ai-sub">Erwachsene/r</div></div><button class="ai-del" aria-label="Löschen" onclick="delAdult('${a.id}')">🗑️</button></div>`).join('')}</div>
+  <div class="al">${(S.household?.adults||[]).map(a=>`<div class="ai"><div class="ai-em">${esc(a.icon)}</div><div class="ai-info"><div class="ai-main">${esc(a.name)}</div><div class="ai-sub">Erwachsene/r</div></div><button class="ai-edit" aria-label="Bearbeiten" onclick="openAdultModal('${a.id}')">✏️</button><button class="ai-del" aria-label="Löschen" onclick="delAdult('${a.id}')">🗑️</button></div>`).join('')}</div>
   <button class="aa" style="margin-bottom:18px" onclick="openAdultModal()">＋ Erwachsene/r hinzufügen</button>
   <div class="as-lbl">Kinder</div>
   <div class="al">${S.kids.map(k=>`<div class="ai"><div class="ai-em">${esc(k.icon)}</div><div class="ai-info"><div class="ai-main">${esc(k.name)}</div><div class="ai-sub">${esc(colorLabel(k.col))}</div></div><button class="ai-edit" aria-label="Bearbeiten" onclick="openKidModal('${k.id}')">✏️</button><button class="ai-del" aria-label="Löschen" onclick="delKid('${k.id}')">🗑️</button></div>`).join('')}</div><button class="aa" onclick="openKidModal(null)">＋ Kind hinzufügen</button>
@@ -1710,6 +1722,9 @@ function epClose(){document.getElementById('epBg').classList.remove('open');_epC
 function setEpCat(id){UI.epCat=id;renderEp();}
 function renderEp(){document.getElementById('epCats').innerHTML=EC.map(c=>`<button class="ep-cat${c.id===UI.epCat?' on':''}" onclick="setEpCat('${c.id}')">${esc(c.l)}</button>`).join('');document.getElementById('epGrid').innerHTML=(EC.find(c=>c.id===UI.epCat)?.e||[]).map(e=>`<button type="button" class="ep-em" onclick="epPick('${e}')">${e}</button>`).join('');}
 function epPick(e){if(_epCb)_epCb(e);epClose();}
+// Eigenes Emoji: nur Bildzeichen, keine Buchstaben oder HTML
+function epOwnOk(v){const t=sEm(String(v||'').trim(),'');return t&&/\p{Extended_Pictographic}/u.test(t)&&!/[A-Za-z0-9]/.test(t)?t:'';}
+function epOwnPick(){const el=document.getElementById('epOwn'),e=epOwnOk(el?.value);if(!e){toast('Bitte ein Emoji eintippen (Emoji-Tastatur).');return;}if(el)el.value='';epPick(e);}
 
 // ═══ MODALS ═══════════════════════════════════
 function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
