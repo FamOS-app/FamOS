@@ -519,3 +519,85 @@ test('Sync: Beitritt übernimmt die Termine des Haushalts, Kalender aus heißt k
   assert.ok(!server.log.some(l => l.includes('/rest/v1/events')));
   assert.ok(server.log.some(l => l.includes('/rest/v1/tasks')));
 });
+
+test('Sync: Anmelden mit Passwort ganz ohne Mail, Beitritt per Einladungscode', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server);
+  server.rateLimited = true; // Mailversand am Limit: Code-Anmeldung geht nicht
+  server.signupsDisabled = true;
+  server.addUser('b@example.org', 'geheim-Passwort-1'); // im Supabase-Dashboard angelegt
+  const b = device(server);
+  b.run(`openLogin();UI.form.email='b@example.org'`);
+  await b.run('loginSend()');
+  assert.match(b.get('UI.form.err'), /zu viele Anmelde-Mails/i);
+  b.run(`UI.form.step='pw';UI.form.err='';openModal()`);
+  assert.match(b.els.mc.innerHTML, /type="password" autocomplete="current-password"/);
+  // falsche Eingaben
+  await b.run('loginPassword()');
+  assert.match(b.get('UI.form.err'), /Passwort eingeben/);
+  b.run(`UI.form.pw='falsch'`);
+  await b.run('loginPassword()');
+  assert.match(b.get('UI.form.err'), /E-Mail-Adresse oder Passwort stimmt nicht/);
+  assert.equal(b.get('UI.form.pw'), ''); // nach dem Versuch geleert
+  b.run(`UI.form.email='unbekannt@example.org';UI.form.pw='geheim-Passwort-1'`);
+  await b.run('loginPassword()');
+  assert.match(b.get('UI.form.err'), /E-Mail-Adresse oder Passwort stimmt nicht/); // verrät nicht, ob es die Adresse gibt
+  assert.equal(b.get('AUTH'), null);
+  // richtig
+  b.run(`UI.form.email=' b@example.org ';UI.form.pw='geheim-Passwort-1'`);
+  await b.run('loginPassword()');
+  assert.equal(b.get('AUTH.user.email'), 'b@example.org');
+  assert.equal(b.get('UI.form.step'), 'household');
+  b.run(`UI.form.joinCode=${JSON.stringify(a.get('SYNC.invite'))}`);
+  await b.run('joinHousehold()');
+  await sync(b);
+  assert.deepEqual(b.get('S.kids.map(k=>k.name)'), ['Emma', 'Ben']);
+  // das Passwort liegt nirgends auf dem Gerät
+  assert.doesNotMatch(JSON.stringify(b.store), /geheim-Passwort-1/);
+  assert.doesNotMatch(JSON.stringify(b.get('UI.form')), /geheim-Passwort-1/);
+  // unbestätigtes Konto
+  server.addUser('c@example.org', 'geheim-Passwort-2', { unconfirmed: true });
+  const c = device(server);
+  c.run(`openLogin();UI.form.step='pw';UI.form.email='c@example.org';UI.form.pw='geheim-Passwort-2'`);
+  await c.run('loginPassword()');
+  assert.match(c.get('UI.form.err'), /noch nicht bestätigt/);
+});
+
+test('Sync: Passwort festlegen und ändern, danach Anmeldung mit dem neuen Passwort', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server); // per Mail-Code angemeldet, noch ohne Passwort
+  a.run(`UI.aTab='konto';renderAdmin()`);
+  assert.match(a.adm(), /onclick="openPwChange\(\)"/);
+  a.run('openPwChange()');
+  const tryPw = async (p1, p2) => { a.run(`UI.form.p1=${JSON.stringify(p1)};UI.form.p2=${JSON.stringify(p2)}`); await a.run('savePwChange()'); };
+  await tryPw('kurz', 'kurz');
+  assert.match(a.get('UI.form.err'), /mindestens 8 Zeichen/);
+  await tryPw('lang-genug-1', 'lang-genug-2');
+  assert.match(a.get('UI.form.err'), /stimmen nicht überein/);
+  assert.equal(server.users['a@example.org'].password, undefined);
+  await tryPw('lang-genug-1', 'lang-genug-1');
+  assert.equal(server.users['a@example.org'].password, 'lang-genug-1');
+  assert.match(a.toast(), /Passwort gespeichert/);
+  assert.doesNotMatch(JSON.stringify(a.store), /lang-genug-1/);
+  // ändern: gleiches Passwort wird abgelehnt, neues gilt
+  a.run('openPwChange()');
+  await tryPw('lang-genug-1', 'lang-genug-1');
+  assert.match(a.get('UI.form.err'), /dasselbe wie das alte/);
+  await tryPw('ganz-anders-22', 'ganz-anders-22');
+  assert.equal(server.users['a@example.org'].password, 'ganz-anders-22');
+  const d = device(server);
+  d.run(`openLogin();UI.form.step='pw';UI.form.email='a@example.org';UI.form.pw='lang-genug-1'`);
+  await d.run('loginPassword()');
+  assert.match(d.get('UI.form.err'), /stimmt nicht/); // altes Passwort gilt nicht mehr
+  d.run(`UI.form.pw='ganz-anders-22'`);
+  await d.run('loginPassword()');
+  assert.equal(d.get('SYNC.hid'), a.get('SYNC.hid')); // bestehender Haushalt wird sofort verbunden
+  // ohne Anmeldung kein Passwort-Dialog und kein Aufruf
+  const e = device(server);
+  e.run('openPwChange()');
+  assert.notEqual(e.get('UI.form?.mode'), 'pwChange');
+  server.expireTokens(); server.revokeRefresh();
+  a.run('openPwChange()');
+  await tryPw('noch-ein-neues-3', 'noch-ein-neues-3');
+  assert.equal(server.users['a@example.org'].password, 'ganz-anders-22'); // abgelaufene Sitzung ändert nichts
+});

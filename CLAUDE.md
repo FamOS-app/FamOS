@@ -31,6 +31,7 @@ FamOS („Das Gehirn der Familie“): Familien-App als **Single-File-PWA** (`app
 
 ## Stand / offen
 - Konto & Sync: Registrierung in Supabase gesperrt, Freunde werden eingeladen. Ohne Konto läuft alles lokal.
+- Anmeldung: Code/Link per Mail oder Passwort (`loginPassword()`, ändern über `savePwChange()`); Passwörter nie speichern, nur im Formular halten und danach leeren.
 - Login-Mails ohne eigenes SMTP: nur Link → App akzeptiert eingefügten Link. Optional Brevo-SMTP für Code in der Mail.
 - Wünsche gleichen sich über `cfg` ab (bei gleichzeitigen Änderungen gewinnt die Cloud); bei Bedarf auf eigene Tabelle umstellen.
 - Kalender: eigene Termine in FamOS; Abgleich mit Google/Outlook/iCloud und `.ics`-Export bewusst noch nicht gebaut.
