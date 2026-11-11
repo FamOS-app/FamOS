@@ -2042,3 +2042,56 @@ test('Kalender: Uhrzeit über eigene Auswahl (Stunde, Minute in 5er-Schritten) s
   a.run(`openCal();UI.form.title='Ausflug';UI.form.day='${td}';saveCal()`);
   assert.deepEqual(a.get(`(e=>[e.from,e.to])(S.kalender.items.find(e=>e.title==='Ausflug'))`), ['', '']);
 });
+
+test('Essen: Mahlzeit als „Nicht zu Hause“ oder „Wird bestellt“ markieren; Würfeln und Einkauf lassen sie aus', () => {
+  const a = household();
+  a.run(`setView('essen');setEssTab('plan')`);
+  const td = a.get('today()'), d1 = a.get('addDays(today(),1)'), d2 = a.get('addDays(today(),2)');
+  a.run(`openEssPick('${td}','abend')`);
+  let html = a.els.mc.innerHTML;
+  assert.match(html, /🧳<\/span><span class="ai-main">Nicht zu Hause/);
+  assert.match(html, /🥡<\/span><span class="ai-main">Wird bestellt/);
+  assert.doesNotMatch(html, /Ganzer/); // nur eine Mahlzeit aktiv
+  a.run(`essPickOff('order')`);
+  assert.deepEqual(a.get(`S.essen.plan['${td}'].abend`), { off: 'order' });
+  html = a.app();
+  assert.match(html, /Heute[\s\S]*🥡<\/span><span class="ess-name">Wird bestellt/);
+  assert.doesNotMatch(html.split('ess-weekhead')[0], /Würfeln/); // heute nichts zu würfeln
+  a.run(`rollToday('abend')`);
+  assert.deepEqual(a.get(`S.essen.plan['${td}'].abend`), { off: 'order' });
+  // Woche würfeln lässt markierte Tage frei
+  a.run(`openEssPick('${d1}','abend');essPickOff('away')`);
+  a.run('rollWeek()');
+  assert.deepEqual(a.get(`S.essen.plan['${d1}'].abend`), { off: 'away' });
+  if (a.get(`weekDates(0).includes('${d2}')`)) assert.ok(a.get(`!!planSlot('${d2}','abend')`));
+  assert.match(a.app(), /🧳 <span class="ess-empty">Nicht zu Hause<\/span>/);
+  // Einkauf aus dem Plan zählt sie nicht
+  const lines = a.get('ekPlanLines(0).dishes');
+  const planned = a.get(`weekDates(0).filter(ds=>ds>=today()&&planSlot(ds,'abend')).length`);
+  assert.ok(lines <= planned);
+  // Startseite
+  a.run(`setView('heute')`);
+  assert.match(a.app(), /Essen heute[\s\S]*🥡[\s\S]*Wird bestellt/);
+  // Leeren hebt die Markierung auf, dann normal würfeln
+  a.run(`setView('essen');openEssPick('${td}','abend')`);
+  assert.match(a.els.mc.innerHTML, /essPickSet\(null\)">Leeren/);
+  a.run('essPickSet(null)');
+  assert.equal(a.get(`S.essen.plan['${td}']?.abend`), undefined);
+  a.run(`rollToday('abend')`);
+  assert.ok(a.get(`!!planSlot('${td}','abend')`));
+  // gespeichert und bereinigt: nur die zwei Varianten
+  assert.deepEqual(a.saved('ra_cfg3').essen.plan[d1].abend, { off: 'away' });
+  const S = a.get(`sanitizeEssen({...S.essen,plan:{'${td}':{abend:{off:'party'},mittag:{off:'order',id:'x'}}}},S.kids,[])`);
+  assert.deepEqual(S.plan[td], { mittag: { off: 'order' } });
+  a.run(`essPickOff('<b>')`);
+});
+
+test('Essen: ganzer Tag nicht zu Hause, wenn mehrere Mahlzeiten geplant werden', () => {
+  const a = household();
+  a.run(`S.essen.meals={fruehstueck:false,mittag:true,abend:true};setView('essen')`);
+  const d1 = a.get('addDays(today(),1)');
+  a.run(`openEssPick('${d1}','mittag')`);
+  assert.match(a.els.mc.innerHTML, /Ganzer [A-Za-z]+: nicht zu Hause/);
+  a.run(`essPickOff('away',true)`);
+  assert.deepEqual(a.get(`S.essen.plan['${d1}']`), { mittag: { off: 'away' }, abend: { off: 'away' } });
+});

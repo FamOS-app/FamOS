@@ -785,7 +785,7 @@ function sanitizeEssen(e,kids,adults){
       portions:Math.round(sNum(d.portions,1,20))||4,steps:sArr(d.steps,100).map(x=>sStr(x,300).trim()).filter(Boolean).slice(0,30)};}).filter(Boolean);
   const plan={};
   Object.keys(sObj(e.plan)).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-120).forEach(ds=>{const p={};
-    mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin};});
+    mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(sl.off==='away'||sl.off==='order')p[m]={off:sl.off};else if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin};});
     if(Object.keys(p).length)plan[ds]=p;});
   return{meals,persons:Math.round(sNum(e.persons,1,20))||4,dishes,plan};
 }
@@ -1219,6 +1219,10 @@ function addDays(s,n){const d=pdate(s);d.setDate(d.getDate()+n);return dstr(d);}
 function daysBetween(a,b){return Math.round((pdate(b)-pdate(a))/864e5);}
 function weekDates(off){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-(d.getDay()+6)%7+7*(off||0));const mo=dstr(d);return DAYS.map((_,i)=>addDays(mo,i));}
 function planSlot(ds,meal){const sl=S.essen.plan[ds]?.[meal];return sl&&dishById(sl.id)?sl:null;}
+// Mahlzeit ohne Kochen (unterwegs, bestellt, eingeladen): bleibt beim Würfeln frei und zählt nicht für den Einkauf
+const OFFS={away:{em:'🧳',l:'Nicht zu Hause'},order:{em:'🥡',l:'Wird bestellt'}};
+function isOff(ds,meal){const o=S.essen.plan[ds]?.[meal]?.off;return OFFS[o]?o:'';}
+function setOff(ds,meal,kind){if(!OFFS[kind])return;const P=S.essen.plan;if(!P[ds])P[ds]={};P[ds][meal]={off:kind};}
 function setSlot(ds,meal,id,pin){const P=S.essen.plan;if(id){if(!P[ds])P[ds]={};P[ds][meal]={id,pin:!!pin};}else if(P[ds]){delete P[ds][meal];if(!Object.keys(P[ds]).length)delete P[ds];}}
 function pruneEssen(){const min=addDays(today(),-35);Object.keys(S.essen.plan).forEach(k=>{if(k<min)delete S.essen.plan[k];});}
 function lastPlanned(id,before){let best=null;for(const ds in S.essen.plan){if(ds>=before)continue;if(Object.values(S.essen.plan[ds]).some(sl=>sl.id===id)&&(!best||ds>best))best=ds;}return best;}
@@ -1243,15 +1247,15 @@ function pickDish(meal,ds,avoid,tag,exclude){
   return c[c.length-1][0].id;
 }
 function rollToday(meal){
-  const td=today(),cur=planSlot(td,meal);if(cur?.pin)return;
+  const td=today(),cur=planSlot(td,meal);if(cur?.pin||isOff(td,meal))return;
   const id=pickDish(meal,td,weekIds(weekDates(0),td,meal),null,cur?.id);
   if(!id){toast(`Noch kein Gericht für ${mealOf(meal).l} im Kochbuch.`);return;}
   setSlot(td,meal,id,false);pruneEssen();saveCfg();render();
 }
 function rollWeek(){
   const dates=weekDates(UI.essWeek),td=today(),meals=activeMeals();let n=0;
-  dates.forEach(ds=>{if(ds<td)return;meals.forEach(m=>{if(!planSlot(ds,m.id)?.pin)setSlot(ds,m.id,null);});});
-  dates.forEach(ds=>{if(ds<td)return;meals.forEach(m=>{if(planSlot(ds,m.id))return;const id=pickDish(m.id,ds,weekIds(dates),null,null);if(id){setSlot(ds,m.id,id,false);n++;}});});
+  dates.forEach(ds=>{if(ds<td)return;meals.forEach(m=>{if(!planSlot(ds,m.id)?.pin&&!isOff(ds,m.id))setSlot(ds,m.id,null);});});
+  dates.forEach(ds=>{if(ds<td)return;meals.forEach(m=>{if(planSlot(ds,m.id)||isOff(ds,m.id))return;const id=pickDish(m.id,ds,weekIds(dates),null,null);if(id){setSlot(ds,m.id,id,false);n++;}});});
   pruneEssen();saveCfg();render();
   toast(n?`${n} ${n===1?'Mahlzeit':'Mahlzeiten'} gewürfelt`:'Nichts zu würfeln: alles festgelegt oder keine passenden Gerichte.');
 }
@@ -1283,6 +1287,8 @@ function essTagChips(){
 function buildEssPlan(){
   const dates=weekDates(UI.essWeek),meals=activeMeals(),td=today(),showToday=dates.includes(td);
   const todayCard=m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
+    if(isOff(td,m.id))return`<div class="tg-card ess-today"><div class="ess-meal">${m.l}</div><div class="ess-dish"><span class="ess-em">${OFFS[isOff(td,m.id)].em}</span><span class="ess-name">${OFFS[isOff(td,m.id)].l}</span></div>
+    <div class="ess-acts"><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Ändern</button></div></div>`;
     return`<div class="tg-card ess-today"><div class="ess-meal">${m.l}</div>
     ${d?`<button class="ess-dish" onclick="openRecipe('${d.id}','${td}','${m.id}')"><span class="ess-em">${dishIc(d,64)}</span><span class="ess-name">${esc(d.name)}</span></button><button class="ess-rc" onclick="openRecipe('${d.id}','${td}','${m.id}')">Rezept ansehen${d.steps.length?` · ${d.steps.length} Schritte`:''} →</button>`:`<div class="ess-none">Noch nichts geplant</div>`}
     <div class="ess-acts"><button class="tg-act ein" onclick="rollToday('${m.id}')" ${sl?.pin?'disabled':''}>${d?'Nochmal würfeln':'Würfeln'}</button><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Auswählen</button>${d?`<button class="tg-act ess-pinbtn${sl.pin?' pinned':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="${sl.pin?'Festgelegt, tippen zum Lösen':'Festlegen'}" onclick="togPin('${td}','${m.id}')">📌</button>`:''}</div></div>`;};
@@ -1291,7 +1297,7 @@ function buildEssPlan(){
   <div class="ess-weekhead"><div class="rt-pills" style="margin:0"><button class="rt-pill${UI.essWeek===0?' on':''}" onclick="setEssWeek(0)">Diese Woche</button><button class="rt-pill${UI.essWeek===1?' on':''}" onclick="setEssWeek(1)">Nächste</button></div><button class="ess-roll" onclick="rollWeek()">Woche würfeln</button></div>
   ${rest.length?rest.map(ds=>{const i=DAYS.findIndex(d=>d.id===['so','mo','di','mi','do','fr','sa'][pdate(ds).getDay()]);
     return`<div class="ess-day"><div class="ess-dlbl">${DAYS[i].s}<span>${ds.slice(8,10)}.${ds.slice(5,7)}.</span></div><div class="ess-slots">${meals.map(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);
-    return`<div class="ess-slot"><button class="ess-pick" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${d?`${dishIc(d,28)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
+    return`<div class="ess-slot"><button class="ess-pick" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${isOff(ds,m.id)?`${OFFS[isOff(ds,m.id)].em} <span class="ess-empty">${OFFS[isOff(ds,m.id)].l}</span>`:d?`${dishIc(d,28)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
   <div class="ess-hint">📌 = festgelegt, bleibt beim Würfeln stehen.</div>`;
 }
 function buildEssBook(){
@@ -1394,9 +1400,13 @@ function delDish(){const id=UI.form.id;if(!confirm('Gericht löschen?'))return;
 function openEssPick(ds,meal){UI.form={mode:'essPick',ds,meal};openModal();}
 function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f.ds).getDay()+6)%7].l,cur=planSlot(f.ds,f.meal);
   const list=S.essen.dishes.filter(d=>d.meals.includes(f.meal)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
+  const off=isOff(f.ds,f.meal),multi=activeMeals().length>1;
   return`<h3>${m.em} ${m.l} · ${day}</h3>
+  <div class="al" style="margin-bottom:10px">${Object.keys(OFFS).map(k=>`<button class="ai ess-pickrow${off===k?' sel':''}" aria-pressed="${off===k}" onclick="essPickOff('${k}')"><span class="ai-em">${OFFS[k].em}</span><span class="ai-main">${OFFS[k].l}</span></button>`).join('')}
+  ${multi?`<button class="ai ess-pickrow" onclick="essPickOff('away',true)"><span class="ai-em">${OFFS.away.em}</span><span class="ai-main">Ganzer ${day}: nicht zu Hause</span></button>`:''}</div>
   <div class="al">${list.map(d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`).join('')||`<div class="sp-empty">Noch kein Gericht für ${m.l}.</div>`}</div>
-  <div class="m-btns">${cur?`<button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
+  <div class="m-btns">${cur||off?`<button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
+function essPickOff(kind,day){const f=UI.form;if(!OFFS[kind])return;(day?activeMeals().map(m=>m.id):[f.meal]).forEach(m=>setOff(f.ds,m,kind));pruneEssen();saveCfg();closeModal();render();}
 function essPickSet(id){const f=UI.form;if(id&&!dishById(id))return;setSlot(f.ds,f.meal,id,true);pruneEssen();saveCfg();closeModal();render();}
 
 // Einstellungen: welche Mahlzeiten geplant werden
@@ -1900,6 +1910,7 @@ function buildHeute(){
       return`<div class="home-kid"><span class="wish-em">${esc(k.icon)}</span><span class="todo-t"><span class="ek-name">${esc(k.name)}</span><span class="todo-m">${[modOn('routine')&&tot?`${esc(S.routines[rt].label)}routine ${done}/${tot}${done>=tot?' ✓':''}`:'',brot?'🍞 braucht ein Brot':'',sp].filter(Boolean).join(' · ')||'–'}</span></span></div>`;}).join(''),"goKinder()");}
   // Essen heute
   if(modOn('essen')&&S.essen.dishes.length){cards.essen=homeCard('essen','Essen heute',activeMeals().map(m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
+    if(isOff(td,m.id))return`<div class="home-kid"><span class="wish-em">${OFFS[isOff(td,m.id)].em}</span><span class="todo-t"><span class="todo-m">${m.l}</span><span class="ek-name">${OFFS[isOff(td,m.id)].l}</span></span></div>`;
     return`<div class="home-kid"><span class="wish-em">${d?dishIc(d,40):m.em}</span><span class="todo-t"><span class="todo-m">${m.l}</span>${d?`<button class="home-link" onclick="openRecipe('${d.id}','${td}','${m.id}')">${esc(d.name)}</button>`:'<span class="ek-name">noch offen</span>'}</span>${d?'':`<button class="tg-act" onclick="rollToday('${m.id}')">Würfeln</button>`}</div>`;}).join(''),"setView('essen')");}
   // Einkauf
   if(modOn('einkauf')){const n=ekOpen().length;
