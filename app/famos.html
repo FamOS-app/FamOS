@@ -189,6 +189,9 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.wish-item{cursor:default}
+.wish-em{font-size:1.4rem;flex-shrink:0}
+.wish-link{flex-shrink:0;min-width:36px;min-height:36px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--border);color:var(--text);text-decoration:none;font-weight:800}
 .todo-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .todo-m{font-size:.78rem;color:var(--muted);font-weight:600}
 .ek-row.over .todo-m{color:var(--acc-a)}
@@ -606,7 +609,8 @@ const DEF={
   },
   einkauf:{items:[],recent:[],cats:{},order:[],std:[]},
   aufgaben:{items:[]},
-  modules:{routine:true,stundenplan:true,taschengeld:true,aufgaben:true,essen:true,einkauf:true},
+  wuensche:{items:[]},
+  modules:{routine:true,stundenplan:true,taschengeld:true,wuensche:true,aufgaben:true,essen:true,einkauf:true},
   installHintDone:false,
   _mv:4,
 };
@@ -646,6 +650,7 @@ const MODULES=[
   {id:'routine',kid:true,em:'✅',lbl:'Routine',nav:'Routine',desc:'Tägliche Aufgaben, Brot-Check, Haushalts-Wahl'},
   {id:'stundenplan',kid:true,em:'📅',lbl:'Stundenplan',nav:'Plan',desc:'Schule und Kita pro Wochentag'},
   {id:'taschengeld',kid:true,em:'🐷',lbl:'Taschengeld',nav:'Geld',desc:'Wochengeld, Sparschwein, Ein- und Auszahlungen'},
+  {id:'wuensche',kid:true,em:'🎁',lbl:'Wünsche',nav:'Wünsche',desc:'Wunschliste pro Kind für Geburtstag und Weihnachten'},
   {id:'aufgaben',em:'📝',lbl:'Aufgaben',nav:'Aufgaben',desc:'To-dos für alle: wer, bis wann, Wiederholung'},
   {id:'essen',em:'🍽️',lbl:'Essen',nav:'Essen',desc:'Lieblingsgerichte, Würfeln, Wochenplan'},
   {id:'einkauf',em:'🛒',lbl:'Einkauf',nav:'Einkauf',desc:'Einkaufsliste, auch aus dem Wochenplan'},
@@ -705,8 +710,8 @@ function sanitizeCfg(c){
   const modules={};MODULES.forEach(m=>{modules[m.id]=sObj(c.modules)[m.id]!==false;});
   if(!MODULES.some(m=>modules[m.id]))modules[MODULES[0].id]=true;
   const pin=c.pin&&typeof c.pin.s==='string'&&typeof c.pin.h==='string'&&/^[a-z0-9]{1,16}$/.test(c.pin.s)&&/^[0-9a-f]{8}$/.test(c.pin.h)?{s:c.pin.s,h:c.pin.h}:null;
-  const essen=sanitizeEssen(c.essen,kids,household?.adults||[]),einkauf=sanitizeEinkauf(c.einkauf),aufgaben=sanitizeAufgaben(c.aufgaben,[...kids,...(household?.adults||[])].map(p=>p.id));
-  return{household,kids,routines,wahlPool,stundenplan,taschengeld,modules,essen,einkauf,aufgaben,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
+  const essen=sanitizeEssen(c.essen,kids,household?.adults||[]),einkauf=sanitizeEinkauf(c.einkauf),wuensche=sanitizeWuensche(c.wuensche,kids.map(k=>k.id)),aufgaben=sanitizeAufgaben(c.aufgaben,[...kids,...(household?.adults||[])].map(p=>p.id));
+  return{household,kids,routines,wahlPool,stundenplan,taschengeld,modules,essen,einkauf,aufgaben,wuensche,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
 }
 function sanitizeEssen(e,kids,adults){
   if(!e||typeof e!=='object'||Array.isArray(e))e=clone(DEF.essen); // ältere Stände: Beispielgerichte
@@ -744,6 +749,12 @@ function sanitizeTask(x,personIds){const id=sId(x?.id),title=sStr(x?.title,120).
   return{id,title,note:sStr(x.note,300).trim(),who,due,rep:['d','w','m'].includes(x.rep)?x.rep:'',done:!!x.done,doneBy:sId(x.doneBy)||'',doneAt:Number.isFinite(Number(x.doneAt))?Number(x.doneAt)||0:0};}
 function sanitizeAufgaben(a,personIds){const ids=new Set();
   const items=sArr(sObj(a).items,500).map(x=>{const t=sanitizeTask(x,personIds);if(!t||ids.has(t.id))return null;ids.add(t.id);return t;}).filter(Boolean);
+  return{items};}
+const OCC=[{id:'geb',em:'🎂',l:'Geburtstag'},{id:'weih',em:'🎄',l:'Weihnachten'}];
+function safeLink(v){const t=sStr(v,300).trim();if(!t)return'';try{const u=new URL(t);return/^https?:$/.test(u.protocol)&&!u.username&&!u.password?u.href:'';}catch(e){return'';}}
+function sanitizeWuensche(w,kidIds){const ids=new Set();
+  const items=sArr(sObj(w).items,300).map(x=>{const id=sId(x?.id),title=sStr(x?.title,100).trim();if(!id||ids.has(id)||!title||!kidIds.includes(x.kid))return null;ids.add(id);
+    return{id,kid:x.kid,title,link:safeLink(x.link),occ:OCC.map(o=>o.id).filter(o=>sArr(x.occ,2).includes(o)),note:sStr(x.note,200).trim(),got:!!x.got,from:sStr(x.from,40).trim()};}).filter(Boolean);
   return{items};}
 function sanitizeDay(d){d=sObj(d);return{date:sStr(d.date,10),chk:sObj(d.chk),brot:sObj(d.brot),wahl:sObj(d.wahl)};}
 function sanitizeTgd(t){const o={};Object.keys(sObj(t)).slice(-600).forEach(k=>{if(/^[A-Za-z0-9_-]{1,40}:\d{4}W\d{2}$/.test(k)&&(t[k]==='ausgezahlt'||t[k]==='gespart'))o[k]=t[k];});return o;}
@@ -901,8 +912,9 @@ function buildApp(){
   else if(UI.view==='essen') content=buildEssenContent();
   else if(UI.view==='einkauf') content=buildEinkaufContent();
   else if(UI.view==='aufgaben') content=buildAufgabenContent();
+  else if(UI.view==='wuensche') content=buildWishContent(kid);
 
-  const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',aufgaben:'Aufgaben',stundenplan:'Stundenplan',taschengeld:'Taschengeld'}[UI.view];
+  const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',aufgaben:'Aufgaben',stundenplan:'Stundenplan',taschengeld:'Taschengeld',wuensche:'Wünsche'}[UI.view];
 
   const nav=navItems(),showNav=nav.length>1,km=kidMods();
   const kidSeg=isKidView(UI.view)&&km.length>1?`<div class="seg seg-${km.length}" role="tablist">${km.map(m=>`<button class="seg-b${UI.view===m.id?' on':''}" role="tab" aria-selected="${UI.view===m.id}" onclick="setView('${m.id}')">${esc(m.nav==='Plan'?'Stundenplan':m.nav||m.lbl)}</button>`).join('')}</div>`:'';
@@ -1572,6 +1584,46 @@ function saveTodo(){const f=UI.form,t=S.aufgaben.items.find(x=>x.id===f.id);if(!
   todoOp('up',t);saveCfg();closeModal();render();}
 function delTodo(){const f=UI.form;if(!confirm('Aufgabe löschen?'))return;S.aufgaben.items=S.aufgaben.items.filter(x=>x.id!==f.id);todoOp('del',{id:f.id});saveCfg();closeModal();render();}
 
+// ═══ WÜNSCHE ══════════════════════════════════
+// Wunschliste pro Kind. Kinder tragen selbst ein; „besorgt“ und „wer schenkt“ nur in der Eltern-Ansicht (Eltern-PIN).
+function wishParentOn(){requirePin(()=>{UI.wishParent=true;render();});}
+function wishParentOff(){UI.wishParent=false;render();}
+function setWishOcc(o){UI.wishOcc=o;render();}
+function addWishInput(kid){const v=String(UI.wishNew||document.getElementById('wishNew')?.value||'').replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,100);
+  if(!v||!S.kids.some(k=>k.id===kid))return;if(S.wuensche.items.length>=300){toast('Die Wunschliste ist voll.');return;}
+  S.wuensche.items.push({id:uid(),kid,title:v,link:'',occ:UI.wishOcc?[UI.wishOcc]:[],note:'',got:false,from:''});
+  UI.wishNew='';saveCfg();render();setTimeout(()=>document.getElementById('wishNew')?.focus(),0);}
+function togWishGot(id){if(!UI.wishParent)return;const w=S.wuensche.items.find(x=>x.id===id);if(!w)return;w.got=!w.got;saveCfg();render();}
+function buildWishContent(kid){if(!kid)return'';const par=!!UI.wishParent,occ=UI.wishOcc||'';
+  const list=S.wuensche.items.filter(w=>w.kid===kid.id&&(!occ||w.occ.includes(occ)));
+  if(par)list.sort((a,b)=>a.got-b.got);
+  const row=w=>`<div class="ek-row${par&&w.got?' done':''}">${par?`<button class="ek-item" aria-pressed="${w.got}" aria-label="${esc(w.title)}: ${w.got?'besorgt':'noch nicht besorgt'}" onclick="togWishGot('${w.id}')"><span class="t-chk">${w.got?'✓':''}</span>`:`<div class="ek-item wish-item"><span class="wish-em">🎁</span>`}
+    <span class="todo-t"><span class="ek-name">${esc(w.title)}</span><span class="todo-m">${[w.occ.map(o=>OCC.find(x=>x.id===o).em+' '+OCC.find(x=>x.id===o).l).join(' · '),par&&w.from?'von '+esc(w.from):'',w.note?esc(w.note):''].filter(Boolean).join(' · ')}</span></span>
+    ${par?'</button>':'</div>'}${w.link?`<a class="wish-link" href="${esc(w.link)}" target="_blank" rel="noopener noreferrer" aria-label="Link zu ${esc(w.title)} öffnen">↗</a>`:''}
+    <button class="ek-del" aria-label="${esc(w.title)} bearbeiten" onclick="openWish('${w.id}')">⋯</button></div>`;
+  return`<div class="ess-tags">${[{id:'',em:'',l:'Alle'},...OCC].map(o=>`<button class="ap${occ===o.id?' on':''}" onclick="setWishOcc('${o.id}')">${o.em} ${o.l}</button>`).join('')}</div>
+  <div class="ek-add"><label for="wishNew" class="sr">Neuer Wunsch</label><input id="wishNew" value="${esc(UI.wishNew||'')}" maxlength="100" placeholder="Was wünschst du dir?" autocomplete="off" enterkeyhint="done" oninput="UI.wishNew=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();addWishInput('${kid.id}')}"><button class="m-save ek-plus" aria-label="Hinzufügen" onclick="addWishInput('${kid.id}')">＋</button></div>
+  ${list.length?list.map(row).join(''):`<div class="sp-empty">Noch keine Wünsche${occ?' für diesen Anlass':''}.</div>`}
+  <button class="reset-btn" onclick="${par?'wishParentOff()':'wishParentOn()'}">${par?'Eltern-Ansicht beenden':'🔒 Eltern-Ansicht: besorgt & wer schenkt'}</button>`;}
+function openWish(id){const w=S.wuensche.items.find(x=>x.id===id);if(!w)return;UI.form={mode:'wish',id,title:w.title,link:w.link,occ:w.occ.slice(),note:w.note,got:w.got,from:w.from};openModal();}
+function renderWishModal(){const f=UI.form,par=!!UI.wishParent;
+  return`<h3>Wunsch</h3>
+  <div class="field"><label for="wsT">Was</label><input id="wsT" maxlength="100" value="${esc(f.title)}" oninput="UI.form.title=this.value"></div>
+  <div class="field"><label>Für</label><div class="ap-wrap">${OCC.map(o=>`<button class="ap${f.occ.includes(o.id)?' on':''}" aria-pressed="${f.occ.includes(o.id)}" onclick="wishTogOcc('${o.id}')">${o.em} ${o.l}</button>`).join('')}</div></div>
+  <div class="field"><label for="wsL">Link (optional)</label><input id="wsL" type="url" inputmode="url" maxlength="300" placeholder="https://…" value="${esc(f.link)}" oninput="UI.form.link=this.value"></div>
+  <div class="field"><label for="wsN">Notiz (optional)</label><input id="wsN" maxlength="200" placeholder="z.B. Größe 128, in Blau" value="${esc(f.note)}" oninput="UI.form.note=this.value"></div>
+  ${par?`<div class="field"><label for="wsF">Wer schenkt (nur Eltern-Ansicht)</label><input id="wsF" maxlength="40" placeholder="z.B. Oma" value="${esc(f.from)}" oninput="UI.form.from=this.value"></div>
+  <div class="tog-row"><div><div class="tog-l">Besorgt</div></div><button type="button" role="switch" aria-checked="${f.got}" class="tog${f.got?' on':''}" onclick="UI.form.got=!UI.form.got;openModal()"></button></div>`:''}
+  <div class="m-btns"><button class="m-cancel" onclick="delWish()">Löschen</button><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveWish()">Speichern</button></div>`;}
+function wishTogOcc(id){const o=UI.form.occ,i=o.indexOf(id);if(i>=0)o.splice(i,1);else o.push(id);openModal();}
+function saveWish(){const f=UI.form,w=S.wuensche.items.find(x=>x.id===f.id);if(!w)return closeModal();
+  const title=String(f.title||'').trim().slice(0,100);if(!title){toast('Bitte eintragen, was gewünscht ist.');return;}
+  const link=String(f.link||'').trim();if(link&&!safeLink(link)){toast('Der Link muss mit https:// beginnen.');return;}
+  Object.assign(w,{title,link:safeLink(link),occ:OCC.map(o=>o.id).filter(o=>f.occ.includes(o)),note:String(f.note||'').trim().slice(0,200)});
+  if(UI.wishParent)Object.assign(w,{got:!!f.got,from:String(f.from||'').trim().slice(0,40)});
+  saveCfg();closeModal();render();}
+function delWish(){if(!confirm('Wunsch löschen?'))return;S.wuensche.items=S.wuensche.items.filter(x=>x.id!==UI.form.id);saveCfg();closeModal();render();}
+
 // ═══ EMOJI PICKER ═════════════════════════════
 let _epCb=null;
 function epOpen(cb){_epCb=cb;document.getElementById('epBg').classList.add('open');renderEp();}
@@ -1582,7 +1634,7 @@ function renderEp(){document.getElementById('epCats').innerHTML=EC.map(c=>`<butt
 function epPick(e){if(_epCb)_epCb(e);epClose();}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,todo:renderTodoModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,wish:renderWishModal,todo:renderTodoModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 
@@ -1683,7 +1735,7 @@ function removePin(){if(!confirm('Eltern-PIN entfernen?'))return;S.pin=null;save
 // ═══ ACTIONS ══════════════════════════════════
 function setKid(id){UI.kid=id;saveUiState();render();}
 function setRt(id){UI.rt=id;render();}
-function setView(v){UI.view=v;if(isKidView(v))UI.lastKid=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
+function setView(v){if(v!=='wuensche')UI.wishParent=false;UI.view=v;if(isKidView(v))UI.lastKid=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
 // ─── Wo war ich? (pro Gerät) ───
 function saveUiState(){try{localStorage.setItem('famos_ui',JSON.stringify({view:UI.view,essTab:UI.essTab,kid:UI.kid,lastKid:UI.lastKid,todoWho:UI.todoWho||''}));}catch(e){}}
 function restoreUiState(){const u=lsGet('famos_ui');if(!u||typeof u!=='object')return;

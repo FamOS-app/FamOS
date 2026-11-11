@@ -408,3 +408,12 @@ test('Sync: ohne Aufgaben-Tabelle (003 noch nicht eingespielt) läuft der Rest w
   assert.deepEqual(server.tasks.map(t => t.title), ['Steuer']); // wird nachgeliefert
   assert.deepEqual(a.get('S.aufgaben.items.map(t=>t.title)'), ['Steuer']);
 });
+
+test('Sync: Wunschliste kommt auf dem anderen Handy an', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server);
+  const b = await partner(server, a);
+  a.run(`setView('wuensche');UI.wishNew='Fahrrad';addWishInput(S.kids[0].id)`);
+  await sync(a); await sync(b);
+  assert.deepEqual(b.get('S.wuensche.items.map(w=>w.title)'), ['Fahrrad']);
+});

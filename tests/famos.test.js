@@ -171,7 +171,7 @@ test('Module: aus- und einschalten, mindestens eins bleibt an', () => {
   assert.equal(a.get('S.modules.taschengeld'), false);
   a.run('render()');
   assert.doesNotMatch(a.app(), /setView\('taschengeld'\)/);
-  a.run(`togModule('stundenplan');togModule('essen');togModule('einkauf');togModule('aufgaben')`);
+  a.run(`togModule('stundenplan');togModule('essen');togModule('einkauf');togModule('aufgaben');togModule('wuensche')`);
   a.run('render()');
   assert.doesNotMatch(a.app(), /bot-nav/); // nur ein Modul: keine Navigation
   a.run(`togModule('routine')`);
@@ -532,7 +532,7 @@ test('Migration: alter Stand ohne household/modules/_mv wird ergänzt, Daten ble
   const a = load(VORLAGE, { storage: { ra_cfg3: JSON.stringify(old) } });
   const S = a.get('S');
   assert.deepEqual(S.household, { name: 'Unsere Familie', adults: [] });
-  assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true, aufgaben: true, essen: true, einkauf: true });
+  assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true, wuensche: true, aufgaben: true, essen: true, einkauf: true });
   assert.deepEqual(S.einkauf.items, []);
   assert.deepEqual(S.einkauf.std, []);
   assert.equal(S.einkauf.order[0], 'obst');
@@ -1367,12 +1367,12 @@ test('Navigation: unten Kinder · Essen · Einkauf, Kinder bündelt Routine, Stu
   const nav = () => [...a.app().matchAll(/<button class="bni[^"]*" onclick="([^"]+)"><span class="bni-ic">[\s\S]*?<\/span>([^<]+)<\/button>/g)].map(m => m[2]);
   assert.deepEqual(nav(), ['Kinder', 'Aufgaben', 'Essen', 'Einkauf']);
   assert.equal(a.get('UI.view'), 'routine'); // nach dem Onboarding mit Kindern: Routine
-  assert.match(a.app(), /class="seg seg-3"/);
+  assert.match(a.app(), /class="seg seg-4"/);
   assert.match(a.app(), />Stundenplan</);
   a.run(`setView('taschengeld');setView('essen');goKinder()`);
   assert.equal(a.get('UI.view'), 'taschengeld'); // Kinder merkt sich den Unterbereich
   assert.match(a.app(), /class="bni on" onclick="goKinder\(\)"/);
-  a.run(`togModule('stundenplan');togModule('taschengeld');goKinder()`);
+  a.run(`togModule('stundenplan');togModule('taschengeld');togModule('wuensche');goKinder()`);
   assert.doesNotMatch(a.app(), /class="seg seg-/); // nur ein Kinder-Bereich: kein Umschalter
 });
 
@@ -1492,4 +1492,61 @@ test('Aufgaben: Import validiert, fremde Personen fallen weg, Schadcode bleibt T
   assert.deepEqual(a.get('S.aufgaben.items'), [{ id: 't1', title: '<img src=x onerror=alert(1)>', note: '', who: ['k1'], due: '', rep: '', done: true, doneBy: '', doneAt: 0 }]);
   a.run(`setView('aufgaben')`);
   assert.doesNotMatch(a.app(), /<img/);
+});
+
+// ─── Wünsche ──────────────────────────────────────────────────
+test('Wünsche: Kinder tragen ein, Anlass-Filter, besorgt und wer schenkt bleiben unsichtbar', () => {
+  const a = household();
+  const [k1, k2] = a.get('S.kids.map(k=>k.id)');
+  a.run(`setView('wuensche');setKid('${k1}')`);
+  assert.match(a.app(), /Was wünschst du dir\?/);
+  a.run(`UI.wishNew='Lego Feuerwehr';addWishInput('${k1}');setWishOcc('weih');UI.wishNew='Schlitten';addWishInput('${k1}')`);
+  assert.deepEqual(a.get(`S.wuensche.items.map(w=>[w.title,w.occ])`), [['Lego Feuerwehr', []], ['Schlitten', ['weih']]]);
+  assert.match(a.app(), /Schlitten/);
+  assert.doesNotMatch(a.app(), /Lego Feuerwehr/); // Filter Weihnachten
+  a.run(`setWishOcc('');setKid('${k2}')`);
+  assert.match(a.app(), /Noch keine Wünsche/); // pro Kind getrennt
+  // Elternteil markiert als besorgt, mit Schenkenden
+  a.run(`setKid('${k1}');wishParentOn()`);
+  const id = a.get('S.wuensche.items[0].id');
+  a.run(`openWish('${id}');UI.form.got=true;UI.form.from='Oma';saveWish()`);
+  assert.match(a.app(), /von Oma/);
+  assert.match(a.app(), /aria-pressed="true"/);
+  a.run(`setView('routine');setView('wuensche')`); // Bereich verlassen: Eltern-Ansicht aus
+  assert.equal(a.get('UI.wishParent'), false);
+  assert.doesNotMatch(a.app(), /Oma|aria-pressed="true"/);
+  a.run(`togWishGot('${id}')`); // ohne Eltern-Ansicht: keine Wirkung
+  assert.equal(a.get(`S.wuensche.items[0].got`), true);
+  a.run(`openWish('${id}')`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /Wer schenkt|Besorgt/);
+});
+
+test('Wünsche: Eltern-Ansicht verlangt die Eltern-PIN, falls gesetzt', () => {
+  const a = household();
+  a.run(`openPinSetModal();UI.form.p1='4711';UI.form.p2='4711';savePin();closeAdmin()`); a.flush();
+  a.run(`UI.unlockUntil=0;setView('wuensche');wishParentOn()`);
+  assert.equal(a.get('UI.wishParent'), undefined);
+  assert.equal(a.get('UI.form.mode'), 'pin');
+  a.run(`UI.form.pin='4711';pinSubmit()`);
+  assert.equal(a.get('UI.wishParent'), true);
+});
+
+test('Wünsche: nur sichere Links, Import validiert, Schadcode bleibt Text', () => {
+  const a = household();
+  const k1 = a.get('S.kids[0].id');
+  a.run(`setView('wuensche');UI.wishNew='Buch';addWishInput('${k1}');openWish(S.wuensche.items[0].id);UI.form.link='javascript:alert(1)';saveWish()`);
+  assert.match(a.toast(), /https:\/\//);
+  a.run(`UI.form.link='https://www.beispiel.de/buch?id=1';saveWish()`);
+  assert.match(a.app(), /href="https:\/\/www\.beispiel\.de\/buch\?id=1" target="_blank" rel="noopener noreferrer"/);
+  a.run('wishParentOn()');
+  assert.doesNotMatch(a.app(), /<button[^>]*>(?:(?!<\/button>)[\s\S])*<a /); // kein Link im Knopf
+  const b = load(VORLAGE);
+  const data = { cfg: { kids: [{ id: 'k1', name: 'Emma' }], household: { name: 'X' }, wuensche: { items: [
+    { id: 'w1', kid: 'k1', title: '<img src=x onerror=alert(1)>', link: 'javascript:alert(1)', occ: ['geb', 'ostern'], got: 1, from: 'Oma' },
+    { id: 'w2', kid: 'fremd', title: 'Fremdes Kind' }, { id: 'w1', kid: 'k1', title: 'Doppelt' },
+  ] } } };
+  assert.equal(b.run(`applyImport(${JSON.stringify(data)})`), true);
+  assert.deepEqual(b.get('S.wuensche.items'), [{ id: 'w1', kid: 'k1', title: '<img src=x onerror=alert(1)>', link: '', occ: ['geb'], note: '', got: true, from: 'Oma' }]);
+  b.run(`setView('wuensche')`);
+  assert.doesNotMatch(b.app(), /<img|javascript:/);
 });
