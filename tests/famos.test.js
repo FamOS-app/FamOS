@@ -171,7 +171,7 @@ test('Module: aus- und einschalten, mindestens eins bleibt an', () => {
   assert.equal(a.get('S.modules.taschengeld'), false);
   a.run('render()');
   assert.doesNotMatch(a.app(), /setView\('taschengeld'\)/);
-  a.run(`togModule('stundenplan');togModule('essen');togModule('einkauf');togModule('aufgaben');togModule('wuensche')`);
+  a.run(`togModule('stundenplan');togModule('essen');togModule('einkauf');togModule('aufgaben');togModule('wuensche');togModule('heute')`);
   a.run('render()');
   assert.doesNotMatch(a.app(), /bot-nav/); // nur ein Modul: keine Navigation
   a.run(`togModule('routine')`);
@@ -532,7 +532,7 @@ test('Migration: alter Stand ohne household/modules/_mv wird ergänzt, Daten ble
   const a = load(VORLAGE, { storage: { ra_cfg3: JSON.stringify(old) } });
   const S = a.get('S');
   assert.deepEqual(S.household, { name: 'Unsere Familie', adults: [] });
-  assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true, wuensche: true, aufgaben: true, essen: true, einkauf: true });
+  assert.deepEqual(S.modules, { heute: true, routine: true, stundenplan: true, taschengeld: true, wuensche: true, aufgaben: true, essen: true, einkauf: true });
   assert.deepEqual(S.einkauf.items, []);
   assert.deepEqual(S.einkauf.std, []);
   assert.equal(S.einkauf.order[0], 'obst');
@@ -1365,7 +1365,7 @@ test('Navigation: Zurück schließt erst Fenster, dann Einstellungen, dann zweim
 test('Navigation: unten Kinder · Essen · Einkauf, Kinder bündelt Routine, Stundenplan, Geld', () => {
   const a = household();
   const nav = () => [...a.app().matchAll(/<button class="bni[^"]*" onclick="([^"]+)"><span class="bni-ic">[\s\S]*?<\/span>([^<]+)<\/button>/g)].map(m => m[2]);
-  assert.deepEqual(nav(), ['Kinder', 'Aufgaben', 'Essen', 'Einkauf']);
+  assert.deepEqual(nav(), ['Heute', 'Kinder', 'Aufgaben', 'Essen', 'Einkauf']);
   assert.equal(a.get('UI.view'), 'routine'); // nach dem Onboarding mit Kindern: Routine
   assert.match(a.app(), /class="seg seg-4"/);
   assert.match(a.app(), />Stundenplan</);
@@ -1381,10 +1381,10 @@ test('Haushalt ohne Kinder: Onboarding nur mit Erwachsenen, kein Kinder-Reiter',
   a.run(`openAdultModal();adultQuick('Alex','🙂');saveAdult();ob().name='WG';obFinish()`);
   assert.equal(a.get('S.household.name'), 'WG');
   assert.deepEqual(a.get('S.kids'), []);
-  assert.equal(a.get('UI.view'), 'aufgaben');
+  assert.equal(a.get('UI.view'), 'heute');
   assert.doesNotMatch(a.app(), /goKinder|kid-tabs/);
   a.run(`setView('routine')`); // per altem Link/Speicherstand: wird umgeleitet
-  assert.equal(a.get('UI.view'), 'aufgaben');
+  assert.equal(a.get('UI.view'), 'heute');
   // letzte Person lässt sich nicht entfernen, erstes Kind schaltet Kinder-Reiter frei
   a.run(`openAdmin();delAdult(S.household.adults[0].id)`);
   assert.match(a.toast(), /Mindestens eine Person/);
@@ -1549,4 +1549,105 @@ test('Wünsche: nur sichere Links, Import validiert, Schadcode bleibt Text', () 
   assert.deepEqual(b.get('S.wuensche.items'), [{ id: 'w1', kid: 'k1', title: '<img src=x onerror=alert(1)>', link: '', occ: ['geb'], note: '', got: true, from: 'Oma' }]);
   b.run(`setView('wuensche')`);
   assert.doesNotMatch(b.app(), /<img|javascript:/);
+});
+
+// ─── Heute, Gerät, Auszahlungstag ─────────────────────────────
+function homeApp(opts) {
+  const a = household(opts);
+  a.run(`openAdmin();openAdultModal();adultQuick('Mama','👩');saveAdult();openAdultModal();adultQuick('Papa','👨');saveAdult();closeAdmin()`); a.flush();
+  return a;
+}
+test('Gerät: einmal fragen, wer es nutzt; Familiengerät möglich; „Später“ fragt nicht nochmal', () => {
+  const a = homeApp();
+  const mama = a.get('S.household.adults[0].id');
+  a.run(`closeModal();setView('heute')`); a.flush(); // nicht über ein anderes offenes Fenster
+  assert.equal(a.get('UI.form.mode'), 'who');
+  assert.match(a.els.mc.innerHTML, /Familiengerät \(für die Kinder\)/);
+  a.run(`setMe('${mama}')`);
+  assert.equal(a.get('getMe()'), mama);
+  assert.equal(a.get('UI.todoWho'), mama); // Aufgaben-Filter folgt
+  assert.match(a.app(), /Hallo|Guten (Morgen|Abend), Mama/);
+  const b = load(VORLAGE, { storage: { ...a.store, famos_me: '' } });
+  b.run(`closeModal();localStorage.setItem('famos_me_later','1');setView('heute')`); b.flush();
+  assert.notEqual(b.get('UI.form.mode'), 'who');
+  b.run(`openAdmin();setATab('kinder')`);
+  assert.match(b.adm(), /Noch nicht zugeordnet/);
+  b.run(`setMe('family')`);
+  assert.match(b.adm(), /Familiengerät/);
+  assert.equal(b.get('getMe()'), 'family');
+  // gelöschte Person: Zuordnung gilt nicht mehr
+  const c = load(VORLAGE, { storage: { ...a.store, famos_me: 'weg' } });
+  assert.equal(c.get('getMe()'), '');
+});
+
+test('Heute: meine fälligen Aufgaben (abhakbar), Essen mit Würfeln, Kinder mit Routine und Brot, Einkauf eintragen', () => {
+  const a = homeApp();
+  const [mama, papa] = a.get('S.household.adults.map(x=>x.id)'), k1 = a.get('S.kids[0].id');
+  a.run(`setMe('${mama}')`);
+  const T = (title, who, due) => a.run(`S.aufgaben.items.push({id:uid(),title:${JSON.stringify(title)},note:'',who:${JSON.stringify(who)},due:${due},rep:'',done:false,doneBy:'',doneAt:0})`);
+  T('Kita-Formular', [mama], 'addDays(today(),-1)'); T('Reifen', [papa], 'today()'); T('Fotos', [], 'today()'); T('Später', [mama], 'addDays(today(),3)');
+  a.run(`togBrot('morgen');UI.kid='${k1}';UI.rt='morgen';setBrot('ja');setView('heute')`); a.flush(); a.run('closeModal()');
+  const html = a.app();
+  assert.match(html, /Meine Aufgaben[\s\S]*Kita-Formular/);
+  assert.match(html, /Fotos/); // irgendwer
+  assert.doesNotMatch(html, /Reifen|Später/); // Papas / nicht fällig
+  assert.match(html, /Essen heute[\s\S]*noch offen[\s\S]*rollToday\('abend'\)/);
+  assert.match(html, /Kinder heute[\s\S]*Morgenroutine 0\/6[\s\S]*🍞 braucht ein Brot/);
+  a.run(`toggleTodo(S.aufgaben.items[0].id)`);
+  assert.doesNotMatch(a.app(), /Kita-Formular/);
+  a.run(`document.getElementById('homeEk').value='Milch';homeEkAdd()`);
+  assert.deepEqual(a.get('S.einkauf.items.map(x=>x.name)'), ['Milch']);
+  assert.match(a.app(), /Einkauf · 1 Ding/);
+  a.run(`rollToday('abend')`);
+  assert.match(a.app(), /Essen heute[\s\S]*home-link/);
+});
+
+test('Heute: Familiengerät zeigt Aufgaben aller, ohne Taschengeld-Entscheidungen; leere Karten fallen weg', () => {
+  const a = homeApp();
+  a.run(`setMe('family');togModule('einkauf');togModule('essen');S.kids.forEach(k=>{S.routines.morgen.tasks=[]});S.tgPay=(new Date().getDay()+6)%7;S.tgPaySince=today();togTgAktiv(S.kids[0].id);setView('heute')`);
+  assert.match(a.app(), /Aufgaben heute|Heute steht nichts an|Kinder heute/);
+  assert.doesNotMatch(a.app(), /Taschengeld .* fällig|tgDecide/);
+  assert.doesNotMatch(a.app(), /Essen heute|Einkauf/);
+});
+
+test('Taschengeld: Auszahlungstag macht es heute fällig, danach überfällig, auch für die Vorwoche', () => {
+  const a = homeApp();
+  const [k1, k2] = a.get('S.kids.map(k=>k.id)'), mama = a.get('S.household.adults[0].id');
+  a.run(`setMe('${mama}');togTgAktiv('${k1}');openTgBetragModal('${k1}');UI.form.betrag='2';saveTgBetrag()`);
+  const dow = a.get('(new Date().getDay()+6)%7');
+  a.run(`openAdmin();setATab('taschengeld')`);
+  assert.match(a.adm(), /Auszahlungstag/);
+  a.run(`setTgPay(${dow})`); // heute ist Auszahlungstag
+  assert.equal(a.get('S.tgPaySince'), a.get('today()'));
+  let due = a.get('tgDue()');
+  assert.equal(due.length, 1); // nur das aktive Kind
+  assert.deepEqual([due[0].kid.id, due[0].over, due[0].amt], [k1, false, 2]);
+  a.run(`closeAdmin()`); a.flush(); a.run(`setView('heute')`); a.flush(); a.run('closeModal()');
+  assert.match(a.app(), /Emma · 2,00 €[\s\S]*Taschengeld · heute fällig/);
+  a.run(`setView('aufgaben')`);
+  assert.match(a.app(), /Emma · 2,00 €/); // auch unter Aufgaben
+  // Entscheiden: ins Sparschwein, Karte verschwindet
+  a.run(`tgDecide('${k1}',weekKey(),'gespart')`);
+  assert.equal(a.get(`SAVINGS['${k1}']`), 2);
+  assert.deepEqual(a.get('tgDue()'), []);
+  // Vorwoche: Auszahlungstag lag in der Vergangenheit, nichts entschieden → überfällig, mit richtiger KW
+  a.run(`S.tgPaySince=addDays(today(),-14)`);
+  due = a.get('tgDue()').filter(x => x.wk !== a.get('weekKey()'));
+  assert.ok(due.length >= 1);
+  assert.equal(due[0].over, true);
+  a.run(`tgDecide('${k1}','${due[0].wk}','gespart')`);
+  assert.equal(a.get(`TX.at(-1).note`), `Wochengeld gespart (KW ${Number(due[0].wk.slice(5))})`);
+  // vor dem Festlegen liegende Wochen zählen nicht
+  a.run(`S.tgPaySince=today();TGD={}`);
+  assert.ok(a.get('tgDue()').every(x => x.pay >= a.get('today()')));
+  a.run(`setTgPay(-1)`);
+  assert.deepEqual(a.get('tgDue()'), []);
+});
+
+test('Taschengeld: Auszahlungstag wird beim Import geprüft und gleicht sich ab', () => {
+  const a = load(VORLAGE);
+  a.run(`applyImport(${JSON.stringify({ cfg: { kids: [{ id: 'k1', name: 'E' }], household: { name: 'X' }, tgPay: 9, tgPaySince: '<x>' } })})`);
+  assert.deepEqual([a.get('S.tgPay'), a.get('S.tgPaySince')], [-1, '']);
+  a.run(`applyImport(${JSON.stringify({ cfg: { kids: [{ id: 'k1', name: 'E' }], household: { name: 'X' }, tgPay: 5, tgPaySince: '2026-11-01' } })})`);
+  assert.deepEqual([a.get('S.tgPay'), a.get('S.tgPaySince')], [5, '2026-11-01']);
 });

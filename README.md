@@ -67,6 +67,13 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 - Logo: Familien-Netz im Haus (vier verbundene Punkte in den Palettenfarben).
 - Tippflächen mindestens 44 px, Zoom erlaubt, sichtbarer Fokus, `prefers-reduced-motion` wird respektiert.
 
+## Navigation und Startseite
+
+- Unten: **Heute · Kinder · Aufgaben · Essen · Einkauf**. „Kinder“ bündelt Routine, Stundenplan, Taschengeld, Wünsche (nur wenn es Kinder gibt). Die App merkt sich pro Gerät die letzte Ansicht; Android-Zurück schließt erst Offenes.
+- **Heute:** Karten für meine fälligen Aufgaben (inkl. fälligem Taschengeld), Kinder (Routine-Fortschritt, Brot, Stundenplan kurz), Essen heute (würfeln, wenn leer), Einkauf (direkt eintragen), ab 14 Uhr „Morgen“. Leere Karten entfallen; morgens Kinder oben, ab 14 Uhr Aufgaben/Essen/Morgen.
+- **Gerät:** „Wer nutzt dieses Gerät?“ (Erwachsene oder Familiengerät), pro Gerät, einmal gefragt, änderbar unter Einstellungen → Haushalt.
+- **Taschengeld-Auszahlungstag** (Einstellungen → Taschengeld): am Tag fällig unter Heute/Aufgaben, danach überfällig bis „Ausgezahlt“/„Sparen“, auch für vergangene Wochen (zählt ab dem Tag des Festlegens).
+
 ## Datenmodell
 
 Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`, `routines`, `wahlPool`, `stundenplan[kidId][tag]`, `taschengeld[kidId]`, `essen {meals, dishes[], plan[datum][mahlzeit]}`, `einkauf {items[], recent[]}`, `modules`, `pin`, `_mv` (aktuell 4).

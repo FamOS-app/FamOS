@@ -189,6 +189,19 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.home-greet{font-size:1.05rem;font-weight:700;color:var(--muted);margin:-8px 0 14px}
+.home-card{padding:12px 14px}
+.home-h{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;padding:2px 0 10px;font:inherit;font-weight:800;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);min-height:36px}
+.home-card .ek-row:last-child{margin-bottom:0}
+.home-kid{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--border)}
+.home-kid:first-of-type{border-top:none;padding-top:0}
+.home-kid .tg-act{flex:0 0 auto;padding:8px 14px;min-height:40px}
+.home-link{background:none;padding:0;font:inherit;font-weight:700;font-size:.98rem;text-align:left;color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px}
+.home-more{background:none;padding:6px 0 0;font-weight:700;font-size:.85rem;color:var(--muted)}
+.tg-due{cursor:default;min-height:52px;padding:8px 12px}
+.tg-due .wish-em{font-size:1.2rem}
+.tg-due-b{display:flex;gap:6px;flex-shrink:0}
+.tg-due-b .tg-act{min-width:46px;min-height:46px;padding:0;font-size:1.2rem;flex-direction:row}
 .wish-item{cursor:default}
 .wish-em{font-size:1.4rem;flex-shrink:0}
 .wish-link{flex-shrink:0;min-width:36px;min-height:36px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--border);color:var(--text);text-decoration:none;font-weight:800}
@@ -562,6 +575,7 @@ const IC={
   taschengeld:'<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></svg>',
   essen:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3v6a2 2 0 0 0 4 0V3M8.5 11v10M17.5 21V3c-2.2 1.2-3.5 4-3.5 8h3.5"/></svg>',
   einkauf:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8z"/><path d="M9 10V6.5a3 3 0 0 1 6 0V10"/></svg>',
+  heute:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 19z"/><path d="M9.5 20.5V14h5v6.5"/></svg>',
   kinder:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7.5" r="3"/><path d="M3.5 20c0-3.3 2.5-6 5.5-6s5.5 2.7 5.5 6"/><circle cx="17" cy="10" r="2.2"/><path d="M15.2 15.1c.6-.3 1.2-.4 1.8-.4 2.4 0 4.3 2.1 4.3 4.8"/></svg>',
   aufgaben:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.3 1.3L7 5M3.5 12l1.3 1.3L7 11"/><circle cx="5" cy="18" r="1.4"/></svg>',
   gear:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>',
@@ -610,7 +624,7 @@ const DEF={
   einkauf:{items:[],recent:[],cats:{},order:[],std:[]},
   aufgaben:{items:[]},
   wuensche:{items:[]},
-  modules:{routine:true,stundenplan:true,taschengeld:true,wuensche:true,aufgaben:true,essen:true,einkauf:true},
+  modules:{heute:true,routine:true,stundenplan:true,taschengeld:true,wuensche:true,aufgaben:true,essen:true,einkauf:true},
   installHintDone:false,
   _mv:4,
 };
@@ -647,6 +661,7 @@ const EK_WORDS={
 const EK_DICT=Object.entries(EK_WORDS).flatMap(([cat,w])=>w.split(' ').map(k=>[k,cat]));
 const EK_SIGNAL={passiert:'vorrat',passierte:'vorrat',dose:'vorrat',konserve:'vorrat',tk:'tk',tiefkühl:'tk',gefroren:'tk'};
 const MODULES=[
+  {id:'heute',em:'🏠',lbl:'Heute',nav:'Heute',desc:'Startseite: Aufgaben, Essen, Kinder, Einkauf auf einen Blick'},
   {id:'routine',kid:true,em:'✅',lbl:'Routine',nav:'Routine',desc:'Tägliche Aufgaben, Brot-Check, Haushalts-Wahl'},
   {id:'stundenplan',kid:true,em:'📅',lbl:'Stundenplan',nav:'Plan',desc:'Schule und Kita pro Wochentag'},
   {id:'taschengeld',kid:true,em:'🐷',lbl:'Taschengeld',nav:'Geld',desc:'Wochengeld, Sparschwein, Ein- und Auszahlungen'},
@@ -661,12 +676,13 @@ function enabledMods(){return MODULES.filter(m=>modOn(m.id));}
 function kidMods(){return S.kids.length?MODULES.filter(m=>m.kid&&modOn(m.id)):[];}
 function isKidView(v){return MODULES.some(m=>m.kid&&m.id===v);}
 function navItems(){const k=kidMods(),out=[];
+  if(modOn('heute'))out.push({id:'heute',lbl:'Heute',on:UI.view==='heute',go:"setView('heute')"});
   if(k.length)out.push({id:'kinder',lbl:'Kinder',on:isKidView(UI.view),go:'goKinder()'});
-  MODULES.filter(m=>!m.kid&&modOn(m.id)).forEach(m=>out.push({id:m.id,lbl:m.nav||m.lbl,on:UI.view===m.id,go:`setView('${m.id}')`}));
+  MODULES.filter(m=>!m.kid&&m.id!=='heute'&&modOn(m.id)).forEach(m=>out.push({id:m.id,lbl:m.nav||m.lbl,on:UI.view===m.id,go:`setView('${m.id}')`}));
   return out;}
 function goKinder(){const k=kidMods();setView(k.some(m=>m.id===UI.lastKid)?UI.lastKid:k[0]?.id||'routine');}
 function ensureView(){const ok=v=>modOn(v)&&(!isKidView(v)||S.kids.length);
-  if(!ok(UI.view))UI.view=kidMods()[0]?.id||MODULES.find(m=>!m.kid&&modOn(m.id))?.id||'routine';}
+  if(!ok(UI.view))UI.view=(modOn('heute')?'heute':null)||kidMods()[0]?.id||MODULES.find(m=>!m.kid&&modOn(m.id))?.id||'routine';}
 
 // ═══ STORAGE ══════════════════════════════════
 function lsSet(k,v){try{localStorage.setItem(k,v);return true;}catch(e){toast('Speichern fehlgeschlagen. Speicher voll oder gesperrt?');return false;}}
@@ -711,7 +727,8 @@ function sanitizeCfg(c){
   if(!MODULES.some(m=>modules[m.id]))modules[MODULES[0].id]=true;
   const pin=c.pin&&typeof c.pin.s==='string'&&typeof c.pin.h==='string'&&/^[a-z0-9]{1,16}$/.test(c.pin.s)&&/^[0-9a-f]{8}$/.test(c.pin.h)?{s:c.pin.s,h:c.pin.h}:null;
   const essen=sanitizeEssen(c.essen,kids,household?.adults||[]),einkauf=sanitizeEinkauf(c.einkauf),wuensche=sanitizeWuensche(c.wuensche,kids.map(k=>k.id)),aufgaben=sanitizeAufgaben(c.aufgaben,[...kids,...(household?.adults||[])].map(p=>p.id));
-  return{household,kids,routines,wahlPool,stundenplan,taschengeld,modules,essen,einkauf,aufgaben,wuensche,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
+  const tgPay=Number.isInteger(c.tgPay)&&c.tgPay>=0&&c.tgPay<=6?c.tgPay:-1,tgPaySince=tgPay>=0&&/^\d{4}-\d{2}-\d{2}$/.test(c.tgPaySince||'')?c.tgPaySince:'';
+  return{household,kids,routines,wahlPool,stundenplan,taschengeld,tgPay,tgPaySince,modules,essen,einkauf,aufgaben,wuensche,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
 }
 function sanitizeEssen(e,kids,adults){
   if(!e||typeof e!=='object'||Array.isArray(e))e=clone(DEF.essen); // ältere Stände: Beispielgerichte
@@ -831,6 +848,7 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function firstActiveRt(){return Object.keys(S.routines).find(k=>S.routines[k].active)||'morgen';}
 function todayDow(){return{0:'so',1:'mo',2:'di',3:'mi',4:'do',5:'fr',6:'sa'}[new Date().getDay()]||'mo';}
 function weekKey(){const d=new Date(),thu=new Date(d);thu.setDate(d.getDate()-(d.getDay()+6)%7+3);const ft=new Date(thu.getFullYear(),0,4);const kw=Math.round(1+(thu-ft)/6048e5);return`${thu.getFullYear()}W${String(kw).padStart(2,'0')}`;}
+function weekKeyOf(ds){const d=pdate(ds),thu=new Date(d);thu.setDate(d.getDate()-(d.getDay()+6)%7+3);const ft=new Date(thu.getFullYear(),0,4);const kw=Math.round(1+(thu-ft)/6048e5);return`${thu.getFullYear()}W${String(kw).padStart(2,'0')}`;}
 function getKW(){const d=new Date(),thu=new Date(d);thu.setDate(d.getDate()-(d.getDay()+6)%7+3);const ft=new Date(thu.getFullYear(),0,4);return Math.round(1+(thu-ft)/6048e5);}
 function fmt(n){return n.toFixed(2).replace('.',',')+' €';}
 
@@ -912,9 +930,10 @@ function buildApp(){
   else if(UI.view==='essen') content=buildEssenContent();
   else if(UI.view==='einkauf') content=buildEinkaufContent();
   else if(UI.view==='aufgaben') content=buildAufgabenContent();
+  else if(UI.view==='heute') content=buildHeute();
   else if(UI.view==='wuensche') content=buildWishContent(kid);
 
-  const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',aufgaben:'Aufgaben',stundenplan:'Stundenplan',taschengeld:'Taschengeld',wuensche:'Wünsche'}[UI.view];
+  const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',aufgaben:'Aufgaben',heute:'Heute',stundenplan:'Stundenplan',taschengeld:'Taschengeld',wuensche:'Wünsche'}[UI.view];
 
   const nav=navItems(),showNav=nav.length>1,km=kidMods();
   const kidSeg=isKidView(UI.view)&&km.length>1?`<div class="seg seg-${km.length}" role="tablist">${km.map(m=>`<button class="seg-b${UI.view===m.id?' on':''}" role="tab" aria-selected="${UI.view===m.id}" onclick="setView('${m.id}')">${esc(m.nav==='Plan'?'Stundenplan':m.nav||m.lbl)}</button>`).join('')}</div>`:'';
@@ -1037,7 +1056,9 @@ function togModule(id){
   S.modules[id]=!modOn(id);
   saveCfg();ensureView();renderAdmin();}
 
-function admKinder(){return`<div class="as-lbl">Aussehen auf diesem Gerät</div>
+function admKinder(){const me=getMe(),mp=meAdult();return`<div class="as-lbl">Dieses Gerät</div>
+  <div class="tog-row"><div><div class="tog-l">${me==='family'?'👨‍👩‍👧 Familiengerät':mp?`${esc(mp.icon)} ${esc(mp.name)}`:'Noch nicht zugeordnet'}</div><div class="tog-s">Bestimmt, welche Aufgaben unter „Heute“ stehen</div></div><button class="m-cancel" style="flex:0 0 auto;padding:8px 14px;min-height:40px" onclick="openWhoModal()">Ändern</button></div>
+  <div class="as-lbl">Aussehen auf diesem Gerät</div>
   <div class="look-pick">${LOOKS.map(l=>`<button class="look-opt${getLook()===l.id?' on':''}" aria-pressed="${getLook()===l.id}" onclick="setLook('${l.id}')"><span class="look-sw">${l.sw.map(c=>`<i style="background:${c}"></i>`).join('')}</span><strong>${l.l}</strong><span>${l.d}</span></button>`).join('')}</div>
   <div class="tg-card"><div class="field" style="margin-bottom:0"><label>Name des Haushalts</label><input value="${esc(S.household?.name||'')}" placeholder="z.B. Familie Müller" onchange="saveHhName(this.value)"></div></div>
   <div class="as-lbl">Erwachsene</div>
@@ -1108,7 +1129,8 @@ function admHaushalt(){return`<div style="font-size:.8rem;color:var(--muted);fon
 
 function admTg(){
   if(!S.taschengeld)S.taschengeld=JSON.parse(JSON.stringify(DEF.taschengeld));
-  return S.kids.map(k=>{
+  return`<div class="tg-card"><div class="as-lbl">Auszahlungstag</div><div class="ins-why" style="margin-bottom:10px">An diesem Tag erscheint das Taschengeld unter „Heute“, danach als überfällig, bis ihr „Ausgezahlt“ oder „Sparen“ wählt.</div>
+  <div class="ap-wrap">${DAYS.map((d,i)=>`<button class="ap${S.tgPay===i?' on':''}" onclick="setTgPay(${i})">${d.s}</button>`).join('')}<button class="ap${S.tgPay<0?' on':''}" onclick="setTgPay(-1)">Keiner</button></div></div>`+S.kids.map(k=>{
     const tg=S.taschengeld[k.id]||{betrag:1,aktiv:false};
     const savings=SAVINGS[k.id]||0;
     return`<div class="ai" style="flex-direction:column;align-items:stretch;padding:14px">
@@ -1517,6 +1539,19 @@ function applyClaude(){const f=UI.form,P=f.preview;
   if(!S.stundenplan[f.kid])S.stundenplan[f.kid]={};Object.entries(P).forEach(([d,list])=>{S.stundenplan[f.kid][d]=list;});
   saveCfg();closeModal();if(document.getElementById('adm').classList.contains('open'))renderAdmin();render();toast('Stundenplan übernommen');}
 
+// ═══ GERÄT: WER NUTZT ES ══════════════════════
+// Pro Gerät: eine erwachsene Person, 'family' (Familiengerät für die Kinder) oder leer (noch nicht gefragt)
+function getMe(){try{const m=localStorage.getItem('famos_me')||'';return m==='family'||(S.household?.adults||[]).some(a=>a.id===m)?m:'';}catch(e){return'';}}
+function setMe(v){try{localStorage.setItem('famos_me',v);}catch(e){}if(v&&v!=='family'){UI.todoWho=v;saveUiState();}closeModal();renderAdmin();render();}
+function meAdult(){const m=getMe();return m&&m!=='family'?personById(m):null;}
+function openWhoModal(){UI.form={mode:'who'};openModal();}
+function renderWhoModal(){const m=getMe(),ad=S.household?.adults||[];
+  return`<h3>Wer nutzt dieses Gerät?</h3><div class="ins-why">Dann zeigt „Heute“ deine Aufgaben. Auf einem Familiengerät stehen dort die Aufgaben aller.</div>
+  <div class="al">${ad.map(a=>`<button class="ai ess-pickrow${m===a.id?' sel':''}" onclick="setMe('${a.id}')"><span class="ai-em">${esc(a.icon)}</span><span class="ai-main">${esc(a.name)}</span></button>`).join('')}
+  <button class="ai ess-pickrow${m==='family'?' sel':''}" onclick="setMe('family')"><span class="ai-em">👨‍👩‍👧</span><span class="ai-main">Familiengerät (für die Kinder)</span></button></div>
+  ${ad.length?'':'<div class="ins-why">Tipp: Unter ⚙️ → Haushalt Erwachsene anlegen, dann kann jede/r ihr Handy zuordnen.</div>'}
+  <div class="m-btns"><button class="m-cancel" onclick="try{localStorage.setItem('famos_me_later','1')}catch(e){};closeModal()">Später</button></div>`;}
+
 // ═══ AUFGABEN ═════════════════════════════════
 // To-dos für alle im Haushalt: wer (eine/mehrere Personen oder irgendwer), bis wann, Wiederholung.
 // Abgleich zeilenweise über die Tabelle tasks (wie die Einkaufsliste).
@@ -1557,6 +1592,7 @@ function buildAufgabenContent(){
   Object.values(by).forEach(a=>a.sort((x,y)=>(x.due||'9').localeCompare(y.due||'9')||x.title.localeCompare(y.title,'de')));
   return`${ps.length>1?`<div class="ess-tags">${[{id:'',icon:'',name:'Alle'},...ps].map(p=>`<button class="ap${who===p.id?' on':''}" onclick="setTodoWho('${p.id}')">${esc(p.icon)} ${esc(p.name)}</button>`).join('')}</div>`:''}
   <div class="ek-add"><label for="todoNew" class="sr">Neue Aufgabe</label><input id="todoNew" value="${esc(UI.todoNew||'')}" maxlength="120" placeholder="${who?`Neue Aufgabe für ${esc(personById(who).name)}`:'Neue Aufgabe'}" autocomplete="off" enterkeyhint="done" oninput="UI.todoNew=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();addTodoInput()}"><button class="m-save ek-plus" aria-label="Hinzufügen" onclick="addTodoInput()">＋</button></div>
+  ${!who||personById(who)?.id&&!S.kids.some(k=>k.id===who)?tgDueRows():''}
   ${open.length?BUCKETS.filter(b=>by[b.id]).map(b=>`<div class="ek-cat${b.id==='over'?' over':''}">${b.l} · ${by[b.id].length}</div>${by[b.id].map(t=>todoRow(t)).join('')}`).join(''):`<div class="sp-empty">${list.length?'Alles erledigt. 🎉':'Noch keine Aufgaben. Oben eintragen; über ⋯ legt ihr fest, wer, bis wann und wie oft.'}</div>`}
   ${done.length?`<div class="ek-cat">Erledigt · ${done.length}</div>${done.map(t=>todoRow(t)).join('')}<button class="reset-btn" onclick="clearTodosDone()">Erledigte entfernen</button>`:''}`;
 }
@@ -1624,6 +1660,48 @@ function saveWish(){const f=UI.form,w=S.wuensche.items.find(x=>x.id===f.id);if(!
   saveCfg();closeModal();render();}
 function delWish(){if(!confirm('Wunsch löschen?'))return;S.wuensche.items=S.wuensche.items.filter(x=>x.id!==UI.form.id);saveCfg();closeModal();render();}
 
+// ═══ HEUTE ════════════════════════════════════
+// Startseite: was heute los ist. Karten ohne Inhalt fallen weg; ab 14 Uhr rücken Abend und „Morgen“ nach vorn.
+function hour(){return new Date().getHours();}
+function spSummary(kidId,ds){const day=DAYS[(pdate(ds).getDay()+6)%7].id,e=(S.stundenplan?.[kidId]?.[day])||[];if(!e.length)return'';
+  const times=e.map(x=>x.time).filter(Boolean),end=times.length?times[times.length-1].split(/[–-]/).pop().trim():'';
+  return`${esc(e[0].lbl)}${e.length>1?` + ${e.length-1}`:''}${end?` · bis ${esc(end)}`:''}`;}
+function homeCard(id,title,body,go){return body?`<div class="tg-card home-card"><button class="home-h" onclick="${go}"><span>${title}</span><span aria-hidden="true">→</span></button>${body}</div>`:'';}
+function buildHeute(){
+  const td=today(),late=hour()>=14,me=getMe(),mp=meAdult(),cards={};
+  // Meine Aufgaben (bzw. alle auf dem Familiengerät)
+  if(modOn('aufgaben')){const who=mp?mp.id:'';
+    const list=S.aufgaben.items.filter(t=>!t.done&&todoFor(t,who)&&t.due&&t.due<=td).sort((a,b)=>a.due.localeCompare(b.due));
+    const tg=me==='family'?'':tgDueRows();
+    cards.todo=homeCard('todo',mp?'Meine Aufgaben':'Aufgaben heute',tg+list.slice(0,5).map(t=>todoRow(t)).join('')+(list.length>5?`<button class="home-more" onclick="setView('aufgaben')">+ ${list.length-5} weitere</button>`:''),"setView('aufgaben')");}
+  else if(me!=='family')cards.todo=homeCard('todo','Taschengeld',tgDueRows(),"goKinder()");
+  // Kinder heute
+  if(S.kids.length&&kidMods().length){const rt=late&&S.routines.abend?.active?'abend':S.routines.morgen?.active?'morgen':firstActiveRt();
+    cards.kinder=homeCard('kinder','Kinder heute',S.kids.map(k=>{const done=doneCount(rt,k.id),tot=totalCount(rt,k.id),brot=S.routines[rt]?.brot&&D.brot?.[rt]?.[k.id]==='ja';
+      const sp=modOn('stundenplan')?spSummary(k.id,td):'';
+      return`<div class="home-kid"><span class="wish-em">${esc(k.icon)}</span><span class="todo-t"><span class="ek-name">${esc(k.name)}</span><span class="todo-m">${[modOn('routine')&&tot?`${esc(S.routines[rt].label)}routine ${done}/${tot}${done>=tot?' ✓':''}`:'',brot?'🍞 braucht ein Brot':'',sp].filter(Boolean).join(' · ')||'–'}</span></span></div>`;}).join(''),"goKinder()");}
+  // Essen heute
+  if(modOn('essen')&&S.essen.dishes.length){cards.essen=homeCard('essen','Essen heute',activeMeals().map(m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
+    return`<div class="home-kid"><span class="wish-em">${d?esc(d.em):m.em}</span><span class="todo-t"><span class="todo-m">${m.l}</span>${d?`<button class="home-link" onclick="openRecipe('${d.id}','${td}','${m.id}')">${esc(d.name)}</button>`:'<span class="ek-name">noch offen</span>'}</span>${d?'':`<button class="tg-act" onclick="rollToday('${m.id}')">Würfeln</button>`}</div>`;}).join(''),"setView('essen')");}
+  // Einkauf
+  if(modOn('einkauf')){const n=ekOpen().length;
+    cards.einkauf=homeCard('einkauf',`Einkauf${n?` · ${n} ${n===1?'Ding':'Dinge'}`:''}`,`<div class="ek-add" style="margin:0"><label for="homeEk" class="sr">Auf die Einkaufsliste</label><input id="homeEk" maxlength="80" placeholder="Auf die Liste: Was fehlt?" autocomplete="off" enterkeyhint="done" onkeydown="if(event.key==='Enter'){event.preventDefault();homeEkAdd()}"><button class="m-save ek-plus" aria-label="Hinzufügen" onclick="homeEkAdd()">＋</button></div>`,"setView('einkauf')");}
+  // Morgen (ab Nachmittag)
+  if(late){const tm=addDays(td,1),rows=[];
+    S.kids.forEach(k=>{const sp=modOn('stundenplan')?spSummary(k.id,tm):'';if(sp)rows.push(`<div class="home-kid"><span class="wish-em">${esc(k.icon)}</span><span class="todo-t"><span class="ek-name">${esc(k.name)}</span><span class="todo-m">${sp}</span></span></div>`);});
+    if(modOn('essen'))activeMeals().forEach(m=>{const sl=planSlot(tm,m.id),d=sl&&dishById(sl.id);if(d)rows.push(`<div class="home-kid"><span class="wish-em">${esc(d.em)}</span><span class="todo-t"><span class="todo-m">${m.l}</span><span class="ek-name">${esc(d.name)}</span></span></div>`);});
+    if(modOn('aufgaben')){const n=S.aufgaben.items.filter(t=>!t.done&&t.due===tm&&todoFor(t,mp?.id||'')).length;if(n)rows.push(`<div class="home-kid"><span class="wish-em">📝</span><span class="todo-t"><span class="ek-name">${n} ${n===1?'Aufgabe':'Aufgaben'}</span></span></div>`);}
+    cards.morgen=homeCard('morgen','Morgen',rows.join(''),modOn('aufgaben')?"setView('aufgaben')":"goKinder()");}
+  const order=late?['todo','essen','morgen','einkauf','kinder']:['kinder','todo','essen','einkauf'];
+  const greet=hour()<11?'Guten Morgen':hour()<17?'Hallo':'Guten Abend';
+  const body=order.map(k=>cards[k]||'').join('');
+  return`<div class="home-greet">${greet}${mp?`, ${esc(mp.name)}`:''}</div>${body||'<div class="sp-empty">Heute steht nichts an. 🌿</div>'}`;
+}
+function homeEkAdd(){const el=document.getElementById('homeEk');if(ekAdd(el?.value||'')){saveCfg();render();setTimeout(()=>document.getElementById('homeEk')?.focus(),0);toast('Auf der Einkaufsliste');}}
+// Einmal fragen, wem dieses Gerät gehört (nur wenn es Erwachsene gibt)
+function maybeAskWho(){if(getMe()||!(S.household?.adults||[]).length)return;try{if(localStorage.getItem('famos_me_later'))return;}catch(e){return;}
+  if(!document.getElementById('mb').classList.contains('open'))openWhoModal();}
+
 // ═══ EMOJI PICKER ═════════════════════════════
 let _epCb=null;
 function epOpen(cb){_epCb=cb;document.getElementById('epBg').classList.add('open');renderEp();}
@@ -1634,7 +1712,7 @@ function renderEp(){document.getElementById('epCats').innerHTML=EC.map(c=>`<butt
 function epPick(e){if(_epCb)_epCb(e);epClose();}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,wish:renderWishModal,todo:renderTodoModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 
@@ -1735,7 +1813,7 @@ function removePin(){if(!confirm('Eltern-PIN entfernen?'))return;S.pin=null;save
 // ═══ ACTIONS ══════════════════════════════════
 function setKid(id){UI.kid=id;saveUiState();render();}
 function setRt(id){UI.rt=id;render();}
-function setView(v){if(v!=='wuensche')UI.wishParent=false;UI.view=v;if(isKidView(v))UI.lastKid=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
+function setView(v){if(v!=='wuensche')UI.wishParent=false;UI.view=v;if(v==='heute')setTimeout(maybeAskWho,300);if(isKidView(v))UI.lastKid=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
 // ─── Wo war ich? (pro Gerät) ───
 function saveUiState(){try{localStorage.setItem('famos_ui',JSON.stringify({view:UI.view,essTab:UI.essTab,kid:UI.kid,lastKid:UI.lastKid,todoWho:UI.todoWho||''}));}catch(e){}}
 function restoreUiState(){const u=lsGet('famos_ui');if(!u||typeof u!=='object')return;
@@ -1766,17 +1844,29 @@ function toggleWahlDone(rtId,kidId,wahlId){dayGuard();const key='w_'+wahlId;if(!
 
 function setTgStatus(status){requirePin(()=>_setTgStatus(status));}
 // Nochmal auf den aktiven Status tippen nimmt ihn zurück
-function _setTgStatus(status){
-  const wk=weekKey(),key=UI.kid+':'+wk,prev=TGD[key]||null;
+function _setTgStatus(status,kidId,wkKey){
+  const kid=kidId||UI.kid,wk=wkKey||weekKey(),key=kid+':'+wk,prev=TGD[key]||null;
   if(prev===status)status=null;
-  const betrag=S.taschengeld?.[UI.kid]?.betrag||0,kw=getKW();
+  const betrag=S.taschengeld?.[kid]?.betrag||0,kw=Number(wk.slice(5));
   // Zurücknehmen löscht die Buchung dieser Woche, statt eine Gegenbuchung anzulegen
-  if(prev==='gespart'){const note=`Wochengeld gespart (KW ${kw})`;let i=-1;for(let j=TX.length-1;j>=0;j--)if(TX[j].kid===UI.kid&&TX[j].note===note&&TX[j].amt>0){i=j;break;}
-    if(i>=0){SAVINGS[UI.kid]=Math.max(0,round2((SAVINGS[UI.kid]||0)-TX[i].amt));TX.splice(i,1);saveSavings();saveTx();}
-    else{const back=Math.min(betrag,SAVINGS[UI.kid]||0);bookSavings(UI.kid,-back,`Sparen zurückgenommen (KW ${kw})`);}}
-  if(status==='gespart')bookSavings(UI.kid,betrag,`Wochengeld gespart (KW ${kw})`);
+  if(prev==='gespart'){const note=`Wochengeld gespart (KW ${kw})`;let i=-1;for(let j=TX.length-1;j>=0;j--)if(TX[j].kid===kid&&TX[j].note===note&&TX[j].amt>0){i=j;break;}
+    if(i>=0){SAVINGS[kid]=Math.max(0,round2((SAVINGS[kid]||0)-TX[i].amt));TX.splice(i,1);saveSavings();saveTx();}
+    else{const back=Math.min(betrag,SAVINGS[kid]||0);bookSavings(kid,-back,`Sparen zurückgenommen (KW ${kw})`);}}
+  if(status==='gespart')bookSavings(kid,betrag,`Wochengeld gespart (KW ${kw})`);
   if(status)TGD[key]=status;else delete TGD[key];
   saveTgd();render();}
+
+// Auszahlungstag: ab diesem Wochentag ist das Wochengeld fällig; offen gebliebene Wochen bleiben überfällig
+function tgPayDate(wkMonday){return addDays(wkMonday,S.tgPay);}
+function tgDue(){if(S.tgPay<0||!modOn('taschengeld'))return[];const td=today(),out=[];
+  for(let back=0;back<=3;back++){const mon=addDays(weekDates(0)[0],-7*back),pay=tgPayDate(mon);
+    if(pay>td||(S.tgPaySince&&pay<S.tgPaySince))continue;const wk=weekKeyOf(mon);
+    S.kids.forEach(k=>{const tg=S.taschengeld?.[k.id];if(tg?.aktiv&&!TGD[k.id+':'+wk])out.push({kid:k,wk,pay,amt:tg.betrag,over:pay<td});});}
+  return out;}
+function tgDecide(kidId,wk,status){requirePin(()=>{_setTgStatus(status,kidId,wk);toast(status==='gespart'?'Ins Sparschwein':'Ausgezahlt');});}
+function tgDueRows(){return tgDue().map(x=>`<div class="ek-row${x.over?' over':''}"><div class="ek-item tg-due"><span class="wish-em">${esc(x.kid.icon)}</span><span class="todo-t"><span class="ek-name">${esc(x.kid.name)} · ${fmt(x.amt)}</span><span class="todo-m">Taschengeld · ${x.over?`seit ${fmtDue(x.pay).replace('seit ','')} (KW ${Number(x.wk.slice(5))})`:'heute fällig'}</span></span></div>
+  <div class="tg-due-b"><button class="tg-act" onclick="tgDecide('${x.kid.id}','${x.wk}','ausgezahlt')" aria-label="Ausgezahlt">💰</button><button class="tg-act" onclick="tgDecide('${x.kid.id}','${x.wk}','gespart')" aria-label="Sparen">🐷</button></div></div>`).join('');}
+function setTgPay(d){S.tgPay=d;S.tgPaySince=d>=0?today():'';saveCfg();renderAdmin();}
 
 function resetSavings(kidId){
   const kid=S.kids.find(k=>k.id===kidId);
