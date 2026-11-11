@@ -159,5 +159,19 @@ test('DB: höchstens 3 Haushalte pro Person, Realtime für docs und Einkauf akti
   for (let i = 0; i < 3; i++) await as(db, 'fremd', `select * from create_household('H${i}')`);
   await fails(as(db, 'fremd', `select * from create_household('H4')`), /zu viele Haushalte/);
   const pub = await db.query(`select tablename from pg_publication_tables where pubname='supabase_realtime' order by 1`);
-  assert.deepEqual(pub.rows.map(r => r.tablename), ['docs', 'shopping_items']);
+  assert.deepEqual(pub.rows.map(r => r.tablename), ['docs', 'shopping_items', 'tasks']);
+});
+
+test('DB: Aufgaben nur für Mitglieder, Eingaben werden begrenzt, Realtime aktiv', async () => {
+  const [h] = await as(db, 'jana', `select * from create_household('Aufgaben-Test')`);
+  await as(db, 'jana', `insert into tasks (household_id, id, title, who, due, rep) values ($1, 't1', 'Müll rausbringen', '["k1"]', '2026-11-16', 'w')`, [h.id]);
+  assert.deepEqual(await as(db, 'fremd', 'select * from tasks'), []);
+  await fails(as(db, 'fremd', `insert into tasks (household_id, id, title) values ($1, 'x', 'Hack')`, [h.id]), /row-level security/);
+  for (const [col, val] of [['title', 'x'.repeat(121)], ['rep', 'jährlich'], ['who', '{"a":1}'], ['id', 'bad id!']]) {
+    await fails(as(db, 'jana', `insert into tasks (household_id, id, title, ${col === 'id' || col === 'title' ? '' : col + ','} note) values ($1, ${col === 'id' ? `'${val}'` : "'t2'"}, ${col === 'title' ? `'${val}'` : "'ok'"}, ${col === 'id' || col === 'title' ? '' : `'${val}',`} '')`, [h.id]), /check|invalid/i);
+  }
+  const [r] = await as(db, 'jana', `update tasks set done=true, done_by='k1' where household_id=$1 and id='t1' returning done, rep, who`, [h.id]);
+  assert.deepEqual(r, { done: true, rep: 'w', who: ['k1'] });
+  const pub = await db.query(`select tablename from pg_publication_tables where pubname='supabase_realtime' and tablename='tasks'`);
+  assert.equal(pub.rows.length, 1);
 });

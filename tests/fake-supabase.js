@@ -13,7 +13,7 @@ class FakeSupabase {
     this.hashes = {};     // email → Token-Hash im Mail-Link
     this.tokens = {};     // access → userId
     this.refresh = {};    // refresh → userId
-    this.households = []; this.members = []; this.docs = []; this.items = [];
+    this.households = []; this.members = []; this.docs = []; this.items = []; this.tasks = [];
     this.offline = false; this.rateLimited = false; this.log = [];
     this.fetch = this.fetch.bind(this);
     this.sockets = []; this.realtimeDown = false;
@@ -138,7 +138,7 @@ class FakeSupabase {
       const hid = eq('id');
       if (this.members.some(m => m.household_id === hid && m.user_id === uid && m.role === 'owner')) {
         this.households = this.households.filter(h => h.id !== hid);
-        for (const t of ['members', 'docs', 'items']) this[t] = this[t].filter(r => r.household_id !== hid);
+        for (const t of ['members', 'docs', 'items', 'tasks']) this[t] = this[t].filter(r => r.household_id !== hid);
       }
       return res(204);
     }
@@ -157,6 +157,19 @@ class FakeSupabase {
         rows.forEach(r => { r.data = data.data; r.version++; this.notify(r.household_id, 'docs', 'UPDATE'); });
         return res(200, rows.map(r => ({ ...r })));
       }
+    }
+    if (path === '/rest/v1/tasks') {
+      if (this.noTasks) return res(404, { code: '42P01', message: 'relation "public.tasks" does not exist' });
+      const hid = eq('household_id');
+      if (method === 'GET') return res(200, mine(this.tasks).filter(r => r.household_id === hid).sort((a, b) => a.created - b.created).map(({ created, household_id, ...r }) => r));
+      if (method === 'POST') {
+        if (!this.isMember(uid, data.household_id)) return denied();
+        const ex = this.tasks.find(r => r.household_id === data.household_id && r.id === data.id);
+        if (ex) Object.assign(ex, data); else this.tasks.push({ ...data, created: ++seq });
+        this.notify(data.household_id, 'tasks', ex ? 'UPDATE' : 'INSERT');
+        return res(201);
+      }
+      if (method === 'DELETE') { this.tasks = this.tasks.filter(r => !(r.household_id === hid && r.id === eq('id') && this.isMember(uid, hid))); this.notify(hid, 'tasks', 'DELETE'); return res(204); }
     }
     if (path === '/rest/v1/shopping_items') {
       const hid = eq('household_id');

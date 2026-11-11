@@ -370,3 +370,41 @@ test('Link-Import: Rezept über die Server-Funktion, verständliche Fehler', asy
   await b.run('runLinkImport()');
   assert.match(b.get('UI.form.err'), /kein Rezept gefunden/);
 });
+
+test('Sync: Aufgaben live auf beiden Handys, Abhaken und Wiederholung kommen an', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server, live(server));
+  const b = await partner(server, a, live(server));
+  await settle(a, b);
+  a.run(`setView('aufgaben');UI.todoNew='Müll rausbringen';addTodoInput()`);
+  const id = a.get('S.aufgaben.items[0].id');
+  a.run(`openTodo('${id}');UI.form.rep='w';UI.form.who=[S.kids[0].id];saveTodo()`);
+  await settle(a, b);
+  assert.equal(server.tasks.length, 1);
+  assert.deepEqual(server.tasks[0].who, [a.get('S.kids[0].id')]);
+  assert.equal(b.get('S.aufgaben.items[0].title'), 'Müll rausbringen');
+  assert.equal(b.get('S.aufgaben.items[0].rep'), 'w');
+  const due0 = b.get('S.aufgaben.items[0].due');
+  b.run(`toggleTodo('${id}')`);
+  await settle(a, b);
+  assert.notEqual(a.get('S.aufgaben.items[0].due'), due0);
+  b.run(`openTodo('${id}');delTodo()`);
+  await settle(a, b);
+  assert.deepEqual(a.get('S.aufgaben.items'), []);
+  assert.equal(server.tasks.length, 0);
+});
+
+test('Sync: ohne Aufgaben-Tabelle (003 noch nicht eingespielt) läuft der Rest weiter', async () => {
+  const server = new FakeSupabase();
+  server.noTasks = true;
+  const a = await founder(server);
+  a.run(`setView('aufgaben');UI.todoNew='Steuer';addTodoInput();UI.ekNew='Milch';ekAddInput()`);
+  await sync(a);
+  assert.equal(a.get('SYNC.status'), 'ok');
+  assert.deepEqual(server.items.map(x => x.name), ['Milch']); // Einkauf läuft trotzdem
+  assert.deepEqual(a.get('S.aufgaben.items.map(t=>t.title)'), ['Steuer']); // Aufgabe bleibt lokal
+  server.noTasks = false; // 003 eingespielt
+  await sync(a);
+  assert.deepEqual(server.tasks.map(t => t.title), ['Steuer']); // wird nachgeliefert
+  assert.deepEqual(a.get('S.aufgaben.items.map(t=>t.title)'), ['Steuer']);
+});

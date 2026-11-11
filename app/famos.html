@@ -189,6 +189,11 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.todo-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.todo-m{font-size:.78rem;color:var(--muted);font-weight:600}
+.ek-row.over .todo-m{color:var(--acc-a)}
+.ek-cat.over{color:var(--acc-a)}
+.field input[type=date]{max-width:220px}
 .field-hint{font-size:.75rem;color:var(--muted);font-weight:600;margin-top:6px}
 .seg-3{grid-template-columns:repeat(3,1fr)!important}.seg-4{grid-template-columns:repeat(4,1fr)!important}
 .seg-3 .seg-b,.seg-4 .seg-b{font-size:.82rem}
@@ -600,7 +605,8 @@ const DEF={
     plan:{},
   },
   einkauf:{items:[],recent:[],cats:{},order:[],std:[]},
-  modules:{routine:true,stundenplan:true,taschengeld:true,essen:true,einkauf:true},
+  aufgaben:{items:[]},
+  modules:{routine:true,stundenplan:true,taschengeld:true,aufgaben:true,essen:true,einkauf:true},
   installHintDone:false,
   _mv:4,
 };
@@ -640,6 +646,7 @@ const MODULES=[
   {id:'routine',kid:true,em:'✅',lbl:'Routine',nav:'Routine',desc:'Tägliche Aufgaben, Brot-Check, Haushalts-Wahl'},
   {id:'stundenplan',kid:true,em:'📅',lbl:'Stundenplan',nav:'Plan',desc:'Schule und Kita pro Wochentag'},
   {id:'taschengeld',kid:true,em:'🐷',lbl:'Taschengeld',nav:'Geld',desc:'Wochengeld, Sparschwein, Ein- und Auszahlungen'},
+  {id:'aufgaben',em:'📝',lbl:'Aufgaben',nav:'Aufgaben',desc:'To-dos für alle: wer, bis wann, Wiederholung'},
   {id:'essen',em:'🍽️',lbl:'Essen',nav:'Essen',desc:'Lieblingsgerichte, Würfeln, Wochenplan'},
   {id:'einkauf',em:'🛒',lbl:'Einkauf',nav:'Einkauf',desc:'Einkaufsliste, auch aus dem Wochenplan'},
 ];
@@ -698,8 +705,8 @@ function sanitizeCfg(c){
   const modules={};MODULES.forEach(m=>{modules[m.id]=sObj(c.modules)[m.id]!==false;});
   if(!MODULES.some(m=>modules[m.id]))modules[MODULES[0].id]=true;
   const pin=c.pin&&typeof c.pin.s==='string'&&typeof c.pin.h==='string'&&/^[a-z0-9]{1,16}$/.test(c.pin.s)&&/^[0-9a-f]{8}$/.test(c.pin.h)?{s:c.pin.s,h:c.pin.h}:null;
-  const essen=sanitizeEssen(c.essen,kids,household?.adults||[]),einkauf=sanitizeEinkauf(c.einkauf);
-  return{household,kids,routines,wahlPool,stundenplan,taschengeld,modules,essen,einkauf,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
+  const essen=sanitizeEssen(c.essen,kids,household?.adults||[]),einkauf=sanitizeEinkauf(c.einkauf),aufgaben=sanitizeAufgaben(c.aufgaben,[...kids,...(household?.adults||[])].map(p=>p.id));
+  return{household,kids,routines,wahlPool,stundenplan,taschengeld,modules,essen,einkauf,aufgaben,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
 }
 function sanitizeEssen(e,kids,adults){
   if(!e||typeof e!=='object'||Array.isArray(e))e=clone(DEF.essen); // ältere Stände: Beispielgerichte
@@ -731,6 +738,13 @@ function sanitizeEinkauf(e){
   const std=[],sk=new Set();sArr(e.std,100).forEach(r=>{const name=sStr(r,80).trim(),k=ekKey(name);if(name&&!sk.has(k)&&std.length<60){sk.add(k);std.push(name);}});
   return{items,recent,cats,order,std};
 }
+function sanitizeTask(x,personIds){const id=sId(x?.id),title=sStr(x?.title,120).trim();if(!id||!title)return null;
+  const who=[...new Set(sArr(x.who,12).filter(w=>typeof w==='string'&&(!personIds||personIds.includes(w))))];
+  const due=typeof x.due==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x.due)?x.due:'';
+  return{id,title,note:sStr(x.note,300).trim(),who,due,rep:['d','w','m'].includes(x.rep)?x.rep:'',done:!!x.done,doneBy:sId(x.doneBy)||'',doneAt:Number.isFinite(Number(x.doneAt))?Number(x.doneAt)||0:0};}
+function sanitizeAufgaben(a,personIds){const ids=new Set();
+  const items=sArr(sObj(a).items,500).map(x=>{const t=sanitizeTask(x,personIds);if(!t||ids.has(t.id))return null;ids.add(t.id);return t;}).filter(Boolean);
+  return{items};}
 function sanitizeDay(d){d=sObj(d);return{date:sStr(d.date,10),chk:sObj(d.chk),brot:sObj(d.brot),wahl:sObj(d.wahl)};}
 function sanitizeTgd(t){const o={};Object.keys(sObj(t)).slice(-600).forEach(k=>{if(/^[A-Za-z0-9_-]{1,40}:\d{4}W\d{2}$/.test(k)&&(t[k]==='ausgezahlt'||t[k]==='gespart'))o[k]=t[k];});return o;}
 function sanitizeSavings(v){const o={};Object.keys(sObj(v)).slice(0,24).forEach(k=>{if(sId(k))o[k]=sNum(v[k],0,1e6);});return o;}
@@ -886,8 +900,9 @@ function buildApp(){
   else if(UI.view==='taschengeld') content=buildTgContent(kid);
   else if(UI.view==='essen') content=buildEssenContent();
   else if(UI.view==='einkauf') content=buildEinkaufContent();
+  else if(UI.view==='aufgaben') content=buildAufgabenContent();
 
-  const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',stundenplan:'Stundenplan',taschengeld:'Taschengeld'}[UI.view];
+  const viewTitle={routine:`${esc(S.routines[UI.rt]?.label||'Morgen')}routine`,essen:'Essen',einkauf:'Einkauf',aufgaben:'Aufgaben',stundenplan:'Stundenplan',taschengeld:'Taschengeld'}[UI.view];
 
   const nav=navItems(),showNav=nav.length>1,km=kidMods();
   const kidSeg=isKidView(UI.view)&&km.length>1?`<div class="seg seg-${km.length}" role="tablist">${km.map(m=>`<button class="seg-b${UI.view===m.id?' on':''}" role="tab" aria-selected="${UI.view===m.id}" onclick="setView('${m.id}')">${esc(m.nav==='Plan'?'Stundenplan':m.nav||m.lbl)}</button>`).join('')}</div>`:'';
@@ -922,7 +937,8 @@ function buildRoutineContent(kid,col){
   <div class="s-lbl">Aufgaben</div>
   ${tasks.map(t=>`<button type="button" class="tc${chks[t.id]?' done c'+col:''}" aria-pressed="${chks[t.id]?'true':'false'}" onclick="toggleTask('${UI.rt}','${UI.kid}','${t.id}')"><span class="t-em">${esc(t.em)}</span><span class="t-body"><span class="t-lbl">${esc(t.lbl)}</span>${t.sub?`<span class="t-sub">${esc(t.sub)}</span>`:''}</span><span class="t-chk">${chks[t.id]?'✓':''}</span></button>`).join('')}
   ${rt.wahl?buildWahlWidget(UI.rt,UI.kid,wahlId,chks):''}
-  <button class="add-tc" onclick="openTaskModal('${UI.rt}',null)">＋ Aufgabe hinzufügen</button>`;
+  <button class="add-tc" onclick="openTaskModal('${UI.rt}',null)">＋ Aufgabe hinzufügen</button>
+  ${modOn('aufgaben')?kidTodos(UI.kid):''}`;
 }
 
 function buildWahlWidget(rtId,kidId,wahlId,chks){
@@ -1489,6 +1505,73 @@ function applyClaude(){const f=UI.form,P=f.preview;
   if(!S.stundenplan[f.kid])S.stundenplan[f.kid]={};Object.entries(P).forEach(([d,list])=>{S.stundenplan[f.kid][d]=list;});
   saveCfg();closeModal();if(document.getElementById('adm').classList.contains('open'))renderAdmin();render();toast('Stundenplan übernommen');}
 
+// ═══ AUFGABEN ═════════════════════════════════
+// To-dos für alle im Haushalt: wer (eine/mehrere Personen oder irgendwer), bis wann, Wiederholung.
+// Abgleich zeilenweise über die Tabelle tasks (wie die Einkaufsliste).
+const REPS=[{id:'',l:'Einmalig'},{id:'d',l:'Täglich'},{id:'w',l:'Wöchentlich'},{id:'m',l:'Monatlich'}];
+function personById(id){return raters().find(p=>p.id===id)||null;}
+function addMonths(ds,n){const d=pdate(ds),day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+n);const last=new Date(d.getFullYear(),d.getMonth()+1,0,12).getDate();d.setDate(Math.min(day,last));return dstr(d);}
+function nextDue(due,rep){const td=today();let n=due||td;
+  const step=x=>rep==='d'?addDays(x,1):rep==='w'?addDays(x,7):addMonths(x,1);
+  n=step(n);for(let i=0;i<500&&n<=td;i++)n=step(n);return n;}
+function fmtDue(ds){if(!ds)return'';const td=today(),d=daysBetween(td,ds);
+  if(d===0)return'heute';if(d===1)return'morgen';if(d===-1)return'gestern';
+  const wd=DAYS[(pdate(ds).getDay()+6)%7].s;return d<0?`seit ${wd}, ${ds.slice(8,10)}.${ds.slice(5,7)}.`:d<7?wd:`${wd}, ${ds.slice(8,10)}.${ds.slice(5,7)}.`;}
+function todoBucket(t){if(!t.due)return'ohne';const td=today();if(t.due<td)return'over';if(t.due===td)return'heute';
+  const sun=addDays(td,(7-((pdate(td).getDay()+6)%7))-1);return t.due<=sun?'woche':'spaeter';}
+const BUCKETS=[{id:'over',l:'Überfällig'},{id:'heute',l:'Heute'},{id:'woche',l:'Diese Woche'},{id:'spaeter',l:'Später'},{id:'ohne',l:'Ohne Datum'}];
+function todoOp(op,t){if(!SYNC?.hid)return;SYNC.queue.push(op==='del'?{t:'tasks',op,id:t.id}:{t:'tasks',op,item:{...t}});if(SYNC.queue.length>500)SYNC.queue=SYNC.queue.slice(-500);saveSync();schedulePush();}
+function todoFor(t,who){return!who||!t.who.length||t.who.includes(who);}
+function addTodoInput(){const v=String(UI.todoNew||document.getElementById('todoNew')?.value||'').replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,120);
+  if(!v)return;if(S.aufgaben.items.length>=500){toast('Zu viele Aufgaben. Bitte erst Erledigtes entfernen.');return;}
+  const t={id:uid(),title:v,note:'',who:UI.todoWho&&personById(UI.todoWho)?[UI.todoWho]:[],due:'',rep:'',done:false,doneBy:'',doneAt:0};
+  S.aufgaben.items.push(t);todoOp('up',t);UI.todoNew='';saveCfg();render();setTimeout(()=>document.getElementById('todoNew')?.focus(),0);}
+// Abhaken: Einmaliges wird erledigt, Wiederkehrendes springt auf den nächsten Termin
+function toggleTodo(id,by){const t=S.aufgaben.items.find(x=>x.id===id);if(!t)return;
+  const who=by||(UI.todoWho&&personById(UI.todoWho)?UI.todoWho:'');
+  if(t.rep&&!t.done){t.due=nextDue(t.due,t.rep);t.doneBy=who;t.doneAt=Date.now();toast(`Erledigt. Nächstes Mal: ${fmtDue(t.due)}`);}
+  else{t.done=!t.done;t.doneBy=t.done?who:'';t.doneAt=t.done?Date.now():0;}
+  todoOp('up',t);saveCfg();render();}
+function clearTodosDone(){const done=S.aufgaben.items.filter(t=>t.done);if(!done.length)return;done.forEach(t=>todoOp('del',t));
+  S.aufgaben.items=S.aufgaben.items.filter(t=>!t.done);saveCfg();render();toast(`${done.length} erledigt und entfernt`);}
+function setTodoWho(id){UI.todoWho=id;saveUiState();render();}
+function todoRow(t,kidView){const ps=t.who.map(personById).filter(Boolean),rep=REPS.find(r=>r.id===t.rep);
+  const meta=[t.due?fmtDue(t.due):'',t.rep?'↻ '+rep.l.toLowerCase():'',kidView?'':ps.length?ps.map(p=>p.icon).join(' '):'irgendwer',t.done&&t.doneBy&&personById(t.doneBy)?'✓ '+personById(t.doneBy).name:''].filter(Boolean).join(' · ');
+  return`<div class="ek-row${t.done?' done':''}${!t.done&&todoBucket(t)==='over'?' over':''}"><button class="ek-item" aria-pressed="${t.done}" onclick="toggleTodo('${t.id}'${kidView?`,'${kidView}'`:''})"><span class="t-chk">${t.done?'✓':''}</span><span class="todo-t"><span class="ek-name">${esc(t.title)}</span>${meta?`<span class="todo-m">${esc(meta)}</span>`:''}</span></button>${kidView?'':`<button class="ek-del" aria-label="${esc(t.title)} bearbeiten" onclick="openTodo('${t.id}')">⋯</button>`}</div>`;}
+function buildAufgabenContent(){
+  const who=personById(UI.todoWho)?UI.todoWho:'',ps=raters();
+  const list=S.aufgaben.items.filter(t=>todoFor(t,who)),open=list.filter(t=>!t.done),done=list.filter(t=>t.done);
+  const by={};open.forEach(t=>(by[todoBucket(t)]||=[]).push(t));
+  Object.values(by).forEach(a=>a.sort((x,y)=>(x.due||'9').localeCompare(y.due||'9')||x.title.localeCompare(y.title,'de')));
+  return`${ps.length>1?`<div class="ess-tags">${[{id:'',icon:'',name:'Alle'},...ps].map(p=>`<button class="ap${who===p.id?' on':''}" onclick="setTodoWho('${p.id}')">${esc(p.icon)} ${esc(p.name)}</button>`).join('')}</div>`:''}
+  <div class="ek-add"><label for="todoNew" class="sr">Neue Aufgabe</label><input id="todoNew" value="${esc(UI.todoNew||'')}" maxlength="120" placeholder="${who?`Neue Aufgabe für ${esc(personById(who).name)}`:'Neue Aufgabe'}" autocomplete="off" enterkeyhint="done" oninput="UI.todoNew=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();addTodoInput()}"><button class="m-save ek-plus" aria-label="Hinzufügen" onclick="addTodoInput()">＋</button></div>
+  ${open.length?BUCKETS.filter(b=>by[b.id]).map(b=>`<div class="ek-cat${b.id==='over'?' over':''}">${b.l} · ${by[b.id].length}</div>${by[b.id].map(t=>todoRow(t)).join('')}`).join(''):`<div class="sp-empty">${list.length?'Alles erledigt. 🎉':'Noch keine Aufgaben. Oben eintragen; über ⋯ legt ihr fest, wer, bis wann und wie oft.'}</div>`}
+  ${done.length?`<div class="ek-cat">Erledigt · ${done.length}</div>${done.map(t=>todoRow(t)).join('')}<button class="reset-btn" onclick="clearTodosDone()">Erledigte entfernen</button>`:''}`;
+}
+// Für Kinder in der Routine: was ihnen zugeteilt und heute (oder überfällig, oder ohne Datum) dran ist
+function kidTodos(kid){if(!kid)return'';const td=today();
+  const list=S.aufgaben.items.filter(t=>t.who.includes(kid)&&(!t.done||(t.doneAt&&dstr(new Date(t.doneAt))===td))&&(!t.due||t.due<=td||t.done));
+  return list.length?`<div class="s-lbl" style="margin-top:14px">Meine Aufgaben</div>${list.map(t=>todoRow(t,kid)).join('')}`:'';}
+// Bearbeiten
+function openTodo(id){const t=S.aufgaben.items.find(x=>x.id===id);if(!t)return;UI.form={mode:'todo',id,title:t.title,note:t.note,who:t.who.slice(),due:t.due,rep:t.rep};openModal();}
+function todoSetDue(v){UI.form.due=v;openModal();}
+function renderTodoModal(){const f=UI.form,td=today(),dow=(pdate(td).getDay()+6)%7;
+  const quick=[['Heute',td],['Morgen',addDays(td,1)],['Samstag',addDays(td,(5-dow+7)%7||7)],['Nächste Woche',addDays(td,7-dow)],['Kein Datum','']];
+  return`<h3>Aufgabe</h3>
+  <div class="field"><label for="tdT">Was</label><input id="tdT" maxlength="120" value="${esc(f.title)}" oninput="UI.form.title=this.value"></div>
+  <div class="field"><label>Wer</label><div class="ap-wrap">${raters().map(p=>`<button class="ap${f.who.includes(p.id)?' on':''}" aria-pressed="${f.who.includes(p.id)}" onclick="todoTogWho('${p.id}')">${esc(p.icon)} ${esc(p.name)}</button>`).join('')}</div><div class="field-hint">${f.who.length?'':'Niemand gewählt: irgendwer kann es erledigen.'}</div></div>
+  <div class="field"><label for="tdD">Bis wann</label><div class="ap-wrap" style="margin-bottom:8px">${quick.map(([l,v])=>`<button class="ap${f.due===v?' on':''}" onclick="todoSetDue('${v}')">${l}</button>`).join('')}</div><input id="tdD" type="date" value="${esc(f.due)}" onchange="UI.form.due=this.value"></div>
+  <div class="field"><label>Wiederholen</label><div class="ap-wrap">${REPS.map(r=>`<button class="ap${f.rep===r.id?' on':''}" onclick="UI.form.rep='${r.id}';openModal()">${r.l}</button>`).join('')}</div></div>
+  <div class="field"><label for="tdN">Notiz (optional)</label><textarea id="tdN" rows="2" maxlength="300" oninput="UI.form.note=this.value">${esc(f.note)}</textarea></div>
+  <div class="m-btns"><button class="m-cancel" onclick="delTodo()">Löschen</button><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveTodo()">Speichern</button></div>`;}
+function todoTogWho(id){const w=UI.form.who,i=w.indexOf(id);if(i>=0)w.splice(i,1);else w.push(id);openModal();}
+function saveTodo(){const f=UI.form,t=S.aufgaben.items.find(x=>x.id===f.id);if(!t)return closeModal();
+  const title=String(f.title||'').replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,120);if(!title){toast('Bitte eintragen, was zu tun ist.');return;}
+  const due=/^\d{4}-\d{2}-\d{2}$/.test(f.due||'')?f.due:'';
+  Object.assign(t,{title,note:String(f.note||'').trim().slice(0,300),who:f.who.filter(w=>personById(w)),due:f.rep&&!due?today():due,rep:f.rep});
+  todoOp('up',t);saveCfg();closeModal();render();}
+function delTodo(){const f=UI.form;if(!confirm('Aufgabe löschen?'))return;S.aufgaben.items=S.aufgaben.items.filter(x=>x.id!==f.id);todoOp('del',{id:f.id});saveCfg();closeModal();render();}
+
 // ═══ EMOJI PICKER ═════════════════════════════
 let _epCb=null;
 function epOpen(cb){_epCb=cb;document.getElementById('epBg').classList.add('open');renderEp();}
@@ -1499,7 +1582,7 @@ function renderEp(){document.getElementById('epCats').innerHTML=EC.map(c=>`<butt
 function epPick(e){if(_epCb)_epCb(e);epClose();}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,todo:renderTodoModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 
@@ -1602,12 +1685,13 @@ function setKid(id){UI.kid=id;saveUiState();render();}
 function setRt(id){UI.rt=id;render();}
 function setView(v){UI.view=v;if(isKidView(v))UI.lastKid=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
 // ─── Wo war ich? (pro Gerät) ───
-function saveUiState(){try{localStorage.setItem('famos_ui',JSON.stringify({view:UI.view,essTab:UI.essTab,kid:UI.kid,lastKid:UI.lastKid}));}catch(e){}}
+function saveUiState(){try{localStorage.setItem('famos_ui',JSON.stringify({view:UI.view,essTab:UI.essTab,kid:UI.kid,lastKid:UI.lastKid,todoWho:UI.todoWho||''}));}catch(e){}}
 function restoreUiState(){const u=lsGet('famos_ui');if(!u||typeof u!=='object')return;
   if(MODULES.some(m=>m.id===u.view)&&modOn(u.view))UI.view=u.view;
   if(u.essTab==='plan'||u.essTab==='buch')UI.essTab=u.essTab;
   if(S.kids.some(k=>k.id===u.kid))UI.kid=u.kid;
-  if(isKidView(u.lastKid))UI.lastKid=u.lastKid;}
+  if(isKidView(u.lastKid))UI.lastKid=u.lastKid;
+  if(typeof u.todoWho==='string'&&personById(u.todoWho))UI.todoWho=u.todoWho;}
 // ─── Zurück-Taste (Android): erst Offenes schließen, auf der Startebene zweimal drücken zum Beenden ───
 // Ein einziger Merk-Eintrag im Verlauf; jedes Zurück landet hier und wird in der App behandelt.
 let _lastBack=0;
@@ -1790,9 +1874,10 @@ async function connectHousehold(h,role,{upload=false,replace=false}={}){
     if(!replace&&S.household&&!confirm('In der Cloud gibt es schon Daten für diesen Haushalt. Sie ersetzen die Daten auf diesem Gerät. Fortfahren?')){
       SYNC=emptySync();saveSync();throw new Error('abgebrochen');}
     docs.forEach(d=>applyRemote(d.key,d.data,d.version));
-    S.einkauf.items=[];
+    S.einkauf.items=[];S.aufgaben.items=[];
   }else{SYNC_KEYS.forEach(k=>{SYNC.dirty[k]=true;});
-    S.einkauf.items.forEach(it=>SYNC.queue.push({op:'up',item:{...it}}));}
+    S.einkauf.items.forEach(it=>SYNC.queue.push({op:'up',item:{...it}}));
+    S.aufgaben.items.forEach(t=>SYNC.queue.push({t:'tasks',op:'up',item:{...t}}));}
   saveSync();await syncNow(true);
   UI.kid=S.kids[0]?.id||null;UI.rt=firstActiveRt();UI.ob=null;refreshAll();rtStop();rtStart();
 }
@@ -1813,11 +1898,11 @@ function fmtInvite(c){return String(c||'').replace(/^(.{4})(.{4})$/,'$1 $2');}
 
 // ─── Dokumente: was geht in welchen Bereich ───
 function docOf(k){
-  if(k==='cfg'){const c=JSON.parse(JSON.stringify(S));delete c.installHintDone;c.einkauf={recent:S.einkauf.recent,cats:S.einkauf.cats,order:S.einkauf.order,std:S.einkauf.std};return c;}
+  if(k==='cfg'){const c=JSON.parse(JSON.stringify(S));delete c.installHintDone;c.einkauf={recent:S.einkauf.recent,cats:S.einkauf.cats,order:S.einkauf.order,std:S.einkauf.std};delete c.aufgaben;return c;}
   return k==='day'?D:k==='tgd'?TGD:k==='savings'?SAVINGS:TX;
 }
 function applyRemote(k,data,version){
-  if(k==='cfg'){const c=sanitizeCfg({...data,installHintDone:S.installHintDone,einkauf:{...sObj(data?.einkauf),items:S.einkauf.items}});if(c){S=c;lsSet('ra_cfg3',JSON.stringify(S));}}
+  if(k==='cfg'){const c=sanitizeCfg({...data,installHintDone:S.installHintDone,einkauf:{...sObj(data?.einkauf),items:S.einkauf.items},aufgaben:S.aufgaben});if(c){S=c;lsSet('ra_cfg3',JSON.stringify(S));}}
   else if(k==='day'){const d=sanitizeDay(data);if(d.date===today()){D=d;lsSet('ra_day3',JSON.stringify(D));}}
   else if(k==='tgd'){TGD=sanitizeTgd(data);lsSet('ra_tgd',JSON.stringify(TGD));}
   else if(k==='savings'){SAVINGS=sanitizeSavings(data);lsSet('ra_savings',JSON.stringify(SAVINGS));}
@@ -1865,18 +1950,33 @@ async function pullDocs(){
 // ─── Einkaufsliste: Operationen in Warteschlange, Server-Liste plus offene Operationen ───
 function ekOp(op,item){if(!SYNC?.hid)return;SYNC.queue.push(op==='del'?{op,id:item.id}:{op,item:{id:item.id,name:item.name,n:item.n,done:!!item.done}});if(SYNC.queue.length>500)SYNC.queue=SYNC.queue.slice(-500);saveSync();schedulePush();}
 async function flushQueue(){
-  while(SYNC.queue.length){const q=SYNC.queue[0];
-    if(q.op==='up')await sb('/rest/v1/shopping_items?on_conflict=household_id,id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:{household_id:SYNC.hid,...q.item}});
-    else await sb(`/rest/v1/shopping_items?household_id=eq.${SYNC.hid}&id=eq.${encodeURIComponent(q.id)}`,{method:'DELETE'});
+  while(SYNC.queue.length){const q=SYNC.queue[0],tbl=q.t==='tasks'?'tasks':'shopping_items';
+    const body=q.op==='up'?(tbl==='tasks'?{household_id:SYNC.hid,id:q.item.id,title:q.item.title,note:q.item.note,who:q.item.who,due:q.item.due||null,rep:q.item.rep,done:q.item.done,done_by:q.item.doneBy,done_at:q.item.doneAt||null}:{household_id:SYNC.hid,...q.item}):null;
+    try{
+      if(q.op==='up')await sb(`/rest/v1/${tbl}?on_conflict=household_id,id`,{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body});
+      else await sb(`/rest/v1/${tbl}?household_id=eq.${SYNC.hid}&id=eq.${encodeURIComponent(q.id)}`,{method:'DELETE'});
+    }catch(e){if(tbl!=='tasks'||e.status!==404)throw e;SYNC.tasksMissing=true;} // Tabelle fehlt noch: Aufgaben bleiben lokal, Rest läuft weiter
     SYNC.queue.shift();saveSync();}
 }
 async function pullItems(){
   const rows=await sb(`/rest/v1/shopping_items?select=id,name,n,done&household_id=eq.${SYNC.hid}&order=created_at.asc`)||[];
   let items=rows.map(r=>({id:r.id,name:r.name,n:r.n,done:!!r.done}));
-  SYNC.queue.forEach(q=>{if(q.op==='del')items=items.filter(x=>x.id!==q.id);else{const i=items.findIndex(x=>x.id===q.item.id);if(i>=0)items[i]={...q.item};else items.push({...q.item});}});
+  SYNC.queue.filter(q=>q.t!=='tasks').forEach(q=>{if(q.op==='del')items=items.filter(x=>x.id!==q.id);else{const i=items.findIndex(x=>x.id===q.item.id);if(i>=0)items[i]={...q.item};else items.push({...q.item});}});
   const before=JSON.stringify(S.einkauf.items);
   S.einkauf=sanitizeEinkauf({...S.einkauf,items});lsSet('ra_cfg3',JSON.stringify(S));
   return JSON.stringify(S.einkauf.items)!==before;
+}
+async function pullTasks(){
+  if(!modOn('aufgaben'))return false;
+  let rows;try{rows=await sb(`/rest/v1/tasks?select=id,title,note,who,due,rep,done,done_by,done_at&household_id=eq.${SYNC.hid}&order=created_at.asc`)||[];}
+  catch(e){if(e.status===404){SYNC.tasksMissing=true;return false;}throw e;} // Tabelle noch nicht angelegt (003 fehlt): Aufgaben bleiben lokal
+  if(SYNC.tasksMissing){SYNC.tasksMissing=false;S.aufgaben.items.forEach(t=>SYNC.queue.push({t:'tasks',op:'up',item:{...t}}));saveSync();await flushQueue();
+    rows=await sb(`/rest/v1/tasks?select=id,title,note,who,due,rep,done,done_by,done_at&household_id=eq.${SYNC.hid}&order=created_at.asc`)||[];}
+  let items=rows.map(r=>({id:r.id,title:r.title,note:r.note,who:r.who,due:r.due||'',rep:r.rep,done:r.done,doneBy:r.done_by,doneAt:r.done_at||0}));
+  SYNC.queue.filter(q=>q.t==='tasks').forEach(q=>{if(q.op==='del')items=items.filter(x=>x.id!==q.id);else{const i=items.findIndex(x=>x.id===q.item.id);if(i>=0)items[i]={...q.item};else items.push({...q.item});}});
+  const before=JSON.stringify(S.aufgaben.items);
+  S.aufgaben=sanitizeAufgaben({items},raters().map(p=>p.id));lsSet('ra_cfg3',JSON.stringify(S));
+  return JSON.stringify(S.aufgaben.items)!==before;
 }
 // ─── Sofort-Übertragung (Supabase Realtime, Phoenix-Protokoll) ───
 // Die Meldung löst nur ein Abholen aus; Daten kommen weiter über die REST-Schnittstelle mit RLS.
@@ -1892,7 +1992,7 @@ function rtStart(){
   RT.ws=ws;RT.joined=false;
   ws.onopen=()=>{
     rtSend({topic:rtTopic(),event:'phx_join',payload:{access_token:AUTH.access_token,config:{broadcast:{self:false},presence:{key:''},private:false,
-      postgres_changes:[{event:'*',schema:'public',table:'docs',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'shopping_items',filter:'household_id=eq.'+SYNC.hid}]}}},true);
+      postgres_changes:[{event:'*',schema:'public',table:'docs',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'shopping_items',filter:'household_id=eq.'+SYNC.hid},{event:'*',schema:'public',table:'tasks',filter:'household_id=eq.'+SYNC.hid}]}}},true);
     clearInterval(RT.hb);RT.hb=setInterval(()=>rtSend({topic:'phoenix',event:'heartbeat',payload:{}}),25000);
   };
   ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
@@ -1921,6 +2021,7 @@ async function syncNow(force){
     const now=Date.now();
     if(force||now-_lastDocPull>15000||UI.view==='einkauf'){_lastDocPull=now;if(await pullDocs())changed=true;}
     if(await pullItems())changed=true;
+    if(await pullTasks())changed=true;
     SYNC.status='ok';SYNC.err='';SYNC.at=now;
   }catch(e){
     SYNC.status=!e.status?'offline':e.status===401?'out':'err';SYNC.err=e.message||'';

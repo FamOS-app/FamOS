@@ -171,7 +171,7 @@ test('Module: aus- und einschalten, mindestens eins bleibt an', () => {
   assert.equal(a.get('S.modules.taschengeld'), false);
   a.run('render()');
   assert.doesNotMatch(a.app(), /setView\('taschengeld'\)/);
-  a.run(`togModule('stundenplan');togModule('essen');togModule('einkauf')`);
+  a.run(`togModule('stundenplan');togModule('essen');togModule('einkauf');togModule('aufgaben')`);
   a.run('render()');
   assert.doesNotMatch(a.app(), /bot-nav/); // nur ein Modul: keine Navigation
   a.run(`togModule('routine')`);
@@ -532,7 +532,7 @@ test('Migration: alter Stand ohne household/modules/_mv wird ergänzt, Daten ble
   const a = load(VORLAGE, { storage: { ra_cfg3: JSON.stringify(old) } });
   const S = a.get('S');
   assert.deepEqual(S.household, { name: 'Unsere Familie', adults: [] });
-  assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true, essen: true, einkauf: true });
+  assert.deepEqual(S.modules, { routine: true, stundenplan: true, taschengeld: true, aufgaben: true, essen: true, einkauf: true });
   assert.deepEqual(S.einkauf.items, []);
   assert.deepEqual(S.einkauf.std, []);
   assert.equal(S.einkauf.order[0], 'obst');
@@ -1365,7 +1365,7 @@ test('Navigation: Zurück schließt erst Fenster, dann Einstellungen, dann zweim
 test('Navigation: unten Kinder · Essen · Einkauf, Kinder bündelt Routine, Stundenplan, Geld', () => {
   const a = household();
   const nav = () => [...a.app().matchAll(/<button class="bni[^"]*" onclick="([^"]+)"><span class="bni-ic">[\s\S]*?<\/span>([^<]+)<\/button>/g)].map(m => m[2]);
-  assert.deepEqual(nav(), ['Kinder', 'Essen', 'Einkauf']);
+  assert.deepEqual(nav(), ['Kinder', 'Aufgaben', 'Essen', 'Einkauf']);
   assert.equal(a.get('UI.view'), 'routine'); // nach dem Onboarding mit Kindern: Routine
   assert.match(a.app(), /class="seg seg-3"/);
   assert.match(a.app(), />Stundenplan</);
@@ -1381,13 +1381,115 @@ test('Haushalt ohne Kinder: Onboarding nur mit Erwachsenen, kein Kinder-Reiter',
   a.run(`openAdultModal();adultQuick('Alex','🙂');saveAdult();ob().name='WG';obFinish()`);
   assert.equal(a.get('S.household.name'), 'WG');
   assert.deepEqual(a.get('S.kids'), []);
-  assert.equal(a.get('UI.view'), 'essen');
+  assert.equal(a.get('UI.view'), 'aufgaben');
   assert.doesNotMatch(a.app(), /goKinder|kid-tabs/);
   a.run(`setView('routine')`); // per altem Link/Speicherstand: wird umgeleitet
-  assert.equal(a.get('UI.view'), 'essen');
+  assert.equal(a.get('UI.view'), 'aufgaben');
   // letzte Person lässt sich nicht entfernen, erstes Kind schaltet Kinder-Reiter frei
   a.run(`openAdmin();delAdult(S.household.adults[0].id)`);
   assert.match(a.toast(), /Mindestens eine Person/);
   a.run(`openKidModal(null);UI.form.name='Mia';saveKid();render()`);
   assert.match(a.app(), /goKinder/);
+});
+
+// ─── Aufgaben ─────────────────────────────────────────────────
+function todoApp() {
+  const a = household();
+  a.run(`openAdmin();openAdultModal();adultQuick('Mama','👩');saveAdult();openAdultModal();adultQuick('Papa','👨');saveAdult();closeAdmin()`); a.flush();
+  a.run(`setView('aufgaben')`);
+  return a;
+}
+const addT = (a, title) => { a.run(`UI.todoNew=${JSON.stringify(title)};addTodoInput()`); return a.get('S.aufgaben.items.at(-1).id'); };
+
+test('Aufgaben: eintragen, Filter nach Person (merkt sich das Gerät), irgendwer erscheint bei allen', () => {
+  const a = todoApp();
+  const [mama, papa] = a.get('S.household.adults.map(x=>x.id)');
+  assert.match(a.app(), /Noch keine Aufgaben/);
+  addT(a, 'Steuererklärung');
+  a.run(`setTodoWho('${mama}')`);
+  const t2 = addT(a, 'Geschenk für Paul besorgen');
+  assert.deepEqual(a.get(`S.aufgaben.items.find(x=>x.id==='${t2}').who`), [mama]); // Filter aktiv: gehört Mama
+  assert.match(a.app(), /Steuererklärung/); // irgendwer: auch bei Mama
+  a.run(`setTodoWho('${papa}')`);
+  assert.doesNotMatch(a.app(), /Geschenk für Paul/);
+  assert.match(a.app(), /Neue Aufgabe für Papa/);
+  const b = load(VORLAGE, { storage: a.store });
+  assert.equal(b.get('UI.todoWho'), papa);
+});
+
+test('Aufgaben: nach Fälligkeit gruppiert, Bearbeiten mit Schnellwahl für Datum', () => {
+  const a = todoApp();
+  const ids = ['Alt', 'Heute', 'Bald', 'Später', 'Irgendwann'].map(t => addT(a, t));
+  const set = (id, due) => a.run(`openTodo('${id}');UI.form.due=${JSON.stringify(due)};saveTodo()`);
+  set(ids[0], a.get('addDays(today(),-3)'));
+  a.run(`openTodo('${ids[1]}');todoSetDue(today());saveTodo()`);
+  set(ids[3], a.get('addDays(today(),20)'));
+  const buckets = [...a.app().matchAll(/class="ek-cat[^"]*">([^·<]+) ·/g)].map(m => m[1].trim());
+  assert.deepEqual(buckets.filter(x => x !== 'Diese Woche'), ['Überfällig', 'Heute', 'Später', 'Ohne Datum']);
+  assert.match(a.app(), /class="ek-row over"/);
+  assert.match(a.app(), /seit /);
+  a.run(`openTodo('${ids[2]}');UI.form.title='  ';saveTodo()`);
+  assert.match(a.toast(), /was zu tun ist/);
+});
+
+test('Aufgaben: wiederkehrende springen beim Abhaken auf den nächsten Termin, auch wenn überfällig', () => {
+  const a = todoApp();
+  const id = addT(a, 'Müll rausbringen');
+  const td = a.get('today()');
+  a.run(`openTodo('${id}');UI.form.rep='w';UI.form.due=addDays(today(),-10);saveTodo()`);
+  a.run(`toggleTodo('${id}')`);
+  const t = a.get(`S.aufgaben.items.find(x=>x.id==='${id}')`);
+  assert.equal(t.done, false);
+  assert.ok(t.due > td && a.get(`daysBetween(today(),'${t.due}')`) <= 7, t.due);
+  assert.equal(a.get(`daysBetween(addDays(today(),-10),'${t.due}')`) % 7, 0); // gleicher Wochentag
+  assert.match(a.toast(), /Nächstes Mal/);
+  // ohne Datum + Wiederholung: Start heute
+  const id2 = addT(a, 'Blumen gießen');
+  a.run(`openTodo('${id2}');UI.form.rep='d';saveTodo()`);
+  assert.equal(a.get(`S.aufgaben.items.find(x=>x.id==='${id2}').due`), td);
+  // Monatlich am 31.: im kürzeren Monat der letzte Tag
+  assert.equal(a.get(`addMonths('2027-01-31',1)`), '2027-02-28');
+});
+
+test('Aufgaben: einmalige abhaken, wer erledigt hat, Erledigte entfernen', () => {
+  const a = todoApp();
+  const mama = a.get('S.household.adults[0].id');
+  a.run(`setTodoWho('${mama}')`);
+  const id = addT(a, 'Kita-Formular');
+  a.run(`toggleTodo('${id}')`);
+  assert.match(a.app(), /Erledigt · 1/);
+  assert.match(a.app(), /✓ Mama/);
+  a.run(`toggleTodo('${id}')`); // zurück
+  assert.equal(a.get(`S.aufgaben.items[0].done`), false);
+  a.run(`toggleTodo('${id}');clearTodosDone()`);
+  assert.deepEqual(a.get('S.aufgaben.items'), []);
+});
+
+test('Aufgaben: Kinder sehen ihre heutigen Aufgaben in der Routine und haken sie ab', () => {
+  const a = todoApp();
+  const [k1, k2] = a.get('S.kids.map(k=>k.id)');
+  const id = addT(a, 'Zimmer aufräumen'), later = addT(a, 'Bastelsachen für Freitag');
+  a.run(`openTodo('${id}');UI.form.who=['${k1}'];UI.form.due=today();saveTodo()`);
+  a.run(`openTodo('${later}');UI.form.who=['${k1}'];UI.form.due=addDays(today(),5);saveTodo()`);
+  a.run(`setView('routine');setKid('${k1}')`);
+  assert.match(a.app(), /Meine Aufgaben[\s\S]*Zimmer aufräumen/);
+  assert.doesNotMatch(a.app(), /Bastelsachen/); // erst später dran
+  assert.doesNotMatch(a.app(), /openTodo\(/); // Kinder können nur abhaken
+  a.run(`toggleTodo('${id}','${k1}')`);
+  assert.equal(a.get(`S.aufgaben.items.find(x=>x.id==='${id}').doneBy`), k1);
+  assert.match(a.app(), /class="ek-row done"[\s\S]*Zimmer aufräumen/); // bleibt heute sichtbar, abgehakt
+  a.run(`setKid('${k2}')`);
+  assert.doesNotMatch(a.app(), /Meine Aufgaben/);
+});
+
+test('Aufgaben: Import validiert, fremde Personen fallen weg, Schadcode bleibt Text', () => {
+  const a = load(VORLAGE);
+  const data = { cfg: { kids: [{ id: 'k1', name: 'Emma' }], household: { name: 'X' }, aufgaben: { items: [
+    { id: 't1', title: '<img src=x onerror=alert(1)>', who: ['k1', 'fremd', 7], due: '2026-13-99x', rep: 'jährlich', done: 'ja' },
+    { id: 't1', title: 'Doppelt' }, { id: 'x y', title: 'Böse' }, { id: 't2', title: '' },
+  ] } } };
+  assert.equal(a.run(`applyImport(${JSON.stringify(data)})`), true);
+  assert.deepEqual(a.get('S.aufgaben.items'), [{ id: 't1', title: '<img src=x onerror=alert(1)>', note: '', who: ['k1'], due: '', rep: '', done: true, doneBy: '', doneAt: 0 }]);
+  a.run(`setView('aufgaben')`);
+  assert.doesNotMatch(a.app(), /<img/);
 });
