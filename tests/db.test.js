@@ -128,7 +128,7 @@ test('DB: Dokument-Version steigt bei jeder Änderung, Konflikte sind erkennbar'
   const [{ version: v1 }] = await as(db, 'mama', `select version from docs where household_id=$1 and key='cfg'`, [hh.id]);
   const ok = await as(db, 'partner', `update docs set data='{"kids":[]}' where household_id=$1 and key='cfg' and version=$2 returning version, updated_by`, [hh.id, v1]);
   assert.deepEqual(ok, [{ version: v1 + 1, updated_by: U.partner }]);
-  // Jana schreibt mit veralteter Version: trifft keine Zeile → App weiß, dass sie neu laden muss
+  // Mama schreibt mit veralteter Version: trifft keine Zeile → App weiß, dass sie neu laden muss
   const stale = await as(db, 'mama', `update docs set data='{"x":1}' where household_id=$1 and key='cfg' and version=$2 returning 1`, [hh.id, v1]);
   assert.equal(stale.length, 0);
   await fails(as(db, 'mama', `insert into docs (household_id, key, data) values ($1, 'geheim', '{}')`, [hh.id]), /check/);
