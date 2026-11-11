@@ -417,3 +417,17 @@ test('Sync: Wunschliste kommt auf dem anderen Handy an', async () => {
   await sync(a); await sync(b);
   assert.deepEqual(b.get('S.wuensche.items.map(w=>w.title)'), ['Fahrrad']);
 });
+
+test('Sync: Registrierung gesperrt – Unbekannte bekommen eine verständliche Meldung, Bekannte kommen rein', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server); // bereits registriert
+  server.signupsDisabled = true;
+  const x = device(server);
+  x.run(`openLogin();UI.form.email='fremd@example.org'`);
+  await x.run('loginSend()');
+  assert.match(x.get('UI.form.err'), /nicht freigeschaltet/);
+  assert.equal(x.get('UI.form.step'), 'email');
+  const a2 = device(server);
+  await login(a2, server, 'a@example.org');
+  assert.equal(a2.get('SYNC.hid'), a.get('SYNC.hid'));
+});

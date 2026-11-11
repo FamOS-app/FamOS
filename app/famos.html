@@ -1933,6 +1933,8 @@ async function refreshToken(){
   catch(e){if(e.status&&e.status<500){AUTH=null;saveAuth();rtStop();SYNC.status='out';saveSync();toast('Bitte neu anmelden. Deine Daten bleiben auf dem Gerät.');}return false;}
 }
 function authError(e){
+  // Neue Registrierungen in Supabase ausgeschaltet: nur eingeladene Adressen dürfen sich anmelden
+  if(/signups? (are )?not allowed|signup_disabled|otp_disabled/i.test(e.message+' '+(e.code||'')))return'Diese E-Mail-Adresse ist für FamOS nicht freigeschaltet. Bitte die Person fragen, die dir den Link gegeben hat.';
   if(e.status===429||/rate limit/i.test(e.message))return'Gerade zu viele Anmelde-Mails. Bitte in einer Stunde nochmal versuchen.';
   if(/expired|invalid/i.test(e.message)&&e.status<500)return'Der Code stimmt nicht oder ist abgelaufen.';
   if(!e.status)return'Keine Verbindung. Bist du online?';

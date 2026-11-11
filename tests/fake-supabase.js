@@ -70,6 +70,7 @@ class FakeSupabase {
     // ── Auth ──
     if (path === '/auth/v1/otp') {
       if (this.rateLimited) return res(429, { code: 429, error_code: 'over_email_send_rate_limit', msg: 'email rate limit exceeded' });
+      if (this.signupsDisabled && !this.users[data.email]) return res(422, { code: 422, error_code: 'otp_disabled', msg: 'Signups not allowed for otp' });
       this.users[data.email] ||= { id: uuid(), email: data.email };
       this.codes[data.email] = String(100000 + (seq * 7919) % 900000);
       this.hashes[data.email] = 'pkh' + Math.random().toString(36).slice(2) + 'abcdef0123';
