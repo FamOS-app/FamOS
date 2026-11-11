@@ -159,7 +159,7 @@ test('DB: höchstens 3 Haushalte pro Person, Realtime für docs und Einkauf akti
   for (let i = 0; i < 3; i++) await as(db, 'fremd', `select * from create_household('H${i}')`);
   await fails(as(db, 'fremd', `select * from create_household('H4')`), /zu viele Haushalte/);
   const pub = await db.query(`select tablename from pg_publication_tables where pubname='supabase_realtime' order by 1`);
-  assert.deepEqual(pub.rows.map(r => r.tablename), ['docs', 'shopping_items', 'tasks']);
+  assert.deepEqual(pub.rows.map(r => r.tablename), ['docs', 'events', 'shopping_items', 'tasks']);
 });
 
 test('DB: Aufgaben nur für Mitglieder, Eingaben werden begrenzt, Realtime aktiv', async () => {
@@ -174,4 +174,27 @@ test('DB: Aufgaben nur für Mitglieder, Eingaben werden begrenzt, Realtime aktiv
   assert.deepEqual(r, { done: true, rep: 'w', who: ['k1'] });
   const pub = await db.query(`select tablename from pg_publication_tables where pubname='supabase_realtime' and tablename='tasks'`);
   assert.equal(pub.rows.length, 1);
+});
+
+test('DB: Termine nur für Mitglieder, Eingaben werden begrenzt, Realtime aktiv', async () => {
+  const [h] = await as(db, 'partner', `select * from create_household('Termine-Test')`);
+  await as(db, 'partner', `insert into events (household_id, id, title, day, end_day, t_from, t_to, place, who, rep) values ($1, 'e1', 'Kinderarzt', '2026-11-16', null, '15:30', '16:00', 'Praxis', '["k1"]', '')`, [h.id]);
+  await as(db, 'partner', `insert into events (household_id, id, title, day, end_day) values ($1, 'e2', 'Urlaub', '2026-12-20', '2027-01-03')`, [h.id]);
+  assert.deepEqual(await as(db, 'fremd', 'select * from events'), []);
+  await fails(as(db, 'fremd', `insert into events (household_id, id, title, day) values ($1, 'x', 'Hack', '2026-11-16')`, [h.id]), /row-level security/);
+  await fails(as(db, 'fremd', `update events set title='Hack' where id='e1' returning 1`).then(r => { if (!r.length) throw new Error('row-level security: nichts geändert'); }), /row-level security/);
+  const ok = { id: "'e9'", title: "'ok'", day: "'2026-11-16'", end_day: 'null', t_from: "''", t_to: "''", place: "''", note: "''", who: "'[]'", rep: "''" };
+  for (const [col, val] of [['title', `'${'x'.repeat(121)}'`], ['title', "''"], ['id', "'bad id!'"], ['day', "'2026-02-31'"], ['day', 'null'], ['end_day', "'2026-11-16'"], ['end_day', "'2026-11-01'"],
+    ['t_from', "'25:00'"], ['t_from', "'9:00'"], ['t_to', "'12:60'"], ['place', `'${'p'.repeat(81)}'`], ['note', `'${'n'.repeat(301)}'`], ['who', `'{"a":1}'`], ['rep', "'m'"]]) {
+    const row = { ...ok, [col]: val };
+    await fails(as(db, 'partner', `insert into events (household_id, ${Object.keys(row).join(', ')}) values ($1, ${Object.values(row).join(', ')})`, [h.id]), /check|invalid|null value|out of range/i);
+  }
+  // Gegenprobe: die unveränderte Zeile geht durch
+  await as(db, 'partner', `insert into events (household_id, ${Object.keys(ok).join(', ')}) values ($1, ${Object.values(ok).join(', ')})`, [h.id]);
+  const [r] = await as(db, 'partner', `update events set rep='y', t_from='08:00' where household_id=$1 and id='e1' returning rep, t_from, who, day::text`, [h.id]);
+  assert.deepEqual(r, { rep: 'y', t_from: '08:00', who: ['k1'], day: '2026-11-16' });
+  const pub = await db.query(`select tablename from pg_publication_tables where pubname='supabase_realtime' and tablename='events'`);
+  assert.equal(pub.rows.length, 1);
+  await as(db, 'partner', `delete from households where id=$1`, [h.id]);
+  assert.equal((await db.query('select count(*)::int n from events where household_id=$1', [h.id])).rows[0].n, 0);
 });

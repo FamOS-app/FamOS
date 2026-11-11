@@ -17,7 +17,7 @@ FamOS („Das Gehirn der Familie“): Familien-App als **Single-File-PWA** (`app
 | `app/famos.html` | die App (CSS, HTML, JS in einer Datei) |
 | `app/icons/` | Logo (`logo.svg`) und PNG-Icons (`node tools/make_icons.js`) |
 | `tools/build.py` | baut `dist/` (Seite, Manifest, Service Worker, Icons), Personendaten-Check, Supabase-Konfiguration aus Umgebung |
-| `supabase/migrations/` | SQL, **von der Nutzerin manuell** im Supabase SQL Editor ausgeführt (001, 002, 003 …). Neue Änderungen immer als neue nummerierte Datei, nie alte ändern. |
+| `supabase/migrations/` | SQL, **von der Nutzerin manuell** im Supabase SQL Editor ausgeführt (001, 002, 003, 004 …). Neue Änderungen immer als neue nummerierte Datei, nie alte ändern. |
 | `supabase/functions/recipe-import/index.ts` | Edge Function (manuell im Dashboard deployt, „Verify JWT“ an) |
 | `tests/` | `famos.test.js` (App im node:vm-Harness), `sync.test.js` (zwei Geräte gegen `fake-supabase.js`), `db.test.js` (SQL in PGlite, Supabase-Umgebung nachgebaut), `recipe-import.test.js` |
 | `.github/workflows/ci.yml` | Tests → Build → Personendaten-Check → Deploy `dist/` auf GitHub Pages |
@@ -27,10 +27,11 @@ FamOS („Das Gehirn der Familie“): Familien-App als **Single-File-PWA** (`app
 - UI-Änderungen im Browser prüfen (Playwright ist vorinstalliert, `dist/index.html` per `file://`).
 - Nach dem Push den CI-Lauf abwarten (öffentliche API: `/repos/FamOS-app/FamOS/actions/runs`). Build-Fehler erscheinen als Annotation (`/check-runs/<job>/annotations`).
 - Neue Module: Eintrag in `MODULES`, Standardwert in `DEF.modules`, Tests für Modul-Liste/Navigation anpassen.
-- Daten zwischen Geräten: Einstellungen als Dokument `docs.cfg` (Konflikt → Cloud gewinnt), Einkauf und Aufgaben zeilenweise (`shopping_items`, `tasks`) über die Warteschlange `SYNC.queue`.
+- Daten zwischen Geräten: Einstellungen als Dokument `docs.cfg` (Konflikt → Cloud gewinnt), Einkauf, Aufgaben und Termine zeilenweise (`shopping_items`, `tasks`, `events`) über die Warteschlange `SYNC.queue`. Neue Tabellen erst nach erfolgreichem Abruf in der Sofort-Übertragung abonnieren (siehe `SYNC.eventsOk`), sonst scheitert die Verbindung, solange die Migration fehlt.
 
 ## Stand / offen
 - Konto & Sync: Registrierung in Supabase gesperrt, Freunde werden eingeladen. Ohne Konto läuft alles lokal.
 - Login-Mails ohne eigenes SMTP: nur Link → App akzeptiert eingefügten Link. Optional Brevo-SMTP für Code in der Mail.
 - Wünsche gleichen sich über `cfg` ab (bei gleichzeitigen Änderungen gewinnt die Cloud); bei Bedarf auf eigene Tabelle umstellen.
+- Kalender: eigene Termine in FamOS; Abgleich mit Google/Outlook/iCloud und `.ics`-Export bewusst noch nicht gebaut.
 - Erinnerungen/Push-Benachrichtigungen: bewusst noch nicht gebaut.

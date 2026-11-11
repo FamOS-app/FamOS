@@ -13,7 +13,7 @@ class FakeSupabase {
     this.hashes = {};     // email → Token-Hash im Mail-Link
     this.tokens = {};     // access → userId
     this.refresh = {};    // refresh → userId
-    this.households = []; this.members = []; this.docs = []; this.items = []; this.tasks = [];
+    this.households = []; this.members = []; this.docs = []; this.items = []; this.tasks = []; this.events = [];
     this.offline = false; this.rateLimited = false; this.log = [];
     this.fetch = this.fetch.bind(this);
     this.sockets = []; this.realtimeDown = false;
@@ -34,7 +34,8 @@ class FakeSupabase {
         if (m.event === 'phx_join') {
           const uid = server.tokens[m.payload.access_token];
           const f = m.payload.config.postgres_changes.map(c => c.filter.replace('household_id=eq.', ''));
-          const ok = uid && f.every(h => server.isMember(uid, h));
+          const unknown = server.noEvents && m.payload.config.postgres_changes.some(c => c.table === 'events');
+          const ok = uid && f.every(h => server.isMember(uid, h)) && !unknown;
           if (ok) { this.topic = m.topic; this.hid = f[0]; }
           this.deliver({ topic: m.topic, event: 'phx_reply', ref: m.ref, payload: ok ? { status: 'ok', response: {} } : { status: 'error', response: { reason: 'unauthorized' } } });
         }
@@ -139,7 +140,7 @@ class FakeSupabase {
       const hid = eq('id');
       if (this.members.some(m => m.household_id === hid && m.user_id === uid && m.role === 'owner')) {
         this.households = this.households.filter(h => h.id !== hid);
-        for (const t of ['members', 'docs', 'items', 'tasks']) this[t] = this[t].filter(r => r.household_id !== hid);
+        for (const t of ['members', 'docs', 'items', 'tasks', 'events']) this[t] = this[t].filter(r => r.household_id !== hid);
       }
       return res(204);
     }
@@ -171,6 +172,23 @@ class FakeSupabase {
         return res(201);
       }
       if (method === 'DELETE') { this.tasks = this.tasks.filter(r => !(r.household_id === hid && r.id === eq('id') && this.isMember(uid, hid))); this.notify(hid, 'tasks', 'DELETE'); return res(204); }
+    }
+    if (path === '/rest/v1/events') {
+      if (this.noEvents) return res(404, { code: 'PGRST205', message: "Could not find the table 'public.events' in the schema cache" });
+      const hid = eq('household_id');
+      if (method === 'GET') return res(200, mine(this.events).filter(r => r.household_id === hid).sort((a, b) => a.created - b.created).map(({ created, household_id, ...r }) => r));
+      if (method === 'POST') {
+        if (!this.isMember(uid, data.household_id)) return denied();
+        // wie die Prüfregeln in 004_termine.sql
+        const time = /^$|^([01][0-9]|2[0-3]):[0-5][0-9]$/, date = /^\d{4}-\d{2}-\d{2}$/;
+        if (!date.test(data.day) || (data.end_day !== null && !(date.test(data.end_day) && data.end_day > data.day)) || !time.test(data.t_from) || !time.test(data.t_to) || !['', 'w', 'y'].includes(data.rep) || !data.title || data.title.length > 120)
+          return res(400, { code: '23514', message: 'new row for relation "events" violates check constraint' });
+        const ex = this.events.find(r => r.household_id === data.household_id && r.id === data.id);
+        if (ex) Object.assign(ex, data); else this.events.push({ ...data, created: ++seq });
+        this.notify(data.household_id, 'events', ex ? 'UPDATE' : 'INSERT');
+        return res(201);
+      }
+      if (method === 'DELETE') { this.events = this.events.filter(r => !(r.household_id === hid && r.id === eq('id') && this.isMember(uid, hid))); this.notify(hid, 'events', 'DELETE'); return res(204); }
     }
     if (path === '/rest/v1/shopping_items') {
       const hid = eq('household_id');

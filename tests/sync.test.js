@@ -446,3 +446,76 @@ test('Sync: ohne Konto steht vorab, dass FamOS lokal voll funktioniert und wie m
   x.run('openLogin()');
   assert.match(x.els.mc.innerHTML, /Nur für freigeschaltete Haushalte/);
 });
+
+test('Sync: Termine live auf beiden Handys, Ändern und Löschen kommen an', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server, live(server));
+  const b = await partner(server, a, live(server));
+  await settle(a, b);
+  const td = a.get('today()');
+  a.run(`setView('kalender');openCal();Object.assign(UI.form,{title:'Kinderarzt',day:'${td}',from:'15:30',to:'16:00',place:'Praxis',who:[S.kids[0].id]});saveCal()`);
+  b.run(`setView('kalender');openCal();Object.assign(UI.form,{title:'Urlaub',day:'${td}',end:addDays('${td}',7)});saveCal()`);
+  await settle(a, b);
+  assert.equal(server.events.length, 2);
+  const row = server.events.find(e => e.title === 'Kinderarzt');
+  assert.deepEqual([row.day, row.end_day, row.t_from, row.t_to, row.place, row.rep, row.who], [td, null, '15:30', '16:00', 'Praxis', '', [a.get('S.kids[0].id')]]);
+  // gleichzeitig angelegt: beide Termine bleiben (zeilenweise, kein „Cloud gewinnt“)
+  for (const d of [a, b]) assert.deepEqual(d.get('S.kalender.items.map(e=>e.title).sort()'), ['Kinderarzt', 'Urlaub']);
+  assert.match(a.app(), /Urlaub/);
+  const id = row.id;
+  b.run(`openCal('${id}');UI.form.rep='w';UI.form.from='16:00';UI.form.to='';saveCal()`);
+  await settle(a, b);
+  assert.deepEqual(a.get(`(e=>[e.rep,e.from,e.to])(S.kalender.items.find(e=>e.id==='${id}'))`), ['w', '16:00', '']);
+  a.run(`openCal('${id}');delCal()`);
+  await settle(a, b);
+  assert.deepEqual(b.get('S.kalender.items.map(e=>e.title)'), ['Urlaub']);
+  assert.equal(server.events.length, 1);
+  // Termine stecken nicht im Einstellungs-Dokument
+  assert.equal(server.docs.find(d => d.key === 'cfg').data.kalender, undefined);
+});
+
+test('Sync: ohne Termin-Tabelle (004 noch nicht eingespielt) läuft der Rest weiter, auch die Sofort-Übertragung', async () => {
+  const server = new FakeSupabase();
+  server.noEvents = true;
+  const a = await founder(server, live(server));
+  const b = await partner(server, a, live(server));
+  await settle(a, b);
+  assert.equal(a.get('RT.joined'), true); // events wird noch nicht abonniert, sonst scheitert die Verbindung
+  const td = a.get('today()');
+  a.run(`openCal();Object.assign(UI.form,{title:'Elternabend',day:'${td}'});saveCal();UI.todoNew='Steuer';addTodoInput();UI.ekNew='Milch';ekAddInput()`);
+  await settle(a, b);
+  assert.equal(a.get('SYNC.status'), 'ok');
+  assert.deepEqual(server.items.map(x => x.name), ['Milch']);
+  assert.deepEqual(server.tasks.map(x => x.title), ['Steuer']);
+  assert.deepEqual(b.get('S.aufgaben.items.map(t=>t.title)'), ['Steuer']); // live angekommen
+  assert.deepEqual(a.get('S.kalender.items.map(e=>e.title)'), ['Elternabend']); // Termin bleibt lokal
+  assert.deepEqual(b.get('S.kalender.items'), []);
+  server.noEvents = false; // 004 eingespielt
+  await sync(a); await settle(a, b);
+  assert.deepEqual(server.events.map(e => e.title), ['Elternabend']); // wird nachgeliefert
+  await sync(b); await settle(a, b);
+  assert.deepEqual(b.get('S.kalender.items.map(e=>e.title)'), ['Elternabend']);
+  // danach ist events im Abo beider Geräte und Änderungen kommen sofort
+  for (const d of [a, b]) assert.equal(d.get('RT.joined'), true);
+  assert.ok(server.sockets.every(s => s.sent.find(m => m.event === 'phx_join').payload.config.postgres_changes.some(c => c.table === 'events')));
+  b.run(`openCal();Object.assign(UI.form,{title:'Laternenfest',day:'${td}'});saveCal()`);
+  await settle(a, b);
+  assert.deepEqual(a.get('S.kalender.items.map(e=>e.title).sort()'), ['Elternabend', 'Laternenfest']);
+});
+
+test('Sync: Beitritt übernimmt die Termine des Haushalts, Kalender aus heißt kein Abruf', async () => {
+  const server = new FakeSupabase();
+  const a = await founder(server);
+  const td = a.get('today()');
+  a.run(`openCal();Object.assign(UI.form,{title:'Geburtstag',day:'${td}',rep:'y'});saveCal()`);
+  await sync(a);
+  const b = await partner(server, a);
+  await sync(b);
+  assert.deepEqual(b.get('S.kalender.items.map(e=>[e.title,e.rep])'), [['Geburtstag', 'y']]);
+  b.run(`togModule('kalender')`);
+  await sync(b);
+  server.log.length = 0;
+  await sync(b);
+  assert.ok(!server.log.some(l => l.includes('/rest/v1/events')));
+  assert.ok(server.log.some(l => l.includes('/rest/v1/tasks')));
+});
