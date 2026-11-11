@@ -189,6 +189,8 @@ input{font-family:var(--font)}
 .ins-steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--pri);color:var(--on);display:grid;place-items:center;font-weight:700;font-size:.85rem}
 .ins-ico{width:20px;height:20px;vertical-align:-4px;color:var(--pri)}
 .ins-now{width:100%;margin-bottom:6px}
+.imp-row{display:flex;gap:8px}
+.imp-row .aa{flex:1;padding:12px 6px;margin:0}
 .ek-cat{font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:16px 2px 8px}
 .ek-src{display:flex;gap:8px}
 .ek-src .ek-plan{flex:1;margin-bottom:6px}
@@ -1037,7 +1039,8 @@ function admSp(){
   <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none">${DAYS.map(d=>`<button class="rt-sel-btn${d.id===day?' on':''}" style="flex-shrink:0" onclick="setASpDay('${d.id}')">${esc(d.s)}</button>`).join('')}</div>
   <div class="as-lbl">${DAYS.find(d=>d.id===day)?.l||day}</div>
   <div class="al">${entries.map((e,i)=>{const sub=[e.time,e.teacher].filter(Boolean).join(' · ');return`<div class="ai"><div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0"><button class="move-btn" onclick="moveSpEntry('${kid}','${day}',${i},'up')" ${i===0?'disabled':''}>↑</button><button class="move-btn" onclick="moveSpEntry('${kid}','${day}',${i},'down')" ${i===entries.length-1?'disabled':''}>↓</button></div><div class="ai-em">${esc(e.em)}</div><div class="ai-info"><div class="ai-main">${esc(e.lbl)}</div>${sub?`<div class="ai-sub">${esc(sub)}</div>`:''}</div><button class="ai-edit" aria-label="Bearbeiten" onclick="openSpModal('${kid}','${day}',${i})">✏️</button><button class="ai-del" aria-label="Löschen" onclick="delSpEntry('${kid}','${day}',${i})">🗑️</button></div>`;}).join('')}</div>
-  <button class="aa" onclick="openSpModal('${kid}','${day}',null)">＋ Eintrag hinzufügen</button>`;}
+  <button class="aa" onclick="openSpModal('${kid}','${day}',null)">＋ Eintrag hinzufügen</button>
+  <button class="aa" style="margin-top:8px" onclick="openClaude('stundenplan')">Ganzen Plan mit Claude vom Foto übernehmen</button>`;}
 
 function admHaushalt(){return`<div style="font-size:.8rem;color:var(--muted);font-weight:700;margin-bottom:13px;line-height:1.65">Kinder wählen täglich <strong>eine</strong> Aufgabe.<br>Aktivieren unter Routinen-Tab.</div><div class="al">${S.wahlPool.map(w=>`<div class="ai"><div class="ai-em">${esc(w.em)}</div><div class="ai-info"><div class="ai-main">${esc(w.lbl)}</div></div><button class="ai-del" aria-label="Löschen" onclick="delWahl('${w.id}')">🗑️</button></div>`).join('')}</div><button class="aa" onclick="openWahlModal()">＋ Aufgabe hinzufügen</button>`;}
 
@@ -1145,7 +1148,7 @@ function buildEssDishes(kid){
   <div class="al ess-list">${list.map(d=>{const r=d.ratings[kid?.id]||0,vals=Object.values(d.ratings),up=vals.filter(v=>v>0).length,down=vals.filter(v=>v<0).length;
     return`<div class="ai"><button class="ess-open" aria-label="Rezept ${esc(d.name)}" onclick="openRecipe('${d.id}')"><span class="ai-em">${esc(d.em)}</span></button><div class="ai-info" onclick="openRecipe('${d.id}')"><div class="ai-main">${esc(d.name)}</div><div class="ai-sub">${d.meals.map(m=>mealOf(m).em).join(' ')}${d.tags.length?' · '+d.tags.map(t=>TAGS.find(x=>x.id===t).em).join(' '):''}${up?` · 👍 ${up}`:''}${down?` · 👎 ${down}`:''}</div></div>
     <button class="ess-rate${r>0?' on':''}" aria-pressed="${r>0}" aria-label="Mag ich" onclick="rateDish('${d.id}',1)">👍</button><button class="ess-rate${r<0?' on':''}" aria-pressed="${r<0}" aria-label="Mag ich nicht" onclick="rateDish('${d.id}',-1)">👎</button><button class="ai-edit" aria-label="Bearbeiten" onclick="openDishModal('${d.id}')">✏️</button></div>`;}).join('')||'<div class="sp-empty">Kein Gericht mit diesem Filter.</div>'}</div>
-  <button class="aa" onclick="openDishModal(null)">＋ Gericht hinzufügen</button>`;
+  <div class="imp-row"><button class="aa" onclick="openDishModal(null)">＋ Neu</button><button class="aa" onclick="openLinkImport()">Aus Link</button><button class="aa" onclick="openClaude('rezept')">Mit Claude</button></div>`;
 }
 
 // ─── Mengen: „500 g Mehl“ erkennen, umrechnen, zusammenzählen ───
@@ -1341,6 +1344,94 @@ function buildEinkaufContent(){
   ${done.length?`<div class="s-lbl">Im Wagen · ${done.length}</div>${done.map(row).join('')}<button class="reset-btn" onclick="ekClearDone()">Erledigte entfernen</button>`:''}`;
 }
 
+// ═══ IMPORT: per Link (Server-Funktion) und mit Claude (Text einfügen) ═══
+// Gericht-Formular mit übernommenen Werten öffnen; gespeichert wird erst nach „Speichern“
+function openDishPrefilled(r){openDishModal(null);const f=UI.form;
+  f.name=sStr(r.name,60).trim();f.em=sEm(r.em,'🍽️');f.ingr=sArr(r.ingr,60).map(x=>sStr(x,80).trim()).filter(Boolean).join('\n');
+  f.steps=sArr(r.steps,30).map(x=>sStr(x,300).trim()).filter(Boolean).join('\n');f.portions=Math.min(20,Math.max(1,Math.round(Number(r.portions))||4));
+  const ms=MEALS.map(m=>m.id).filter(id=>sArr(r.meals,3).includes(id));if(ms.length)f.meals=ms;
+  f.tags=TAGS.map(t=>t.id).filter(id=>sArr(r.tags,5).includes(id));openModal();}
+
+// ─── Per Link ───
+function openLinkImport(){UI.form={mode:'linkImp',url:'',busy:false,err:''};openModal();}
+function renderLinkImport(){const f=UI.form,can=SYNC_ON&&AUTH;
+  return`<h3>Rezept aus Link</h3>
+  <div class="ins-why">Link zu einem Rezept einfügen (z. B. Chefkoch, Lecker, eatsmarter). FamOS liest Zutaten, Schritte und Portionen aus. Ohne KI, nichts wird gespeichert.</div>
+  ${can?`<div class="field"><label for="liUrl">Link</label><input id="liUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://…" value="${esc(f.url)}" oninput="UI.form.url=this.value" onkeydown="if(event.key==='Enter')runLinkImport()"></div>`
+    :`<div class="sync-err">Dafür braucht es die Anmeldung (Einstellungen → Konto &amp; Sync), weil die Seite über euren Supabase-Server abgerufen wird.</div>`}
+  ${f.err?`<div class="sync-err" role="alert">${esc(f.err)}</div>`:''}
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button>${can?`<button class="m-save" onclick="runLinkImport()" ${f.busy?'disabled':''}>${f.busy?'Lese …':'Übernehmen'}</button>`:''}</div>`;}
+async function runLinkImport(){const f=UI.form,url=String(f.url||'').trim();
+  if(!/^https?:\/\/[^\s]+\.[^\s]+/.test(url)){f.err='Bitte einen vollständigen Link einfügen (https://…).';openModal();return;}
+  f.busy=true;f.err='';openModal();
+  try{const r=await sb('/functions/v1/recipe-import',{method:'POST',body:{url}});const x=r?.recipe;
+    if(!x?.name)throw Object.assign(new Error('Auf dieser Seite wurde kein Rezept gefunden.'),{status:422});
+    openDishPrefilled({name:x.name,ingr:x.ingredients,steps:x.steps,portions:x.portions});toast('Übernommen. Bitte prüfen und speichern.');}
+  catch(e){f.busy=false;f.err=e.status===404?'Die Import-Funktion ist in Supabase noch nicht eingerichtet.':e.status===401?'Bitte neu anmelden.':(e.message||'Das hat nicht geklappt.');openModal();}
+}
+
+// ─── Mit Claude: Foto in der Claude-App, Antwort hier einfügen ───
+const CLAUDE_PROMPTS={
+rezept:`Lies das Rezept auf dem Foto (oder im Text) und gib es für meine App FamOS zurück.
+Antworte NUR mit JSON in genau diesem Format, ohne weiteren Text:
+{"famos":"rezept","name":"Spaghetti Bolognese","emoji":"🍝","portionen":4,"zutaten":["500 g Spaghetti","1 Dose Tomaten"],"schritte":["Zwiebel würfeln und anbraten","…"],"mahlzeiten":["abend"],"eigenschaften":["fleisch"]}
+Regeln:
+- zutaten: eine Zutat pro Eintrag, Menge und Einheit vorne (g, kg, ml, l, EL, TL, Prise, Dose, Bund, Pck.)
+- schritte: kurze Arbeitsschritte, einer pro Eintrag
+- portionen: Zahl, für wie viele Personen das Rezept ist
+- mahlzeiten aus: fruehstueck, mittag, abend
+- eigenschaften aus: veg, schnell, we, fleisch, fisch
+- Mehrere Rezepte: als Liste [ {...}, {...} ]`,
+stundenplan:`Lies den Stundenplan auf dem Foto und gib ihn für meine App FamOS zurück.
+Antworte NUR mit JSON in genau diesem Format, ohne weiteren Text:
+{"famos":"stundenplan","tage":{"mo":[{"fach":"Mathe","von":"8:15","bis":"9:00","lehrkraft":"Fr. Muster","emoji":"📐"}],"di":[],"mi":[],"do":[],"fr":[]}}
+Regeln:
+- Tage: mo, di, mi, do, fr (sa, so nur wenn vorhanden), Stunden in zeitlicher Reihenfolge
+- von/bis nur, wenn auf dem Plan Zeiten stehen; lehrkraft nur, wenn sie dasteht
+- emoji: ein passendes Emoji zum Fach
+- Pausen nur, wenn sie im Plan stehen`};
+function openClaude(kind){UI.form={mode:'claude',kind,text:'',err:'',preview:null,kid:UI.aSpKid||S.kids[0]?.id};openModal();}
+function copyClaudePrompt(){const t=CLAUDE_PROMPTS[UI.form.kind];
+  try{navigator.clipboard.writeText(t).then(()=>toast('Text für Claude kopiert'),()=>{UI.form.showPrompt=true;openModal();});}catch(e){UI.form.showPrompt=true;openModal();}}
+function renderClaudeModal(){const f=UI.form,rz=f.kind==='rezept',P=f.preview;
+  if(P)return`<h3>Vorschau</h3>${rz?`<div class="al">${P.map(d=>`<div class="ai"><div class="ai-em">${esc(d.em)}</div><div class="ai-info"><div class="ai-main">${esc(d.name)}</div><div class="ai-sub">${d.ingr.length} Zutaten · ${d.steps.length} Schritte · für ${d.portions}</div></div></div>`).join('')}</div>`
+    :`<div class="ins-why">Für <strong>${esc(S.kids.find(k=>k.id===f.kid)?.name||'')}</strong>:</div><div class="al">${DAYS.filter(d=>P[d.id]).map(d=>`<div class="ai"><div class="ai-info"><div class="ai-main">${d.l}</div><div class="ai-sub">${P[d.id].map(e=>esc(e.lbl)).join(' · ')||'frei'}</div></div></div>`).join('')}</div>
+      <div class="field"><label>Für welches Kind?</label><div class="ap-wrap">${S.kids.map(k=>`<button class="ap${f.kid===k.id?' on':''}" onclick="UI.form.kid='${k.id}';openModal()">${esc(k.icon)} ${esc(k.name)}</button>`).join('')}</div></div>
+      <div class="ins-why">Die genannten Tage werden ersetzt, die anderen bleiben.</div>`}
+    <div class="m-btns"><button class="m-cancel" onclick="UI.form.preview=null;openModal()">Zurück</button><button class="m-save" onclick="applyClaude()">Übernehmen</button></div>`;
+  return`<h3>${rz?'Rezept':'Stundenplan'} mit Claude</h3>
+  <ol class="ins-steps"><li><span><button class="aa" style="margin:0" onclick="copyClaudePrompt()">Text für Claude kopieren</button></span></li>
+  <li><span>In der Claude-App einen neuen Chat öffnen, den Text einfügen und ${rz?'das Foto vom Rezept':'ein Foto vom Stundenplan'} anhängen.</span></li>
+  <li><span>Claudes Antwort kopieren und hier einfügen:</span></li></ol>
+  ${f.showPrompt?`<div class="field"><label for="clP">Text für Claude (markieren und kopieren)</label><textarea id="clP" rows="6" readonly>${esc(CLAUDE_PROMPTS[f.kind])}</textarea></div>`:''}
+  <div class="field"><label for="clA">Antwort von Claude</label><textarea id="clA" rows="6" placeholder='{"famos":"${f.kind}", …}' oninput="UI.form.text=this.value">${esc(f.text)}</textarea></div>
+  ${f.err?`<div class="sync-err" role="alert">${esc(f.err)}</div>`:''}
+  ${rz?'':'<div class="sync-privacy">Hinweis: Das Foto und die Namen der Lehrkräfte gehen dabei an Claude (dein Konto bei Anthropic).</div>'}
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="parseClaude()">Prüfen</button></div>`;}
+// JSON aus Claudes Antwort lösen (auch mit Code-Block oder Text drumherum) und streng prüfen
+function claudeJson(t){t=String(t||'');const a=t.search(/[\[{]/),b=Math.max(t.lastIndexOf('}'),t.lastIndexOf(']'));if(a<0||b<a)return null;try{return JSON.parse(t.slice(a,b+1));}catch(e){return null;}}
+function claudeRecipes(j){const list=Array.isArray(j)?j:Array.isArray(j?.rezepte)?j.rezepte:[j];
+  return list.slice(0,20).map(o=>{if(!o||typeof o!=='object')return null;const name=sStr(o.name,60).trim();if(!name)return null;
+    return{name,em:sEm(o.emoji,'🍽️'),portions:Math.min(20,Math.max(1,Math.round(Number(o.portionen))||4)),
+      ingr:sArr(o.zutaten,100).map(x=>sStr(x,80).trim()).filter(Boolean).slice(0,60),steps:sArr(o.schritte,100).map(x=>sStr(x,300).trim()).filter(Boolean).slice(0,30),
+      meals:MEALS.map(m=>m.id).filter(id=>sArr(o.mahlzeiten,3).includes(id)),tags:TAGS.map(t=>t.id).filter(id=>sArr(o.eigenschaften,5).includes(id))};}).filter(Boolean);}
+function claudePlan(j){const T=sObj(j?.tage);const out={};let n=0;
+  DAYS.forEach(d=>{if(!Array.isArray(T[d.id]))return;out[d.id]=T[d.id].slice(0,30).map(e=>{if(!e||typeof e!=='object')return null;const lbl=sStr(e.fach,60).trim();if(!lbl)return null;
+    const von=sStr(e.von,12).trim(),bis=sStr(e.bis,12).trim();return{em:sEm(e.emoji,'📖'),lbl,time:von&&bis?`${von} – ${bis}`:von,teacher:sStr(e.lehrkraft,40).trim()};}).filter(Boolean);n++;});
+  return n?out:null;}
+function parseClaude(){const f=UI.form,j=claudeJson(f.text);
+  if(!j){f.err='Das sieht nicht nach Claudes Antwort aus. Bitte die ganze Antwort kopieren und einfügen.';openModal();return;}
+  if(f.kind==='rezept'){const r=claudeRecipes(j);if(!r.length){f.err='Kein Rezept in der Antwort gefunden.';openModal();return;}
+    if(r.length===1){openDishPrefilled(r[0]);toast('Übernommen. Bitte prüfen und speichern.');return;}f.preview=r;}
+  else{const p=claudePlan(j);if(!p){f.err='Kein Stundenplan in der Antwort gefunden.';openModal();return;}f.preview=p;}
+  f.err='';openModal();}
+function applyClaude(){const f=UI.form,P=f.preview;
+  if(f.kind==='rezept'){P.forEach(r=>{S.essen.dishes.push({id:uid(),em:r.em,name:r.name,meals:r.meals.length?r.meals:['abend'],tags:r.tags,ingr:r.ingr,ratings:{},portions:r.portions,steps:r.steps});});
+    saveCfg();closeModal();render();toast(`${P.length} Gerichte übernommen`);return;}
+  if(!S.kids.some(k=>k.id===f.kid))return;
+  if(!S.stundenplan[f.kid])S.stundenplan[f.kid]={};Object.entries(P).forEach(([d,list])=>{S.stundenplan[f.kid][d]=list;});
+  saveCfg();closeModal();if(document.getElementById('adm').classList.contains('open'))renderAdmin();render();toast('Stundenplan übernommen');}
+
 // ═══ EMOJI PICKER ═════════════════════════════
 let _epCb=null;
 function epOpen(cb){_epCb=cb;document.getElementById('epBg').classList.add('open');renderEp();}
@@ -1351,7 +1442,7 @@ function renderEp(){document.getElementById('epCats').innerHTML=EC.map(c=>`<butt
 function epPick(e){if(_epCb)_epCb(e);epClose();}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 

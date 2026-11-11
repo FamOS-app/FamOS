@@ -79,7 +79,9 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
 - Welche Mahlzeiten geplant werden, steht unter Einstellungen → Essen. Plan-Einträge älter als 5 Wochen werden aufgeräumt.
 - **Mengen:** Zutaten bleiben Textzeilen; Menge und Einheit werden erkannt („500 g“, „1,5 kg“, „½ Bund“, „2 EL“, „1 Dose“). Jedes Gericht hat Portionen („Rezept für 4“), unter Einstellungen → Essen steht, für wie viele gekocht wird. Rezeptansicht rechnet genau um, die Einkaufsliste rundet Zählbares auf (keine halben Dosen) und rechnet gleiche Zutaten zusammen (g/kg, ml/l).
 - **Kochschritte:** ein Schritt pro Zeile; „📖 Rezept“ zeigt Zutaten und nummerierte Schritte, Personenzahl dort nur für die Ansicht änderbar.
-- Keine KI, keine laufenden Kosten.
+- **Rezept aus Link:** Supabase-Funktion `supabase/functions/recipe-import` liest schema.org/Recipe (JSON-LD) aus der Seite. Ohne KI, speichert nichts, nur angemeldet; nur öffentliche Adressen (keine IPs/localhost/Sonderports, auch nicht nach Weiterleitung), max. 2 MB, 8 s.
+- **Mit Claude übernehmen** (Rezept oder Stundenplan vom Foto): Die App kopiert einen fertigen Auftrag; Foto + Auftrag in der Claude-App senden, Antwort (JSON) in FamOS einfügen. Die Antwort wird streng geprüft, Rezepte gehen ins Formular bzw. über eine Vorschau, beim Stundenplan werden nur die genannten Tage des gewählten Kindes ersetzt. Keine API-Kosten.
+- Keine KI in der App, keine laufenden Kosten.
 
 ## Modul Einkauf
 
@@ -100,6 +102,8 @@ Config (`ra_cfg3`): `household {name, adults[]}` (`null` = Onboarding), `kids[]`
   - Anlegen/Beitreten/Code erneuern nur über Funktionen; Code ändern nur der Besitzer.
 - `tests/db.test.js` prüft Schema und Regeln in einer echten Postgres-Instanz (PGlite), auch in CI.
 - App-Konfiguration kommt aus GitHub-Variablen `SUPABASE_URL` und `SUPABASE_PUBLISHABLE_KEY` (nicht geheim, Schutz über RLS). Der secret/service_role key gehört nirgends hin.
+
+- Edge Function `recipe-import`: einmal im Dashboard anlegen (Edge Functions → Deploy a new function → Via Editor → Name `recipe-import` → Inhalt von `supabase/functions/recipe-import/index.ts` → Deploy; „Verify JWT“ an lassen). Tests: `tests/recipe-import.test.js`.
 
 ### Konto & Sync in der App
 

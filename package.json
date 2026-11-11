@@ -3,7 +3,7 @@
   "private": true,
   "description": "FamOS – Das Gehirn der Familie",
   "scripts": {
-    "test": "node --test tests/famos.test.js tests/sync.test.js tests/db.test.js"
+    "test": "node --test tests/famos.test.js tests/sync.test.js tests/db.test.js tests/recipe-import.test.js"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.12"

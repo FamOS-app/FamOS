@@ -1209,3 +1209,52 @@ test('Essen: Gericht für heute direkt auswählen, ohne zu würfeln', () => {
   assert.deepEqual(a.get(`planSlot(today(),'abend')`), { id: 'g3', pin: true });
   assert.match(a.app(), /Pizza/);
 });
+
+// ─── Mit Claude übernehmen ────────────────────────────────────
+test('Claude: ein Rezept aus der Antwort (mit Code-Block drumherum) füllt das Formular', () => {
+  const a = household();
+  a.run(`setView('essen');setEssTab('gerichte');render()`);
+  assert.match(a.app(), /openClaude\('rezept'\)/);
+  a.run(`openClaude('rezept')`);
+  assert.match(a.els.mc.innerHTML, /Text für Claude kopieren/);
+  assert.match(a.get('CLAUDE_PROMPTS.rezept'), /"famos":"rezept"/);
+  const answer = 'Hier ist das Rezept:\n```json\n' + JSON.stringify({ famos: 'rezept', name: 'Linsen-Dal', emoji: '🍛', portionen: 2,
+    zutaten: ['250 g rote Linsen', '400 ml Kokosmilch'], schritte: ['Zwiebel anbraten', 'Linsen dazu, 15 Min. köcheln'], mahlzeiten: ['abend', 'snack'], eigenschaften: ['veg', 'quatsch'] }) + '\n```';
+  a.run(`UI.form.text=${JSON.stringify(answer)};parseClaude()`);
+  const f = a.get('UI.form');
+  assert.equal(f.mode, 'dish');
+  assert.deepEqual([f.name, f.em, f.portions, f.meals, f.tags], ['Linsen-Dal', '🍛', 2, ['abend'], ['veg']]);
+  assert.equal(f.ingr, '250 g rote Linsen\n400 ml Kokosmilch');
+  a.run('saveDish()');
+  assert.equal(a.get('S.essen.dishes.at(-1).steps.length'), 2);
+});
+
+test('Claude: mehrere Rezepte über Vorschau, Unsinn wird abgefangen, Schadcode bleibt Text', () => {
+  const a = household();
+  const n = a.get('S.essen.dishes.length');
+  a.run(`openClaude('rezept');UI.form.text='keine Ahnung, sorry';parseClaude()`);
+  assert.match(a.get('UI.form.err'), /nicht nach Claudes Antwort/);
+  a.run(`UI.form.text='{"famos":"rezept"}';parseClaude()`);
+  assert.match(a.get('UI.form.err'), /Kein Rezept/);
+  const list = [{ name: '<img src=x onerror=alert(1)>', zutaten: ['x'] }, { name: 'Suppe', portionen: 99 }];
+  a.run(`UI.form.text=${JSON.stringify(JSON.stringify(list))};parseClaude()`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /<img/);
+  a.run('applyClaude()');
+  assert.equal(a.get('S.essen.dishes.length'), n + 2);
+  assert.equal(a.get('S.essen.dishes.at(-1).portions'), 20);
+});
+
+test('Claude: Stundenplan vom Foto ersetzt nur die genannten Tage des gewählten Kindes', () => {
+  const a = household();
+  const [k1, k2] = a.get('S.kids').map(k => k.id);
+  a.run(`openSpModal('${k2}','fr',null);UI.form.lbl='Schwimmen';saveSpEntry()`);
+  a.run(`openAdmin();setATab('stundenplan')`);
+  assert.match(a.adm(), /mit Claude vom Foto/);
+  const plan = { famos: 'stundenplan', tage: { mo: [{ fach: 'Mathe', von: '8:15', bis: '9:00', lehrkraft: 'Fr. Beispiel', emoji: '📐' }, { fach: 'Deutsch', von: '9:00' }, { fach: '' }], di: [], xx: [{ fach: 'Hack' }] } };
+  a.run(`openClaude('stundenplan');UI.form.text=${JSON.stringify(JSON.stringify(plan))};parseClaude();UI.form.kid='${k2}';applyClaude()`);
+  const sp = a.get(`S.stundenplan['${k2}']`);
+  assert.deepEqual(sp.mo, [{ em: '📐', lbl: 'Mathe', time: '8:15 – 9:00', teacher: 'Fr. Beispiel' }, { em: '📖', lbl: 'Deutsch', time: '9:00', teacher: '' }]);
+  assert.deepEqual(sp.di, []);
+  assert.deepEqual(sp.fr.map(e => e.lbl), ['Schwimmen']); // nicht genannter Tag bleibt
+  assert.deepEqual(a.get(`S.stundenplan['${k1}'].mo`), []);
+});

@@ -348,3 +348,25 @@ test('Sync: Standardliste und Bereichs-Zuordnungen gelten auf beiden Handys', as
   assert.equal(b.get(`ekCat('Geschenkpapier')`), 'haushalt');
   assert.deepEqual(b.get('S.einkauf.order'), a.get('S.einkauf.order'));
 });
+
+test('Link-Import: Rezept über die Server-Funktion, verständliche Fehler', async () => {
+  const server = new FakeSupabase();
+  const a = device(server);
+  a.run(`openLinkImport()`);
+  assert.match(a.els.mc.innerHTML, /braucht es die Anmeldung/);
+  const b = await founder(server);
+  b.run(`closeModal();openLinkImport();UI.form.url='kein link'`);
+  await b.run('runLinkImport()');
+  assert.match(b.get('UI.form.err'), /vollständigen Link/);
+  b.run(`UI.form.url='https://www.beispiel.de/rezept'`);
+  await b.run('runLinkImport()');
+  assert.match(b.get('UI.form.err'), /noch nicht eingerichtet/);
+  server.recipeFn = url => url.endsWith('/rezept') ? { name: 'Pfannkuchen', ingredients: ['250 g Mehl', '3 Eier'], steps: ['Rühren', 'Ausbacken'], portions: 2 } : null;
+  await b.run('runLinkImport()');
+  const f = b.get('UI.form');
+  assert.equal(f.mode, 'dish');
+  assert.deepEqual([f.name, f.ingr, f.steps, f.portions], ['Pfannkuchen', '250 g Mehl\n3 Eier', 'Rühren\nAusbacken', 2]);
+  b.run(`openLinkImport();UI.form.url='https://www.beispiel.de/kein'`);
+  await b.run('runLinkImport()');
+  assert.match(b.get('UI.form.err'), /kein Rezept gefunden/);
+});

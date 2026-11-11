@@ -100,6 +100,12 @@ class FakeSupabase {
     if (!uid) return res(401, { code: 'PGRST301', message: 'JWT expired' });
     if (path === '/auth/v1/user') return res(200, Object.values(this.users).find(x => x.id === uid));
 
+    // ── Edge Function Rezept-Import ──
+    if (path === '/functions/v1/recipe-import') {
+      if (!this.recipeFn) return res(404, { code: 'NOT_FOUND', message: 'Requested function was not found' });
+      const r = this.recipeFn(data.url);
+      return r ? res(200, { ok: true, recipe: r, source: new URL(data.url).hostname }) : res(422, { error: 'Auf dieser Seite wurde kein Rezept gefunden.' });
+    }
     // ── RPC ──
     if (path === '/rest/v1/rpc/create_household') {
       const h = { id: uuid(), name: data.p_name, invite_code: nid('C').padEnd(8, 'X').slice(-8).toUpperCase(), created_by: uid };
