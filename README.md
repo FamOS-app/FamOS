@@ -166,10 +166,11 @@ Im eigenen Fork: **Settings → Secrets and variables → Actions**.
 |---|---|---|---|
 | Reiter **Variables** | `SUPABASE_URL` | `https://<projekt>.supabase.co` | Supabase → Project Settings → Data API (ein angehängtes `/rest/v1` stört nicht) |
 | Reiter **Variables** | `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_…` | Supabase → Project Settings → API Keys → **Publishable key** |
-| Reiter **Secrets** | `PERSONAL_NAMES` | Namen eurer Kinder, durch Komma getrennt | selbst festlegen (siehe unten) |
+| Reiter **Secrets** | `PERSONAL_NAMES` | Namen eurer Familie, durch Komma getrennt | selbst festlegen (siehe unten) |
 
 - **Niemals den Secret Key (`sb_secret_…`) eintragen**, weder hier noch sonst irgendwo. Der Build bricht ab, wenn er ihn erkennt.
-- **`PERSONAL_NAMES` ist Pflicht.** Der Build prüft damit, dass diese Namen nie im Code landen, und läuft ohne das Secret nicht durch. Wer keine Kinder einträgt, setzt einen Platzhalter, z. B. `KEINNAME`.
+- **`PERSONAL_NAMES` ist Pflicht.** Der Build prüft damit, dass diese Namen nie im Code oder auf der öffentlichen Seite landen, und läuft ohne das Secret nicht durch. Eintragen: Vornamen von Kindern **und** Erwachsenen, den Nachnamen, ggf. Namen von Lehrkräften, Kita oder Schule. Das Secret ist auf GitHub nicht mehr lesbar, auch nicht für euch selbst.
+- Der Check findet nur die eingetragenen Wörter. Adressen oder Geburtsdaten erkennt er nicht. Grundregel bleibt: Familiendaten nur in der App, nie im Code.
 
 ### Schritt 5: GitHub Pages einschalten und veröffentlichen
 1. **Settings → Pages** (linke Leiste, Abschnitt „Code and automation“) → **Source: GitHub Actions**.
