@@ -2006,3 +2006,39 @@ test('Kalender: Ausfälle werden bereinigt (nur Serien, nur gültige Tage ab Beg
   assert.equal(m.length, 100);
   assert.equal(m.at(-1), many.at(-1)); // die jüngsten bleiben
 });
+
+test('Kalender: Uhrzeit über eigene Auswahl (Stunde, Minute in 5er-Schritten) statt System-Zeitfenster', () => {
+  const { a, td } = cal();
+  a.run('openCal()');
+  let html = a.els.mc.innerHTML;
+  assert.doesNotMatch(html, /type="time"/);
+  assert.match(html, /<select id="calFh" aria-label="von, Stunde"/);
+  assert.match(html, /<select id="calFm" aria-label="von, Minute"[^>]*disabled/); // erst Stunde wählen
+  const opts = id => [...a.els.mc.innerHTML.split(`id="${id}"`)[1].split('</select>')[0].matchAll(/<option[^>]*>([^<]*)</g)].map(m => m[1]);
+  assert.equal(opts('calFh').length, 25); // „––“ + 00–23
+  a.run(`calTime('from','h','16')`);
+  assert.equal(a.get('UI.form.from'), '16:00');
+  assert.deepEqual(opts('calFm'), ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55']);
+  assert.match(a.els.mc.innerHTML, /<option selected>16<\/option>/);
+  a.run(`calTime('from','m','30')`);
+  assert.equal(a.get('UI.form.from'), '16:30');
+  a.run(`calTime('to','m','15')`); // Minute ohne Stunde: nichts
+  assert.equal(a.get('UI.form.to'), '');
+  a.run(`calTime('to','h','17')`);
+  assert.equal(a.get('UI.form.to'), '17:00');
+  for (const bad of ['24', '7', 'x', '<b>']) { a.run(`calTime('to','h',${JSON.stringify(bad)})`); assert.equal(a.get('UI.form.to'), '', bad); a.run(`calTime('to','h','17')`); }
+  a.run(`calTime('to','m','99')`);
+  assert.equal(a.get('UI.form.to'), '17:00');
+  // Beginn entfernen nimmt das Ende mit
+  a.run(`calTime('from','h','')`);
+  assert.deepEqual(a.get('[UI.form.from,UI.form.to]'), ['', '']);
+  a.run(`UI.form.title='Turnen';calTime('from','h','09');calTime('from','m','45');calTime('to','h','11');saveCal()`);
+  assert.deepEqual(a.get('[S.kalender.items[0].from,S.kalender.items[0].to]'), ['09:45', '11:00']);
+  // gespeicherte krumme Minute bleibt wählbar und ausgewählt
+  a.run(`S.kalender.items[0].from='09:12';openCal(S.kalender.items[0].id)`);
+  assert.ok(opts('calFm').includes('12'));
+  assert.match(a.els.mc.innerHTML.split('id="calFm"')[1], /<option selected>12<\/option>/);
+  // ganztägig: beide leer
+  a.run(`openCal();UI.form.title='Ausflug';UI.form.day='${td}';saveCal()`);
+  assert.deepEqual(a.get(`(e=>[e.from,e.to])(S.kalender.items.find(e=>e.title==='Ausflug'))`), ['', '']);
+});

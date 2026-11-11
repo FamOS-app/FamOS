@@ -241,6 +241,9 @@ input{font-family:var(--font)}
 .cal-d.on .cal-dots i{background:var(--on)}
 .cal-times{display:flex;gap:8px;align-items:center}
 .cal-times input{flex:1;min-width:0}
+.cal-tsel{display:flex;gap:2px;align-items:center;flex:1;min-width:0;font-weight:800}
+.cal-tsel select{flex:1;min-width:0;min-height:46px;padding:8px 6px;border:1.5px solid var(--border);border-radius:10px;font:inherit;font-size:1rem;font-weight:700;color:var(--text);background:var(--bg);text-align:center}
+.cal-tsel select:focus{border-color:var(--pri);outline:none}
 .seg-n{font-size:.75rem;font-weight:700;background:var(--bg2);border-radius:99px;padding:2px 8px;color:var(--muted)}
 .seg-b.on .seg-n{background:var(--text);color:var(--bg)}
 .ess-weekhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:18px 0 10px;flex-wrap:wrap}
@@ -1783,13 +1786,24 @@ function kidEvents(kid){if(!kid)return'';const rows=calAgenda(today(),7,kid).fla
 function openCal(id,day){const e=id?S.kalender.items.find(x=>x.id===id):null;if(id&&!e)return;
   // occ: der angetippte Termin einer Serie (nur wenn er an dem Tag wirklich stattfindet)
   UI.form=e?{mode:'cal',id:e.id,title:e.title,day:e.day,end:e.end,from:e.from,to:e.to,place:e.place,note:e.note,who:e.who.slice(),rep:e.rep,occ:e.rep&&sDate(day)&&calOn(e,day)?day:''}:{mode:'cal',id:'',title:'',day:sDate(day)||today(),end:'',from:'',to:'',place:'',note:'',who:personById(UI.calWho)?[UI.calWho]:[],rep:''};openModal();}
+// Uhrzeit als zwei Auswahllisten (Stunde, Minute in 5er-Schritten) statt des System-Zeitfensters,
+// das je nach Handy anders aussieht und auf Android abgeschnitten sein kann. Gespeicherte „krumme“ Minuten bleiben wählbar.
+function calTimeSel(key,id,v){const[h,m]=sTime(v)?v.split(':'):['',''],pad=n=>String(n).padStart(2,'0');
+  const mins=[...Array(12)].map((_,i)=>pad(i*5));if(m&&!mins.includes(m)){mins.push(m);mins.sort();}
+  const lbl=key==='from'?'von':'bis';
+  return`<span class="cal-tsel"><select id="${id}h" aria-label="${lbl}, Stunde" onchange="calTime('${key}','h',this.value)"><option value="">––</option>${[...Array(24)].map((_,i)=>`<option${pad(i)===h?' selected':''}>${pad(i)}</option>`).join('')}</select>:<select id="${id}m" aria-label="${lbl}, Minute" onchange="calTime('${key}','m',this.value)" ${h?'':'disabled'}>${h?'':'<option value="">––</option>'}${mins.map(x=>`<option${x===m?' selected':''}>${x}</option>`).join('')}</select></span>`;}
+function calTime(key,part,val){const f=UI.form,[h,m]=sTime(f[key])?f[key].split(':'):['',''];
+  if(part==='h')f[key]=/^([01]\d|2[0-3])$/.test(val)?`${val}:${m||'00'}`:'';
+  else if(h&&/^[0-5]\d$/.test(val))f[key]=`${h}:${val}`;
+  if(key==='from'&&!f.from)f.to=''; // ohne Beginn kein Ende
+  openModal();}
 function calTogWho(id){const w=UI.form.who,i=w.indexOf(id);if(i>=0)w.splice(i,1);else w.push(id);openModal();}
 function renderCalModal(){const f=UI.form,ex=f.id?S.kalender.items.find(x=>x.id===f.id):null;
   return`<h3>${f.id?'Termin':'Neuer Termin'}</h3>
   ${calSkipBox(f)}
   <div class="field"><label for="calT">Was</label><input id="calT" maxlength="120" value="${esc(f.title)}" placeholder="z.B. Kinderarzt, Verabredung, Geburtstag" oninput="UI.form.title=this.value"></div>
   <div class="field"><label for="calD">Wann</label><input id="calD" type="date" value="${esc(f.day)}" onchange="UI.form.day=this.value"></div>
-  <div class="field"><label for="calF">Uhrzeit (optional)</label><div class="cal-times"><input id="calF" type="time" aria-label="von" value="${esc(f.from)}" onchange="UI.form.from=this.value"><span>bis</span><input type="time" aria-label="bis" value="${esc(f.to)}" onchange="UI.form.to=this.value"></div><div class="field-hint">Ohne Uhrzeit gilt der Termin ganztägig.</div></div>
+  <div class="field"><label for="calFh">Uhrzeit (optional)</label><div class="cal-times">${calTimeSel('from','calF',f.from)}<span>bis</span>${calTimeSel('to','calT2',f.to)}</div><div class="field-hint">Ohne Uhrzeit gilt der Termin ganztägig.</div></div>
   <div class="field"><label>Wer</label><div class="ap-wrap">${raters().map(p=>`<button class="ap${f.who.includes(p.id)?' on':''}" aria-pressed="${f.who.includes(p.id)}" onclick="calTogWho('${p.id}')">${esc(p.icon)} ${esc(p.name)}</button>`).join('')}</div><div class="field-hint">${f.who.length?'':'Niemand gewählt: betrifft alle.'}</div></div>
   <div class="field"><label>Wiederholen</label><div class="ap-wrap">${CAL_REPS.map(r=>`<button class="ap${f.rep===r.id?' on':''}" aria-pressed="${f.rep===r.id}" onclick="UI.form.rep='${r.id}';openModal()">${r.l}</button>`).join('')}</div></div>
   ${f.rep?'':`<div class="field"><label for="calE">Letzter Tag (optional, z.B. Urlaub)</label><input id="calE" type="date" value="${esc(f.end)}" onchange="UI.form.end=this.value"></div>`}
