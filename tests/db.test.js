@@ -232,3 +232,17 @@ test('DB: Gericht-Fotos nur für Mitglieder, nur JPEG-Data-URLs in begrenzter Gr
   await as(db, 'partner', `delete from households where id=$1`, [h.id]);
   assert.equal((await db.query('select count(*)::int n from dish_images where household_id=$1', [h.id])).rows[0].n, 0);
 });
+
+test('DB: Termin-Ausfälle als Liste, begrenzt auf 100, Standard leer', async () => {
+  const [h] = await as(db, 'partner', `select * from create_household('Ausfall-Test')`);
+  await as(db, 'partner', `insert into events (household_id, id, title, day, rep) values ($1, 's1', 'Turnen', '2026-11-04', 'w')`, [h.id]);
+  const [r0] = await as(db, 'partner', `select skip from events where id='s1'`);
+  assert.deepEqual(r0.skip, []); // bestehende und neue Termine ohne Angabe: leer
+  const [r1] = await as(db, 'partner', `update events set skip='["2026-11-11","2026-11-18"]' where household_id=$1 and id='s1' returning skip`, [h.id]);
+  assert.deepEqual(r1.skip, ['2026-11-11', '2026-11-18']);
+  await fails(as(db, 'partner', `update events set skip='{"a":1}' where id='s1'`), /check/i);
+  await fails(as(db, 'partner', `update events set skip=$1 where id='s1'`, [JSON.stringify(Array.from({ length: 101 }, (_, i) => String(i)))]), /check/i);
+  await fails(as(db, 'partner', `update events set skip=null where id='s1'`), /null/i);
+  await as(db, 'partner', `update events set skip=$1 where id='s1'`, [JSON.stringify(Array.from({ length: 100 }, (_, i) => String(i)))]); // Gegenprobe: 100 geht
+  assert.deepEqual(await as(db, 'fremd', `update events set skip='[]' where id='s1' returning 1`), []);
+});

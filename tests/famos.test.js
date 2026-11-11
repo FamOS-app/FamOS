@@ -1710,7 +1710,7 @@ test('Kalender: Termin anlegen, Liste nach Tagen, bearbeiten, löschen', () => {
   assert.match(a.toast(), /was ansteht/);
   const id = add({ title: 'Kinderarzt', day: day(2), from: '15:30', to: '16:00', place: 'Praxis', who: [a.get('S.kids[0].id')] });
   add({ title: 'Oma kommt', day: td });
-  assert.deepEqual(a.get('S.kalender.items[0]'), { id, title: 'Kinderarzt', day: day(2), end: '', from: '15:30', to: '16:00', place: 'Praxis', note: '', who: [a.get('S.kids[0].id')], rep: '' });
+  assert.deepEqual(a.get('S.kalender.items[0]'), { id, title: 'Kinderarzt', day: day(2), end: '', from: '15:30', to: '16:00', place: 'Praxis', note: '', who: [a.get('S.kids[0].id')], rep: '', skip: [] });
   const html = a.app();
   assert.match(html, /Heute · [\s\S]*Oma kommt[\s\S]*ganztägig|Heute · [\s\S]*ganztägig[\s\S]*Oma kommt/);
   assert.ok(html.indexOf('Oma kommt') < html.indexOf('Kinderarzt')); // nach Tagen sortiert
@@ -1944,4 +1944,65 @@ test('Fotos: im Gericht-Dialog wählen, ersetzen, entfernen; Gericht löschen en
   b.run(`openDishModal('${id}');delDish()`);
   await tick();
   assert.equal(idb.data[id], undefined);
+});
+
+test('Kalender: einzelnen Termin einer Serie ausfallen lassen und wieder aufnehmen', () => {
+  const { a, add, td, day } = cal();
+  const id = add({ title: 'Turnen', day: td, from: '16:00', rep: 'w' });
+  add({ title: 'Arzt', day: day(7), from: '09:00' });
+  assert.equal(a.app().match(/Turnen/g).length, 5);
+  // Zeile in der Liste öffnet genau diesen Termin
+  assert.ok(a.app().includes(`openCal('${id}','${day(7)}')`));
+  a.run(`openCal('${id}','${day(7)}')`);
+  let html = a.els.mc.innerHTML;
+  assert.match(html, /🚫 Nur [^<]*ausfallen lassen/);
+  assert.match(html, />Serie löschen</);
+  a.run('calSkip()');
+  assert.deepEqual(a.get(`S.kalender.items.find(e=>e.id==='${id}').skip`), [day(7)]);
+  assert.match(a.toast(), /Fällt aus/);
+  html = a.app();
+  assert.equal(html.match(/Turnen/g).length, 4);
+  assert.match(html, /Arzt/); // andere Termine am Tag bleiben
+  assert.equal(a.get(`calOn(S.kalender.items.find(e=>e.id==='${id}'),'${day(7)}')`), false);
+  assert.equal(a.get(`calOn(S.kalender.items.find(e=>e.id==='${id}'),'${day(14)}')`), true);
+  // Monat: kein Punkt mehr für den ausgefallenen Termin (Arzt bleibt)
+  a.run(`setCalTab('monat');setCalSel('${day(7)}')`);
+  assert.doesNotMatch(a.app().split('class="ek-cat"')[1], /Turnen/);
+  // Speichern der Serie behält den Ausfall
+  a.run(`openCal('${id}','${day(14)}');UI.form.from='17:00';saveCal()`);
+  assert.deepEqual(a.get(`S.kalender.items.find(e=>e.id==='${id}').skip`), [day(7)]);
+  assert.equal(a.saved('ra_cfg3').kalender.items.find(e => e.id === id).skip[0], day(7));
+  // Ausfall steht im Dialog und lässt sich zurücknehmen
+  a.run(`openCal('${id}','${day(14)}')`);
+  html = a.els.mc.innerHTML;
+  assert.match(html, /fällt aus · ↩︎/);
+  a.run(`calUnskip('${day(7)}')`);
+  assert.deepEqual(a.get(`S.kalender.items.find(e=>e.id==='${id}').skip`), []);
+  assert.match(a.toast(), /Wieder aufgenommen/);
+  // ohne angetippten Tag (Startseite eines anderen Tages o. ä.) kein Ausfall-Knopf, nur Hinweis
+  a.run(`openCal('${id}')`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /🚫/);
+  assert.match(a.els.mc.innerHTML, /in der Liste oder im Monat antippen/);
+  // an einem Tag ohne Termin der Serie auch nicht
+  a.run(`openCal('${id}','${day(3)}')`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /🚫/);
+  // einmaliger Termin: kein Ausfall-Bereich, normales Löschen
+  const once = a.get(`S.kalender.items.find(e=>e.title==='Arzt').id`);
+  a.run(`openCal('${once}','${day(7)}')`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /Einzelne Termine/);
+  assert.match(a.els.mc.innerHTML, />Löschen</);
+  // Kinder-Ansicht und Startseite richten sich nach dem Ausfall
+  a.run(`openCal('${id}','${td}');calSkip();setView('heute')`);
+  assert.doesNotMatch(a.app(), /Turnen/);
+});
+
+test('Kalender: Ausfälle werden bereinigt (nur Serien, nur gültige Tage ab Beginn, keine Doppelten)', () => {
+  const { a } = cal();
+  const e = a.get(`sanitizeEvent({id:'s',title:'x',day:'2026-11-04',rep:'w',skip:['2026-11-11','2026-11-11','2026-11-04','2026-10-28','2026-02-31','<b>',5,'2026-11-18']},null)`);
+  assert.deepEqual(e.skip, ['2026-11-04', '2026-11-11', '2026-11-18']); // auch der erste Termin der Serie
+  assert.deepEqual(a.get(`sanitizeEvent({id:'s',title:'x',day:'2026-11-04',skip:['2026-11-11']},null).skip`), []);
+  const many = Array.from({ length: 150 }, (_, i) => a.get(`addDays('2026-11-04',${(i + 1) * 7})`));
+  const m = a.get(`sanitizeEvent({id:'s',title:'x',day:'2026-11-04',rep:'w',skip:${JSON.stringify(many)}},null).skip`);
+  assert.equal(m.length, 100);
+  assert.equal(m.at(-1), many.at(-1)); // die jüngsten bleiben
 });
