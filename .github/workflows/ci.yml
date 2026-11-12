@@ -44,17 +44,30 @@ jobs:
           REQUIRE_PERSONAL_NAMES: '1'
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          PRIVACY_NAME: ${{ secrets.PRIVACY_NAME }}
+          PRIVACY_EMAIL: ${{ secrets.PRIVACY_EMAIL }}
         run: python3 tools/build.py app/famos.html dist
 
       - name: Personendaten-Check über das ganze Repo
         env:
           PERSONAL_NAMES: ${{ secrets.PERSONAL_NAMES }}
+          PRIVACY_NAME: ${{ secrets.PRIVACY_NAME }}
+          PRIVACY_EMAIL: ${{ secrets.PRIVACY_EMAIL }}
         run: |
           python3 - <<'EOF'
-          import os, re, subprocess, sys
+          import json, os, re, subprocess, sys
           names = [n.strip() for n in re.split(r'[,\n]', os.environ['PERSONAL_NAMES']) if n.strip()]
           files = subprocess.check_output(['git', 'ls-files'], text=True).split() + ['dist/index.html', 'dist/manifest.webmanifest']
-          bad = [f for f in files if any(n in open(f, encoding='utf-8', errors='ignore').read() for n in names)]
+          # Einzige gewollte Ausnahme: der Datenschutz-Kontakt, den der Build in dist/index.html einsetzt
+          allowed = [json.dumps(' '.join(os.environ.get('PRIVACY_NAME', '').split())), json.dumps(os.environ.get('PRIVACY_EMAIL', '').strip())]
+          def text(f):
+              t = open(f, encoding='utf-8', errors='ignore').read()
+              if f == 'dist/index.html':
+                  for a in allowed:
+                      if a != '""':
+                          t = t.replace(a, '')
+              return t
+          bad = [f for f in files if any(n in text(f) for n in names)]
           if bad:
               sys.exit(f'Personendaten gefunden in: {", ".join(bad)}')
           print(f'{len(files)} Dateien geprüft, keine Treffer')

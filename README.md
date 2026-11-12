@@ -41,6 +41,7 @@ Die Sperrliste (Namen, die nie im Code auftauchen dürfen) steht selbst nicht im
 Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 
 ## Daten und Datenschutz
+- **Datenschutzerklärung in der App:** Startseite (unten), Einstellungen (unten) und Anmeldung verlinken sie. Name und E-Mail der verantwortlichen Person kommen aus den GitHub-Secrets `PRIVACY_NAME` und `PRIVACY_EMAIL` (Settings → Secrets and variables → Actions); ohne sie nennt die App keinen Namen. Der Text beschreibt, was die App tatsächlich tut, ersetzt aber keine Rechtsberatung.
 
 - Alle Daten liegen **pro Gerät** im `localStorage` (`ra_cfg3`, `ra_day3`, `ra_tgd`, `ra_savings`, `ra_tx`). Kein Server, kein Tracking, keine Cookies.
 - Backup und Gerätewechsel über **Einstellungen → Haushalt → Exportieren/Importieren**. Die Backup-Datei enthält Familiendaten: nicht ins Repo, nicht offen teilen.
@@ -72,6 +73,7 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 ## Navigation und Startseite
 
 - Unten: **Heute · Kinder · Aufgaben · Kalender · Essen · Einkauf**. „Kinder“ bündelt Routine, Stundenplan, Taschengeld, Wünsche (nur wenn es Kinder gibt). Die App merkt sich pro Gerät die letzte Ansicht; Android-Zurück schließt erst Offenes.
+- **Kein Kochen:** Im Wochenplan eine Mahlzeit als „🧳 Nicht zu Hause“ oder „🥡 Wird bestellt“ markieren (bei mehreren Mahlzeiten auch den ganzen Tag). Würfeln lässt sie frei, der Einkauf aus dem Plan zählt sie nicht.
 - **Fotos zu Gerichten:** Im Gericht-Dialog ein Foto vom Gerät wählen; es ersetzt das Emoji in Plan, Kochbuch, Auswahl und auf der Startseite und steht groß über dem Rezept. Die App verkleinert es vor dem Speichern (Vorschau 160 px, Bild höchstens 900 px, zusammen rund 0,1–0,2 MB) und entfernt dabei Aufnahmeort und Kameradaten. Auf dem Gerät liegen Fotos in IndexedDB, im Haushalt in der Tabelle `dish_images`; sie sind nicht im Backup-Export enthalten.
 - **Kalender:** Familientermine und Verabredungen mit Tag, optionaler Uhrzeit, Ort und Personen; mehrtägig (Urlaub) oder wiederkehrend (wöchentlich, jährlich). Einzelne Termine einer Serie lassen sich ausfallen lassen und wieder aufnehmen (Termin antippen → „Nur … ausfallen lassen“). Ansicht als Liste ab heute oder als Monat. Kinder sehen ihre Termine der nächsten 7 Tage in der Routine (nur lesen). Kein Abgleich mit Google/Outlook, keine Erinnerungen.
 - **Heute:** Karten für Termine heute und morgen, meine fälligen Aufgaben (inkl. fälligem Taschengeld), Kinder (Routine-Fortschritt, Brot, Stundenplan kurz), Essen heute (würfeln, wenn leer), Einkauf (direkt eintragen), ab 14 Uhr „Morgen“. Leere Karten entfallen; morgens Kinder oben, ab 14 Uhr Aufgaben/Essen/Morgen.
