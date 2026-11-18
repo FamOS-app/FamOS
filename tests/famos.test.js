@@ -2144,3 +2144,101 @@ test('Datenschutz: Kontakt kommt aus PRIVACY_NAME/PRIVACY_EMAIL in den Build, ge
     assert.deepEqual(r.files, []);
   }
 });
+
+// ─── Essen: Reste und Tauschen ───
+function essPlan() {
+  const a = household();
+  const ids = a.get('S.essen.dishes.filter(d=>d.meals.includes("abend")).map(d=>d.id)');
+  const day = n => a.get(`addDays(today(),${n})`);
+  // Abend: Tag 0..4 mit Gericht A..E belegen
+  a.run(`S.essen.plan={};${[0, 1, 2, 3, 4].map(n => `setSlot(addDays(today(),${n}),'abend','${ids[n]}',false);`).join('')}setView('essen');setEssTab('plan')`);
+  const at = n => a.get(`(S.essen.plan[addDays(today(),${n})]||{}).abend||null`);
+  return { a, ids, day, at };
+}
+
+test('Essen: Reste eintragen schiebt den restlichen Plan bis zur nächsten Lücke einen Tag weiter', () => {
+  const { a, ids, day, at } = essPlan();
+  a.run(`openEssPick('${day(1)}','abend')`);
+  assert.match(a.els.mc.innerHTML, /♻️<\/span><span class="ai-main">Reste<span[^>]*>Der Plan ab hier rückt einen Tag weiter/);
+  a.run('essPickRest()');
+  assert.deepEqual(at(0), { id: ids[0], pin: false }); // davor unverändert
+  assert.deepEqual(at(1), { off: 'rest' });
+  assert.deepEqual([2, 3, 4, 5].map(n => at(n).id), [ids[1], ids[2], ids[3], ids[4]]);
+  assert.equal(at(6), null); // nichts erfunden
+  assert.match(a.toast(), /4 Gerichte rücken einen Tag weiter/);
+  assert.match(a.app(), /♻️ <span class="ess-empty">Reste<\/span>|♻️<\/span><span class="ess-name">Reste/);
+  // Würfeln lässt Reste stehen
+  a.run('rollWeek()');
+  assert.deepEqual(at(1), { off: 'rest' });
+});
+
+test('Essen: beim Weiterschieben bleiben feste Tage stehen und werden übersprungen, Lücken fangen auf', () => {
+  const { a, ids, day, at } = essPlan();
+  a.run(`setOff('${day(2)}','abend','away');togPin('${day(3)}','abend');S.essen.plan['${day(5)}']=undefined;delete S.essen.plan['${day(5)}']`);
+  // vorher: 0:A 1:B 2:away 3:D📌 4:E 5:– 
+  a.run(`openEssPick('${day(0)}','abend');essPickRest()`);
+  assert.deepEqual(at(0), { off: 'rest' });
+  assert.equal(at(1).id, ids[0]);            // A → 1
+  assert.deepEqual(at(2), { off: 'away' });  // bleibt
+  assert.deepEqual(at(3), { id: ids[3], pin: true }); // festgelegt, bleibt
+  assert.equal(at(4).id, ids[1]);            // B springt über 2 und 3
+  assert.equal(at(5).id, ids[4]);            // E in die Lücke
+  assert.equal(at(6), null);
+  // Reste an einem leeren Tag verschieben nichts
+  a.run(`openEssPick('${day(7)}','abend');essPickRest()`);
+  assert.deepEqual(at(7), { off: 'rest' });
+  assert.equal(at(8), null);
+  assert.match(a.toast(), /^Reste eingetragen\.$/);
+  assert.equal(a.saved('ra_cfg3').essen.plan[day(7)].abend.off, 'rest');
+});
+
+test('Essen: zwei Tage tauschen per Antippen, auch mit Markierungen und Festlegung', () => {
+  const { a, ids, day, at } = essPlan();
+  a.run(`togPin('${day(1)}','abend')`);
+  a.run(`openEssPick('${day(1)}','abend')`);
+  assert.match(a.els.mc.innerHTML, /onclick="essSwapStart\(\)">⇅ Tauschen/);
+  a.run('essSwapStart()');
+  let html = a.app();
+  assert.match(html, /ess-swapbar[\s\S]*Mit welchem Tag tauschen/);
+  assert.match(html, /class="ess-pick swap-src"/);
+  a.run(`openEssPick('${day(3)}','abend')`); // Ziel antippen: tauscht statt Dialog
+  assert.equal(a.run("document.getElementById('mb').classList.contains('open')"), false); // kein Auswahl-Dialog
+  assert.deepEqual(at(1), { id: ids[3], pin: false });
+  assert.deepEqual(at(3), { id: ids[1], pin: true }); // Festlegung wandert mit dem Gericht
+  assert.match(a.toast(), /getauscht/);
+  assert.doesNotMatch(a.app(), /ess-swapbar/);
+  // mit „Nicht zu Hause“ und mit leerem Tag
+  a.run(`setOff('${day(2)}','abend','away');openEssPick('${day(2)}','abend');essSwapStart();openEssPick('${day(6)}','abend')`);
+  assert.equal(at(2), null);
+  assert.deepEqual(at(6), { off: 'away' });
+  // Heute-Karte ist im Tauschmodus antippbar
+  a.run(`openEssPick('${day(4)}','abend');essSwapStart()`);
+  assert.match(a.app(), /zum Tauschen antippen/);
+  a.run(`openEssPick('${day(0)}','abend')`);
+  assert.deepEqual([at(0).id, at(4).id], [ids[4], ids[0]]);
+  // Abbrechen, gleicher Tag, Ansicht wechseln: nichts passiert
+  const before = JSON.stringify(a.get('S.essen.plan'));
+  a.run(`openEssPick('${day(0)}','abend');essSwapStart();essSwapCancel()`);
+  a.run(`openEssPick('${day(0)}','abend');essSwapStart();openEssPick('${day(0)}','abend')`);
+  a.run(`openEssPick('${day(0)}','abend');essSwapStart();setView('heute');setView('essen')`);
+  assert.equal(JSON.stringify(a.get('S.essen.plan')), before);
+  assert.equal(a.get('UI.swap'), null);
+  // leerer Tag bietet kein Tauschen an
+  a.run(`openEssPick('${day(9)}','abend')`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /Tauschen/);
+});
+
+test('Essen: Tauschen nur innerhalb derselben Mahlzeit', () => {
+  const a = household();
+  a.run(`S.essen.meals={fruehstueck:false,mittag:true,abend:true};S.essen.plan={};const ids=S.essen.dishes.map(d=>d.id);setView('essen')`);
+  const d1 = a.get('addDays(today(),1)'), d2 = a.get('addDays(today(),2)');
+  const m = a.get('S.essen.dishes.find(d=>d.meals.includes("mittag")).id');
+  const b = a.get(`S.essen.dishes.find(d=>d.meals.includes("abend")&&d.id!=='${m}').id`);
+  assert.notEqual(m, b);
+  a.run(`setSlot('${d1}','mittag','${m}',false);setSlot('${d2}','abend','${b}',false)`);
+  a.run(`openEssPick('${d1}','mittag');essSwapStart();openEssPick('${d2}','abend')`);
+  assert.deepEqual(a.get(`S.essen.plan['${d1}'].mittag.id`), m); // unverändert
+  assert.deepEqual(a.get(`S.essen.plan['${d2}'].abend.id`), b);
+  assert.equal(a.get(`S.essen.plan['${d1}'].abend`), undefined);
+  assert.equal(a.get(`S.essen.plan['${d2}'].mittag`), undefined);
+});
