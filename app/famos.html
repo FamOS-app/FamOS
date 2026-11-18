@@ -1411,11 +1411,12 @@ function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f
   const list=S.essen.dishes.filter(d=>d.meals.includes(f.meal)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
   const off=isOff(f.ds,f.meal),multi=activeMeals().length>1;
   return`<h3>${m.em} ${m.l} · ${day}</h3>
+  ${cur||off?`<div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow" onclick="essSwapStart()"><span class="ai-em">⇅</span><span class="ai-main">Mit anderem Tag tauschen<span class="ai-sub" style="display:block">Danach den anderen Tag im Plan antippen</span></span></button></div>`:''}
   <div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow${off==='rest'?' sel':''}" aria-pressed="${off==='rest'}" onclick="essPickRest()"><span class="ai-em">${OFFS.rest.em}</span><span class="ai-main">Reste<span class="ai-sub" style="display:block">${cur?'Der Plan ab hier rückt einen Tag weiter':'Folgende Gerichte bleiben, wo sie sind'}</span></span></button>
   ${['away','order'].map(k=>`<button class="ai ess-pickrow${off===k?' sel':''}" aria-pressed="${off===k}" onclick="essPickOff('${k}')"><span class="ai-em">${OFFS[k].em}</span><span class="ai-main">${OFFS[k].l}</span></button>`).join('')}
   ${multi?`<button class="ai ess-pickrow" onclick="essPickOff('away',true)"><span class="ai-em">${OFFS.away.em}</span><span class="ai-main">Ganzer ${day}: nicht zu Hause</span></button>`:''}</div>
   <div class="al">${list.map(d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`).join('')||`<div class="sp-empty">Noch kein Gericht für ${m.l}.</div>`}</div>
-  <div class="m-btns">${cur||off?`<button class="m-cancel" onclick="essSwapStart()">⇅ Tauschen</button><button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
+  <div class="m-btns">${cur||off?`<button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
 // Reste an einem Tag: was dort geplant war, rückt einen Tag weiter, und so fort bis zum nächsten leeren Tag.
 // Feste Tage (Nicht zu Hause, Bestellt, Reste, 📌 festgelegt) bleiben stehen und werden übersprungen.
 function slotFixed(ds,meal){return!!isOff(ds,meal)||!!planSlot(ds,meal)?.pin;}

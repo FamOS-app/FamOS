@@ -2196,7 +2196,10 @@ test('Essen: zwei Tage tauschen per Antippen, auch mit Markierungen und Festlegu
   const { a, ids, day, at } = essPlan();
   a.run(`togPin('${day(1)}','abend')`);
   a.run(`openEssPick('${day(1)}','abend')`);
-  assert.match(a.els.mc.innerHTML, /onclick="essSwapStart\(\)">⇅ Tauschen/);
+  // Tauschen steht oben, vor Reste und der Gerichtsliste (kein Scrollen nötig)
+  const pick = a.els.mc.innerHTML;
+  assert.match(pick, /onclick="essSwapStart\(\)">[\s\S]*Mit anderem Tag tauschen/);
+  assert.ok(pick.indexOf('essSwapStart()') < pick.indexOf('essPickRest()'));
   a.run('essSwapStart()');
   let html = a.app();
   assert.match(html, /ess-swapbar[\s\S]*Mit welchem Tag tauschen/);
