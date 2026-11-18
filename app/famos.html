@@ -433,6 +433,10 @@ button{font-size:inherit;color:inherit}
 .ess-dlbl span{display:block;font-size:.75rem;color:var(--muted);font-weight:600;text-transform:none}
 .ess-slots{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .ess-slot{display:flex;align-items:center;gap:4px}
+.ess-swapbar{display:flex;align-items:center;gap:10px;background:var(--pri);color:var(--on);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;font-weight:700;font-size:.88rem;line-height:1.4}
+.ess-swapbar span{flex:1}
+.ess-swapbar button{background:var(--card);color:var(--text);border:none;border-radius:10px;padding:8px 12px;font-weight:800;min-height:40px}
+.ess-pick.swap-src,.ess-today.swap-src{outline:3px solid var(--acc-a);outline-offset:1px}
 .ess-pick{flex:1;min-width:0;min-height:44px;text-align:left;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:8px 10px;font-weight:700;font-size:.88rem;line-height:1.3;overflow-wrap:anywhere}
 .ess-list .ai-main{white-space:normal;line-height:1.25}
 .ess-mi{margin-right:6px}
@@ -787,7 +791,7 @@ function sanitizeEssen(e,kids,adults){
       portions:Math.round(sNum(d.portions,1,20))||4,steps:sArr(d.steps,100).map(x=>sStr(x,300).trim()).filter(Boolean).slice(0,30)};}).filter(Boolean);
   const plan={};
   Object.keys(sObj(e.plan)).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-120).forEach(ds=>{const p={};
-    mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(sl.off==='away'||sl.off==='order')p[m]={off:sl.off};else if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin};});
+    mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(OFFS[sl.off])p[m]={off:sl.off};else if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin};});
     if(Object.keys(p).length)plan[ds]=p;});
   return{meals,persons:Math.round(sNum(e.persons,1,20))||4,dishes,plan};
 }
@@ -1222,7 +1226,7 @@ function daysBetween(a,b){return Math.round((pdate(b)-pdate(a))/864e5);}
 function weekDates(off){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-(d.getDay()+6)%7+7*(off||0));const mo=dstr(d);return DAYS.map((_,i)=>addDays(mo,i));}
 function planSlot(ds,meal){const sl=S.essen.plan[ds]?.[meal];return sl&&dishById(sl.id)?sl:null;}
 // Mahlzeit ohne Kochen (unterwegs, bestellt, eingeladen): bleibt beim Würfeln frei und zählt nicht für den Einkauf
-const OFFS={away:{em:'🧳',l:'Nicht zu Hause'},order:{em:'🥡',l:'Wird bestellt'}};
+const OFFS={rest:{em:'♻️',l:'Reste'},away:{em:'🧳',l:'Nicht zu Hause'},order:{em:'🥡',l:'Wird bestellt'}};
 function isOff(ds,meal){const o=S.essen.plan[ds]?.[meal]?.off;return OFFS[o]?o:'';}
 function setOff(ds,meal,kind){if(!OFFS[kind])return;const P=S.essen.plan;if(!P[ds])P[ds]={};P[ds][meal]={off:kind};}
 function setSlot(ds,meal,id,pin){const P=S.essen.plan;if(id){if(!P[ds])P[ds]={};P[ds][meal]={id,pin:!!pin};}else if(P[ds]){delete P[ds][meal];if(!Object.keys(P[ds]).length)delete P[ds];}}
@@ -1289,17 +1293,19 @@ function essTagChips(){
 function buildEssPlan(){
   const dates=weekDates(UI.essWeek),meals=activeMeals(),td=today(),showToday=dates.includes(td);
   const todayCard=m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
+    if(UI.swap)return`<button class="tg-card ess-today ess-pickrow${UI.swap.ds===td&&UI.swap.meal===m.id?' swap-src':''}" style="width:100%;text-align:left;font:inherit" onclick="openEssPick('${td}','${m.id}')"><div class="ess-meal">${m.l} · zum Tauschen antippen</div><div class="ess-dish"><span class="ess-em">${isOff(td,m.id)?OFFS[isOff(td,m.id)].em:d?dishIc(d,64):'–'}</span><span class="ess-name">${isOff(td,m.id)?OFFS[isOff(td,m.id)].l:d?esc(d.name):'Noch nichts geplant'}</span></div></button>`;
     if(isOff(td,m.id))return`<div class="tg-card ess-today"><div class="ess-meal">${m.l}</div><div class="ess-dish"><span class="ess-em">${OFFS[isOff(td,m.id)].em}</span><span class="ess-name">${OFFS[isOff(td,m.id)].l}</span></div>
     <div class="ess-acts"><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Ändern</button></div></div>`;
     return`<div class="tg-card ess-today"><div class="ess-meal">${m.l}</div>
     ${d?`<button class="ess-dish" onclick="openRecipe('${d.id}','${td}','${m.id}')"><span class="ess-em">${dishIc(d,64)}</span><span class="ess-name">${esc(d.name)}</span></button><button class="ess-rc" onclick="openRecipe('${d.id}','${td}','${m.id}')">Rezept ansehen${d.steps.length?` · ${d.steps.length} Schritte`:''} →</button>`:`<div class="ess-none">Noch nichts geplant</div>`}
     <div class="ess-acts"><button class="tg-act ein" onclick="rollToday('${m.id}')" ${sl?.pin?'disabled':''}>${d?'Nochmal würfeln':'Würfeln'}</button><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Auswählen</button>${d?`<button class="tg-act ess-pinbtn${sl.pin?' pinned':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="${sl.pin?'Festgelegt, tippen zum Lösen':'Festlegen'}" onclick="togPin('${td}','${m.id}')">📌</button>`:''}</div></div>`;};
-  const rest=dates.filter(ds=>ds>td||(!showToday&&ds>=td));
-  return`${showToday?`<div class="s-lbl">Heute</div>${meals.map(todayCard).join('')}`:''}
+  const rest=dates.filter(ds=>ds>td||(!showToday&&ds>=td)),sw=UI.swap;
+  const swapBar=sw?`<div class="ess-swapbar" role="status"><span>⇅ Mit welchem Tag tauschen? ${DAYS[(pdate(sw.ds).getDay()+6)%7].l}${meals.length>1?' · '+mealOf(sw.meal).l:''} ist ausgewählt – jetzt den anderen Tag antippen.</span><button onclick="essSwapCancel()">Abbrechen</button></div>`:'';
+  return`${swapBar}${showToday?`<div class="s-lbl">Heute</div>${meals.map(todayCard).join('')}`:''}
   <div class="ess-weekhead"><div class="rt-pills" style="margin:0"><button class="rt-pill${UI.essWeek===0?' on':''}" onclick="setEssWeek(0)">Diese Woche</button><button class="rt-pill${UI.essWeek===1?' on':''}" onclick="setEssWeek(1)">Nächste</button></div><button class="ess-roll" onclick="rollWeek()">Woche würfeln</button></div>
   ${rest.length?rest.map(ds=>{const i=DAYS.findIndex(d=>d.id===['so','mo','di','mi','do','fr','sa'][pdate(ds).getDay()]);
     return`<div class="ess-day"><div class="ess-dlbl">${DAYS[i].s}<span>${ds.slice(8,10)}.${ds.slice(5,7)}.</span></div><div class="ess-slots">${meals.map(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);
-    return`<div class="ess-slot"><button class="ess-pick" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${isOff(ds,m.id)?`${OFFS[isOff(ds,m.id)].em} <span class="ess-empty">${OFFS[isOff(ds,m.id)].l}</span>`:d?`${dishIc(d,28)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
+    return`<div class="ess-slot"><button class="ess-pick${sw&&sw.ds===ds&&sw.meal===m.id?' swap-src':''}" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${isOff(ds,m.id)?`${OFFS[isOff(ds,m.id)].em} <span class="ess-empty">${OFFS[isOff(ds,m.id)].l}</span>`:d?`${dishIc(d,28)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
   <div class="ess-hint">📌 = festgelegt, bleibt beim Würfeln stehen.</div>`;
 }
 function buildEssBook(){
@@ -1399,15 +1405,34 @@ function delDish(){const id=UI.form.id;if(!confirm('Gericht löschen?'))return;
   saveCfg();closeModal();render();}
 
 // Gericht für einen Platz von Hand wählen (wird automatisch festgelegt)
-function openEssPick(ds,meal){UI.form={mode:'essPick',ds,meal};openModal();}
+function openEssPick(ds,meal){if(UI.swap){essSwapTo(ds,meal);return;}UI.form={mode:'essPick',ds,meal};openModal();}
 function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f.ds).getDay()+6)%7].l,cur=planSlot(f.ds,f.meal);
   const list=S.essen.dishes.filter(d=>d.meals.includes(f.meal)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
   const off=isOff(f.ds,f.meal),multi=activeMeals().length>1;
   return`<h3>${m.em} ${m.l} · ${day}</h3>
-  <div class="al" style="margin-bottom:10px">${Object.keys(OFFS).map(k=>`<button class="ai ess-pickrow${off===k?' sel':''}" aria-pressed="${off===k}" onclick="essPickOff('${k}')"><span class="ai-em">${OFFS[k].em}</span><span class="ai-main">${OFFS[k].l}</span></button>`).join('')}
+  <div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow${off==='rest'?' sel':''}" aria-pressed="${off==='rest'}" onclick="essPickRest()"><span class="ai-em">${OFFS.rest.em}</span><span class="ai-main">Reste<span class="ai-sub" style="display:block">${cur?'Der Plan ab hier rückt einen Tag weiter':'Folgende Gerichte bleiben, wo sie sind'}</span></span></button>
+  ${['away','order'].map(k=>`<button class="ai ess-pickrow${off===k?' sel':''}" aria-pressed="${off===k}" onclick="essPickOff('${k}')"><span class="ai-em">${OFFS[k].em}</span><span class="ai-main">${OFFS[k].l}</span></button>`).join('')}
   ${multi?`<button class="ai ess-pickrow" onclick="essPickOff('away',true)"><span class="ai-em">${OFFS.away.em}</span><span class="ai-main">Ganzer ${day}: nicht zu Hause</span></button>`:''}</div>
   <div class="al">${list.map(d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`).join('')||`<div class="sp-empty">Noch kein Gericht für ${m.l}.</div>`}</div>
-  <div class="m-btns">${cur||off?`<button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
+  <div class="m-btns">${cur||off?`<button class="m-cancel" onclick="essSwapStart()">⇅ Tauschen</button><button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
+// Reste an einem Tag: was dort geplant war, rückt einen Tag weiter, und so fort bis zum nächsten leeren Tag.
+// Feste Tage (Nicht zu Hause, Bestellt, Reste, 📌 festgelegt) bleiben stehen und werden übersprungen.
+function slotFixed(ds,meal){return!!isOff(ds,meal)||!!planSlot(ds,meal)?.pin;}
+function essRest(ds,meal){const P=S.essen.plan;let carry=planSlot(ds,meal)?{...P[ds][meal]}:null,moved=0;
+  setOff(ds,meal,'rest');
+  for(let d=addDays(ds,1),i=0;carry&&i<120;d=addDays(d,1),i++){
+    if(slotFixed(d,meal))continue;
+    const next=planSlot(d,meal)?{...P[d][meal]}:null;
+    setSlot(d,meal,carry.id,carry.pin);moved++;carry=next;}
+  return moved;}
+function essPickRest(){const f=UI.form,n=essRest(f.ds,f.meal);pruneEssen();saveCfg();closeModal();render();
+  toast(n?`Reste eingetragen. ${n===1?'Ein Gericht rückt':n+' Gerichte rücken'} einen Tag weiter.`:'Reste eingetragen.');}
+// Zwei Tage tauschen: im Dialog „Tauschen“, dann den anderen Tag antippen
+function essSwapStart(){const f=UI.form;UI.swap={ds:f.ds,meal:f.meal};closeModal();render();}
+function essSwapCancel(){UI.swap=null;render();}
+function essSwapTo(ds,meal){const a=UI.swap;UI.swap=null;if(!a||a.meal!==meal||a.ds===ds){render();return;}
+  const P=S.essen.plan,x=P[a.ds]?.[a.meal],y=P[ds]?.[meal],put=(d,v)=>{if(v){if(!P[d])P[d]={};P[d][meal]={...v};}else if(P[d]){delete P[d][meal];if(!Object.keys(P[d]).length)delete P[d];}};
+  put(a.ds,y);put(ds,x);pruneEssen();saveCfg();render();toast(`${DAYS[(pdate(a.ds).getDay()+6)%7].s} und ${DAYS[(pdate(ds).getDay()+6)%7].s} getauscht`);}
 function essPickOff(kind,day){const f=UI.form;if(!OFFS[kind])return;(day?activeMeals().map(m=>m.id):[f.meal]).forEach(m=>setOff(f.ds,m,kind));pruneEssen();saveCfg();closeModal();render();}
 function essPickSet(id){const f=UI.form;if(id&&!dishById(id))return;setSlot(f.ds,f.meal,id,true);pruneEssen();saveCfg();closeModal();render();}
 
@@ -2047,7 +2072,7 @@ function removePin(){if(!confirm('Eltern-PIN entfernen?'))return;S.pin=null;save
 // ═══ ACTIONS ══════════════════════════════════
 function setKid(id){UI.kid=id;saveUiState();render();}
 function setRt(id){UI.rt=id;render();}
-function setView(v){if(v!=='wuensche')UI.wishParent=false;UI.view=v;if(v==='heute')setTimeout(maybeAskWho,300);if(isKidView(v))UI.lastKid=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
+function setView(v){UI.swap=null;if(v!=='wuensche')UI.wishParent=false;UI.view=v;if(v==='heute')setTimeout(maybeAskWho,300);if(isKidView(v))UI.lastKid=v;if(v==='stundenplan'&&!UI.spDay)UI.spDay=todayDow();saveUiState();render();}
 // ─── Wo war ich? (pro Gerät) ───
 function saveUiState(){try{localStorage.setItem('famos_ui',JSON.stringify({view:UI.view,essTab:UI.essTab,kid:UI.kid,lastKid:UI.lastKid,todoWho:UI.todoWho||''}));}catch(e){}}
 function restoreUiState(){const u=lsGet('famos_ui');if(!u||typeof u!=='object')return;
