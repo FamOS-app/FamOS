@@ -2165,7 +2165,9 @@ test('Essen: Reste eintragen schiebt den restlichen Plan bis zur nächsten Lück
   assert.deepEqual(at(1), { off: 'rest' });
   assert.deepEqual([2, 3, 4, 5].map(n => at(n).id), [ids[1], ids[2], ids[3], ids[4]]);
   assert.equal(at(6), null); // nichts erfunden
-  assert.match(a.toast(), /4 Gerichte rücken einen Tag weiter/);
+  // Meldung als Toast, oder im Prüf-Dialog, wenn ein Gericht betroffen ist
+  assert.match(a.toast() + (a.get('UI.form.mode') === 'restCheck' ? a.els.mc.innerHTML : ''), /4 Gerichte (rücken|sind) einen Tag weiter/);
+  a.run('closeModal()');
   assert.match(a.app(), /♻️ <span class="ess-empty">Reste<\/span>|♻️<\/span><span class="ess-name">Reste/);
   // Würfeln lässt Reste stehen
   a.run('rollWeek()');
@@ -2261,4 +2263,40 @@ test('Neustart mit vollem gespeichertem Stand (alle Plan-Markierungen, Termine, 
   assert.match(b.app(), /class="wrap/); // es wird etwas gezeichnet
   b.run(`setView('essen');setEssTab('plan')`);
   assert.match(b.app(), /Reste/);
+});
+
+test('Essen: nach „Reste“ Hinweis für Wochenendgericht am Werktag und für Fleisch/Fisch, mit direktem Tauschen', () => {
+  const a = household();
+  const id = t => a.get(`S.essen.dishes.find(d=>d.tags.includes('${t}')&&d.meals.includes('abend')).id`);
+  const pizza = id('we'), fisch = id('fisch'), veg = a.get(`S.essen.dishes.find(d=>d.tags.includes('veg')&&!d.tags.includes('we')&&!d.tags.includes('fleisch')&&!d.tags.includes('fisch')&&d.meals.includes('abend')).id`);
+  // nächster Samstag und Sonntag ab morgen
+  const sat = a.get(`(()=>{let d=addDays(today(),1);while(pdate(d).getDay()!==6)d=addDays(d,1);return d})()`);
+  const sun = a.get(`addDays('${sat}',1)`), mon = a.get(`addDays('${sat}',2)`), tue = a.get(`addDays('${sat}',3)`);
+  a.run(`S.essen.plan={};setSlot('${sat}','abend','${veg}',false);setSlot('${sun}','abend','${pizza}',false);setSlot('${mon}','abend','${fisch}',false);setView('essen')`);
+  a.run(`openEssPick('${sat}','abend');essPickRest()`);
+  // vorher: Sa veg, So Pizza, Mo Fisch → nachher: Sa Reste, So veg, Mo Pizza, Di Fisch
+  assert.deepEqual([sun, mon, tue].map(d => a.get(`S.essen.plan['${d}'].abend.id`)), [veg, pizza, fisch]);
+  assert.equal(a.get('UI.form.mode'), 'restCheck');
+  assert.match(a.els.mc.innerHTML, /3 Gerichte sind einen Tag weitergerückt/);
+  const html = a.els.mc.innerHTML;
+  assert.match(html, /Bitte kurz prüfen/);
+  const issues = a.get('UI.form.issues');
+  assert.deepEqual(issues.map(x => x.id), [pizza, fisch]); // vegetarisches Alltagsgericht nicht
+  assert.match(issues[0].why.join(), /Wochenendgericht, jetzt an einem Werktag/);
+  assert.match(issues[1].why.join(), /Fisch: einen Tag später, Haltbarkeit prüfen/);
+  assert.equal((html.match(/essRestSwap\(/g) || []).length, 2);
+  // Tauschen startet den Tauschmodus mit dem Wochenendgericht als Ausgangstag
+  a.run('essRestSwap(0)');
+  assert.deepEqual(a.get('UI.swap'), { ds: mon, meal: 'abend' });
+  assert.ok(a.get(`weekDates(UI.essWeek).includes('${mon}')`));
+  assert.match(a.app(), /ess-swapbar/);
+  a.run(`openEssPick('${sun}','abend')`); // mit Sonntag tauschen
+  assert.equal(a.get(`S.essen.plan['${sun}'].abend.id`), pizza);
+  assert.equal(a.get(`S.essen.plan['${mon}'].abend.id`), veg);
+  // ohne betroffene Gerichte kein Dialog: Wochenendgericht rutscht von Samstag auf Sonntag, bleibt also am Wochenende
+  const fri = a.get(`addDays('${sat}',-1)`);
+  a.run(`closeModal();S.essen.plan={};setSlot('${fri}','abend','${veg}',false);setSlot('${sat}','abend','${pizza}',false);openEssPick('${fri}','abend');essPickRest()`);
+  assert.equal(a.get(`S.essen.plan['${sun}'].abend.id`), pizza);
+  assert.notEqual(a.get('UI.form.mode'), 'restCheck');
+  assert.equal(a.run("document.getElementById('mb').classList.contains('open')"), false);
 });
