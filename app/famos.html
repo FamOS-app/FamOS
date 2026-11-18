@@ -1411,23 +1411,38 @@ function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f
   const list=S.essen.dishes.filter(d=>d.meals.includes(f.meal)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
   const off=isOff(f.ds,f.meal),multi=activeMeals().length>1;
   return`<h3>${m.em} ${m.l} · ${day}</h3>
+  ${cur||off?`<div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow" onclick="essSwapStart()"><span class="ai-em">⇅</span><span class="ai-main">Mit anderem Tag tauschen<span class="ai-sub" style="display:block">Danach den anderen Tag im Plan antippen</span></span></button></div>`:''}
   <div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow${off==='rest'?' sel':''}" aria-pressed="${off==='rest'}" onclick="essPickRest()"><span class="ai-em">${OFFS.rest.em}</span><span class="ai-main">Reste<span class="ai-sub" style="display:block">${cur?'Der Plan ab hier rückt einen Tag weiter':'Folgende Gerichte bleiben, wo sie sind'}</span></span></button>
   ${['away','order'].map(k=>`<button class="ai ess-pickrow${off===k?' sel':''}" aria-pressed="${off===k}" onclick="essPickOff('${k}')"><span class="ai-em">${OFFS[k].em}</span><span class="ai-main">${OFFS[k].l}</span></button>`).join('')}
   ${multi?`<button class="ai ess-pickrow" onclick="essPickOff('away',true)"><span class="ai-em">${OFFS.away.em}</span><span class="ai-main">Ganzer ${day}: nicht zu Hause</span></button>`:''}</div>
   <div class="al">${list.map(d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`).join('')||`<div class="sp-empty">Noch kein Gericht für ${m.l}.</div>`}</div>
-  <div class="m-btns">${cur||off?`<button class="m-cancel" onclick="essSwapStart()">⇅ Tauschen</button><button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
+  <div class="m-btns">${cur||off?`<button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
 // Reste an einem Tag: was dort geplant war, rückt einen Tag weiter, und so fort bis zum nächsten leeren Tag.
 // Feste Tage (Nicht zu Hause, Bestellt, Reste, 📌 festgelegt) bleiben stehen und werden übersprungen.
 function slotFixed(ds,meal){return!!isOff(ds,meal)||!!planSlot(ds,meal)?.pin;}
-function essRest(ds,meal){const P=S.essen.plan;let carry=planSlot(ds,meal)?{...P[ds][meal]}:null,moved=0;
+// Gibt zurück, welches Gericht wohin gerückt ist: [{id,to}]
+function essRest(ds,meal){const P=S.essen.plan;let carry=planSlot(ds,meal)?{...P[ds][meal]}:null;const moves=[];
   setOff(ds,meal,'rest');
   for(let d=addDays(ds,1),i=0;carry&&i<120;d=addDays(d,1),i++){
     if(slotFixed(d,meal))continue;
     const next=planSlot(d,meal)?{...P[d][meal]}:null;
-    setSlot(d,meal,carry.id,carry.pin);moved++;carry=next;}
-  return moved;}
-function essPickRest(){const f=UI.form,n=essRest(f.ds,f.meal);pruneEssen();saveCfg();closeModal();render();
+    setSlot(d,meal,carry.id,carry.pin);moves.push({id:carry.id,to:d});carry=next;}
+  return moves;}
+// Nach dem Weiterrücken prüfen: Wochenendgericht jetzt an einem Werktag, Fleisch oder Fisch jetzt später (Haltbarkeit)
+function restIssues(moves){return moves.map(m=>{const d=dishById(m.id);if(!d)return null;const why=[];
+    const wd=pdate(m.to).getDay();if(d.tags.includes('we')&&wd>=1&&wd<=5)why.push('Wochenendgericht, jetzt an einem Werktag');
+    if(d.tags.includes('fleisch')||d.tags.includes('fisch'))why.push(`${d.tags.includes('fisch')?'Fisch':'Fleisch'}: einen Tag später, Haltbarkeit prüfen`);
+    return why.length?{id:m.id,to:m.to,why}:null;}).filter(Boolean);}
+function essPickRest(){const f=UI.form,moves=essRest(f.ds,f.meal),n=moves.length,issues=restIssues(moves);pruneEssen();saveCfg();closeModal();render();
+  if(issues.length){UI.form={mode:'restCheck',meal:f.meal,issues,n};openModal();return;} // Dialog statt Toast, sonst verdeckt der Toast ihn
   toast(n?`Reste eingetragen. ${n===1?'Ein Gericht rückt':n+' Gerichte rücken'} einen Tag weiter.`:'Reste eingetragen.');}
+function renderRestCheckModal(){const f=UI.form;
+  return`<h3>♻️ Bitte kurz prüfen</h3>
+  <div class="ins-why">Reste eingetragen, ${f.n===1?'ein Gericht ist':f.n+' Gerichte sind'} einen Tag weitergerückt. Bei diesen Gerichten lohnt ein Blick. Mit „Tauschen“ legst du sie auf einen anderen Tag.</div>
+  <div class="al">${f.issues.map((x,i)=>{const d=dishById(x.id);if(!d)return'';return`<div class="ai"><span class="ai-em">${dishIc(d,40)}</span><div class="ai-info"><div class="ai-main">${esc(d.name)}</div><div class="ai-sub"><strong>jetzt ${esc(fmtCalDay(x.to))}</strong></div>${x.why.map(w=>`<div class="ai-sub">${esc(w)}</div>`).join('')}</div><button class="tg-act" style="flex:0 0 auto;padding:8px 12px;min-height:40px" onclick="essRestSwap(${i})">⇅ Tauschen</button></div>`;}).join('')}</div>
+  <div class="m-btns"><button class="m-save" onclick="closeModal()">Passt so</button></div>`;}
+function essRestSwap(i){const f=UI.form,x=f.issues?.[i];if(!x)return closeModal();UI.swap={ds:x.to,meal:f.meal};
+  if(!weekDates(UI.essWeek).includes(x.to))UI.essWeek=weekDates(0).includes(x.to)?0:1;closeModal();render();}
 // Zwei Tage tauschen: im Dialog „Tauschen“, dann den anderen Tag antippen
 function essSwapStart(){const f=UI.form;UI.swap={ds:f.ds,meal:f.meal};closeModal();render();}
 function essSwapCancel(){UI.swap=null;render();}
@@ -1972,7 +1987,7 @@ function epOwnOk(v){const t=sEm(String(v||'').trim(),'');return t&&/\p{Extended_
 function epOwnPick(){const el=document.getElementById('epOwn'),e=epOwnOk(el?.value);if(!e){toast('Bitte ein Emoji eintippen (Emoji-Tastatur).');return;}if(el)el.value='';epPick(e);}
 
 // ═══ MODALS ═══════════════════════════════════
-function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,cal:renderCalModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,privacy:renderPrivacyModal,pwChange:renderPwChangeModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
+function openModal(){const r={task:renderTaskModal,kid:renderKidModal,adult:renderAdultModal,wahl:renderWahlModal,sp:renderSpModal,tgBetrag:renderTgBetragModal,tgMove:renderTgMoveModal,pin:renderPinModal,who:renderWhoModal,wish:renderWishModal,todo:renderTodoModal,cal:renderCalModal,linkImp:renderLinkImport,claude:renderClaudeModal,ekItem:renderEkItemModal,recipe:renderRecipeModal,login:renderLoginModal,restCheck:renderRestCheckModal,privacy:renderPrivacyModal,pwChange:renderPwChangeModal,install:renderInstallModal,ekPlan:renderEkPlanModal,dish:renderDishModal,essPick:renderEssPickModal,pinSet:renderPinSetModal};document.getElementById('mc').innerHTML=r[UI.form.mode]?.();document.getElementById('mb').classList.add('open');}
 function closeModal(){_pinCb=null;document.getElementById('mb').classList.remove('open');if(UI.needRender){UI.needRender=false;render();}}
 function mbBgClick(e){if(e.target===document.getElementById('mb'))closeModal();}
 
