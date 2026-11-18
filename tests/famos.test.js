@@ -2242,3 +2242,20 @@ test('Essen: Tauschen nur innerhalb derselben Mahlzeit', () => {
   assert.equal(a.get(`S.essen.plan['${d1}'].abend`), undefined);
   assert.equal(a.get(`S.essen.plan['${d2}'].mittag`), undefined);
 });
+
+test('Neustart mit vollem gespeichertem Stand (alle Plan-Markierungen, Termine, Aufgaben) startet ohne Fehler', () => {
+  // Regression: OFFS wurde beim Start (sanitizeEssen in loadCfg) vor seiner Definition benutzt → leerer Bildschirm
+  const a = household();
+  a.run(`const td=today(),id=S.essen.dishes[0].id;
+    setSlot(td,'abend',id,true);setOff(addDays(td,1),'abend','rest');setOff(addDays(td,2),'abend','away');setOff(addDays(td,3),'abend','order');
+    openCal();Object.assign(UI.form,{title:'Turnen',day:td,rep:'w'});saveCal();
+    setView('aufgaben');UI.todoNew='Müll';addTodoInput();saveCfg()`);
+  const b = load(VORLAGE, { storage: a.store });
+  const td = b.get('today()');
+  assert.deepEqual(b.get(`[1,2,3].map(n=>S.essen.plan[addDays(today(),n)].abend.off)`), ['rest', 'away', 'order']);
+  assert.equal(b.get(`S.essen.plan['${td}'].abend.pin`), true);
+  assert.equal(b.get('S.kalender.items.length'), 1);
+  assert.match(b.app(), /class="wrap/); // es wird etwas gezeichnet
+  b.run(`setView('essen');setEssTab('plan')`);
+  assert.match(b.app(), /Reste/);
+});
