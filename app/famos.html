@@ -684,6 +684,8 @@ const SYNC_ON=/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SB_URL)&&/^sb_publisha
 // ═══ MODULE-REGISTER ══════════════════════════
 // Neuer Bereich = ein Eintrag hier + Build-Funktion im View-Switch von buildApp()
 const MEALS=[{id:'fruehstueck',em:'🥐',l:'Frühstück'},{id:'mittag',em:'🌤️',l:'Mittag'},{id:'abend',em:'🌙',l:'Abend'}];
+// Markierungen im Essensplan statt eines Gerichts. Muss vor loadCfg() stehen: sanitizeEssen braucht sie beim Start.
+const OFFS={rest:{em:'♻️',l:'Reste'},away:{em:'🧳',l:'Nicht zu Hause'},order:{em:'🥡',l:'Wird bestellt'}};
 const TAGS=[{id:'veg',em:'🥦',l:'Vegetarisch'},{id:'schnell',em:'⚡',l:'Schnell'},{id:'we',em:'🎉',l:'Wochenende'},{id:'fleisch',em:'🍖',l:'Fleisch'},{id:'fisch',em:'🐟',l:'Fisch'}];
 // Bereiche im Laden; Standard-Reihenfolge wie ein typischer Aldi. Drogerie vor Tiefkühl, damit TK zuletzt in den Wagen kommt.
 const EK_CATS=[
@@ -1226,7 +1228,6 @@ function daysBetween(a,b){return Math.round((pdate(b)-pdate(a))/864e5);}
 function weekDates(off){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-(d.getDay()+6)%7+7*(off||0));const mo=dstr(d);return DAYS.map((_,i)=>addDays(mo,i));}
 function planSlot(ds,meal){const sl=S.essen.plan[ds]?.[meal];return sl&&dishById(sl.id)?sl:null;}
 // Mahlzeit ohne Kochen (unterwegs, bestellt, eingeladen): bleibt beim Würfeln frei und zählt nicht für den Einkauf
-const OFFS={rest:{em:'♻️',l:'Reste'},away:{em:'🧳',l:'Nicht zu Hause'},order:{em:'🥡',l:'Wird bestellt'}};
 function isOff(ds,meal){const o=S.essen.plan[ds]?.[meal]?.off;return OFFS[o]?o:'';}
 function setOff(ds,meal,kind){if(!OFFS[kind])return;const P=S.essen.plan;if(!P[ds])P[ds]={};P[ds][meal]={off:kind};}
 function setSlot(ds,meal,id,pin){const P=S.essen.plan;if(id){if(!P[ds])P[ds]={};P[ds][meal]={id,pin:!!pin};}else if(P[ds]){delete P[ds][meal];if(!Object.keys(P[ds]).length)delete P[ds];}}
