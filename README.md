@@ -73,6 +73,7 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 ## Navigation und Startseite
 
 - Unten: **Heute · Kinder · Aufgaben · Kalender · Essen · Einkauf**. „Kinder“ bündelt Routine, Stundenplan, Taschengeld, Wünsche (nur wenn es Kinder gibt). Die App merkt sich pro Gerät die letzte Ansicht; Android-Zurück schließt erst Offenes.
+- **Gericht-Auswahl im Plan:** oben ein Suchfeld (Name oder Zutat, ohne Groß-/Kleinschreibung und Umlaute); zuerst die Gerichte, die zur Mahlzeit passen, darunter „Weitere Gerichte“ für alle übrigen.
 - **Reste und Tauschen:** In der Auswahl einer Mahlzeit „♻️ Reste“ wählen: die dort geplanten Gerichte rücken jeweils einen Tag weiter bis zur nächsten Lücke; festgelegte (📌) und markierte Tage bleiben stehen. „⇅ Tauschen“ und dann einen anderen Tag antippen tauscht die beiden (gleiche Mahlzeit).
 - **Kein Kochen:** Im Wochenplan eine Mahlzeit als „🧳 Nicht zu Hause“ oder „🥡 Wird bestellt“ markieren (bei mehreren Mahlzeiten auch den ganzen Tag). Würfeln lässt sie frei, der Einkauf aus dem Plan zählt sie nicht.
 - **Fotos zu Gerichten:** Im Gericht-Dialog ein Foto vom Gerät wählen; es ersetzt das Emoji in Plan, Kochbuch, Auswahl und auf der Startseite und steht groß über dem Rezept. Die App verkleinert es vor dem Speichern (Vorschau 160 px, Bild höchstens 900 px, zusammen rund 0,1–0,2 MB) und entfernt dabei Aufnahmeort und Kameradaten. Auf dem Gerät liegen Fotos in IndexedDB, im Haushalt in der Tabelle `dish_images`; sie sind nicht im Backup-Export enthalten.

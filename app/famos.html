@@ -1408,14 +1408,19 @@ function delDish(){const id=UI.form.id;if(!confirm('Gericht löschen?'))return;
 // Gericht für einen Platz von Hand wählen (wird automatisch festgelegt)
 function openEssPick(ds,meal){if(UI.swap){essSwapTo(ds,meal);return;}UI.form={mode:'essPick',ds,meal};openModal();}
 function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f.ds).getDay()+6)%7].l,cur=planSlot(f.ds,f.meal);
-  const list=S.essen.dishes.filter(d=>d.meals.includes(f.meal)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
+  const all=S.essen.dishes.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')),list=all.filter(d=>d.meals.includes(f.meal)),other=all.filter(d=>!d.meals.includes(f.meal));
   const off=isOff(f.ds,f.meal),multi=activeMeals().length>1;
+  const row=d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" data-q="${esc(essNorm(d.name+' '+d.ingr.join(' ')))}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`;
   return`<h3>${m.em} ${m.l} · ${day}</h3>
+  ${all.length?`<div class="ek-add" style="margin-bottom:10px"><label for="essPickQ" class="sr">Gericht suchen</label><input id="essPickQ" type="search" placeholder="Gericht oder Zutat suchen" autocomplete="off" enterkeyhint="search" oninput="essPickFilter(this.value)"></div>`:''}
+  <div id="essPickTop">
   ${cur||off?`<div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow" onclick="essSwapStart()"><span class="ai-em">⇅</span><span class="ai-main">Mit anderem Tag tauschen<span class="ai-sub" style="display:block">Danach den anderen Tag im Plan antippen</span></span></button></div>`:''}
   <div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow${off==='rest'?' sel':''}" aria-pressed="${off==='rest'}" onclick="essPickRest()"><span class="ai-em">${OFFS.rest.em}</span><span class="ai-main">Reste<span class="ai-sub" style="display:block">${cur?'Der Plan ab hier rückt einen Tag weiter':'Folgende Gerichte bleiben, wo sie sind'}</span></span></button>
   ${['away','order'].map(k=>`<button class="ai ess-pickrow${off===k?' sel':''}" aria-pressed="${off===k}" onclick="essPickOff('${k}')"><span class="ai-em">${OFFS[k].em}</span><span class="ai-main">${OFFS[k].l}</span></button>`).join('')}
-  ${multi?`<button class="ai ess-pickrow" onclick="essPickOff('away',true)"><span class="ai-em">${OFFS.away.em}</span><span class="ai-main">Ganzer ${day}: nicht zu Hause</span></button>`:''}</div>
-  <div class="al">${list.map(d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`).join('')||`<div class="sp-empty">Noch kein Gericht für ${m.l}.</div>`}</div>
+  ${multi?`<button class="ai ess-pickrow" onclick="essPickOff('away',true)"><span class="ai-em">${OFFS.away.em}</span><span class="ai-main">Ganzer ${day}: nicht zu Hause</span></button>`:''}</div></div>
+  ${list.length?`<div class="as-lbl" data-sec="1">Passt zu ${m.l}</div><div class="al" data-sec-list="1">${list.map(row).join('')}</div>`:`<div class="sp-empty" data-sec="1">Noch kein Gericht für ${m.l} markiert.</div>`}
+  ${other.length?`<div class="as-lbl" data-sec="2" style="margin-top:14px">Weitere Gerichte</div><div class="al" data-sec-list="2">${other.map(row).join('')}</div>`:''}
+  <div class="sp-empty" id="essPickNone" style="display:none">Nichts gefunden.</div>
   <div class="m-btns">${cur||off?`<button class="m-cancel" onclick="essPickSet(null)">Leeren</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
 // Reste an einem Tag: was dort geplant war, rückt einen Tag weiter, und so fort bis zum nächsten leeren Tag.
 // Feste Tage (Nicht zu Hause, Bestellt, Reste, 📌 festgelegt) bleiben stehen und werden übersprungen.
@@ -1449,6 +1454,14 @@ function essSwapCancel(){UI.swap=null;render();}
 function essSwapTo(ds,meal){const a=UI.swap;UI.swap=null;if(!a||a.meal!==meal||a.ds===ds){render();return;}
   const P=S.essen.plan,x=P[a.ds]?.[a.meal],y=P[ds]?.[meal],put=(d,v)=>{if(v){if(!P[d])P[d]={};P[d][meal]={...v};}else if(P[d]){delete P[d][meal];if(!Object.keys(P[d]).length)delete P[d];}};
   put(a.ds,y);put(ds,x);pruneEssen();saveCfg();render();toast(`${DAYS[(pdate(a.ds).getDay()+6)%7].s} und ${DAYS[(pdate(ds).getDay()+6)%7].s} getauscht`);}
+// Suche in der Gericht-Auswahl: blendet nur aus, statt neu zu zeichnen, damit das Eingabefeld den Fokus behält
+function essNorm(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss');}
+function essPickMatch(hay,q){const w=essNorm(q).split(/\s+/).filter(Boolean);return w.every(x=>hay.includes(x));}
+function essPickFilter(q){const mc=document.getElementById('mc'),has=!!String(q||'').trim();let n=0;
+  mc.querySelectorAll('[data-q]').forEach(r=>{const ok=essPickMatch(r.dataset.q,q);r.style.display=ok?'':'none';if(ok)n++;});
+  mc.querySelectorAll('[data-sec]').forEach(h=>{const l=mc.querySelector(`[data-sec-list="${h.dataset.sec}"]`);h.style.display=l&&![...l.children].some(c=>c.style.display!=='none')?'none':'';});
+  const top=document.getElementById('essPickTop');if(top)top.style.display=has?'none':'';
+  const none=document.getElementById('essPickNone');if(none)none.style.display=has&&!n?'':'none';}
 function essPickOff(kind,day){const f=UI.form;if(!OFFS[kind])return;(day?activeMeals().map(m=>m.id):[f.meal]).forEach(m=>setOff(f.ds,m,kind));pruneEssen();saveCfg();closeModal();render();}
 function essPickSet(id){const f=UI.form;if(id&&!dishById(id))return;setSlot(f.ds,f.meal,id,true);pruneEssen();saveCfg();closeModal();render();}
 

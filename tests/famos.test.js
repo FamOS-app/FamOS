@@ -678,8 +678,10 @@ test('Essen: Woche würfeln füllt nur aktive Mahlzeiten, 📌 bleibt, Vergangen
 test('Essen: Gericht von Hand wählen legt fest, Leeren entfernt', () => {
   const a = essApp();
   a.run(`openEssPick(today(),'abend')`);
-  assert.match(a.els.mc.innerHTML, /Spaghetti Bolognese/);
-  assert.doesNotMatch(a.els.mc.innerHTML, /Müsli/);
+  const html = a.els.mc.innerHTML;
+  // passende Gerichte oben, Gerichte für andere Mahlzeiten darunter unter „Weitere Gerichte“
+  assert.match(html, /Passt zu Abend[\s\S]*Spaghetti Bolognese[\s\S]*Weitere Gerichte[\s\S]*Müsli/);
+  assert.doesNotMatch(html.split('Weitere Gerichte')[0], /Müsli/);
   a.run(`essPickSet('g2')`);
   assert.deepEqual(a.get(`planSlot(today(),'abend')`), { id: 'g2', pin: true });
   a.run(`openEssPick(today(),'abend');essPickSet('gibtsnicht')`);
@@ -2299,4 +2301,26 @@ test('Essen: nach „Reste“ Hinweis für Wochenendgericht am Werktag und für 
   assert.equal(a.get(`S.essen.plan['${sun}'].abend.id`), pizza);
   assert.notEqual(a.get('UI.form.mode'), 'restCheck');
   assert.equal(a.run("document.getElementById('mb').classList.contains('open')"), false);
+});
+
+test('Essen: Suche in der Gericht-Auswahl findet nach Name und Zutat, ohne Groß-/Kleinschreibung und Umlaute', () => {
+  const a = household();
+  a.run(`openDishModal(null);UI.form.name='Käsespätzle';UI.form.meals=['mittag'];UI.form.ingr='500 g Spätzle\\n200 g Bergkäse';saveDish();setView('essen')`);
+  a.run(`openEssPick(addDays(today(),1),'abend')`);
+  const html = a.els.mc.innerHTML;
+  assert.match(html, /<input id="essPickQ" type="search"[^>]*oninput="essPickFilter\(this.value\)"/);
+  assert.match(html, /data-q="kasespatzle 500 g spatzle 200 g bergkase"/);
+  assert.match(html, /Weitere Gerichte[\s\S]*Käsespätzle/); // nur „Mittag“ markiert, trotzdem wählbar
+  const m = (hay, q) => a.get(`essPickMatch(${JSON.stringify(hay)},${JSON.stringify(q)})`);
+  const hay = a.get(`essNorm('Käsespätzle 500 g Spätzle 200 g Bergkäse')`);
+  for (const q of ['käse', 'KÄSE', 'kase', 'berg', 'spätzle käse', '  ', '']) assert.equal(m(hay, q), true, q);
+  for (const q of ['pizza', 'käse pizza']) assert.equal(m(hay, q), false, q);
+  assert.equal(a.get(`essNorm('Großmutters Soße')`), 'grossmutters sosse');
+  // auswählen aus „Weitere Gerichte“ funktioniert wie sonst
+  const id = a.get(`S.essen.dishes.find(d=>d.name==='Käsespätzle').id`);
+  a.run(`essPickSet('${id}')`);
+  assert.equal(a.get(`planSlot(addDays(today(),1),'abend').id`), id);
+  // Namen werden beim Suchtext maskiert
+  a.run(`openDishModal(null);UI.form.name='"><img src=x>';UI.form.meals=['abend'];saveDish();openEssPick(addDays(today(),2),'abend')`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /<img src=x>/);
 });
