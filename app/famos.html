@@ -795,7 +795,7 @@ function sanitizeEssen(e,kids,adults){
   Object.keys(sObj(e.plan)).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-120).forEach(ds=>{const p={};
     mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(OFFS[sl.off])p[m]={off:sl.off};else if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin};});
     if(Object.keys(p).length)plan[ds]=p;});
-  return{meals,persons:Math.round(sNum(e.persons,1,20))||4,dishes,plan};
+  return{meals,oneWarm:e.oneWarm===true,persons:Math.round(sNum(e.persons,1,20))||4,dishes,plan};
 }
 function sanitizeEinkauf(e){
   e=sObj(e);const ids=new Set();
@@ -1218,8 +1218,11 @@ function admTg(){
 
 // ═══ ESSEN ════════════════════════════════════
 // Lieblingsgerichte, Würfeln (gewichtet nach Bewertung und zuletzt gegessen), Wochenplan mit 📌
-function activeMeals(){return MEALS.filter(m=>S.essen.meals[m.id]);}
-function mealOf(id){return MEALS.find(m=>m.id===id);}
+// „Ein warmes Essen am Tag“: eine Zeile pro Tag (gespeichert unter 'abend'), passend sind Gerichte für Mittag oder Abend
+const WARM={id:'abend',em:'🍲',l:'Warmes Essen'};
+function activeMeals(){return S.essen.oneWarm?[WARM]:MEALS.filter(m=>S.essen.meals[m.id]);}
+function mealOf(id){return S.essen.oneWarm&&id==='abend'?WARM:MEALS.find(m=>m.id===id);}
+function dishFits(d,meal){return d.meals.includes(meal)||(S.essen.oneWarm&&meal==='abend'&&d.meals.includes('mittag'));}
 function dishById(id){return S.essen.dishes.find(d=>d.id===id)||null;}
 function dstr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function pdate(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d,12);}
@@ -1236,7 +1239,7 @@ function lastPlanned(id,before){let best=null;for(const ds in S.essen.plan){if(d
 function weekIds(dates,skipDs,skipMeal){const ids=new Set();dates.forEach(ds=>Object.entries(S.essen.plan[ds]||{}).forEach(([m,sl])=>{if(!(ds===skipDs&&m===skipMeal))ids.add(sl.id);}));return ids;}
 // Gewicht: 👍 eines Kindes ×1,6, 👎 ×0,4 (seltener, nie ausgeschlossen); kürzlich gegessen deutlich seltener; schon in dieser Woche ×0,15
 function dishWeight(d,meal,ds,avoid){
-  if(!d.meals.includes(meal))return 0;
+  if(!dishFits(d,meal))return 0;
   let w=1;
   const who=new Set(raters().map(p=>p.id));
   Object.entries(d.ratings).forEach(([k,v])=>{if(who.has(k))w*=v>0?1.6:0.4;});
@@ -1408,7 +1411,7 @@ function delDish(){const id=UI.form.id;if(!confirm('Gericht löschen?'))return;
 // Gericht für einen Platz von Hand wählen (wird automatisch festgelegt)
 function openEssPick(ds,meal){if(UI.swap){essSwapTo(ds,meal);return;}UI.form={mode:'essPick',ds,meal};openModal();}
 function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f.ds).getDay()+6)%7].l,cur=planSlot(f.ds,f.meal);
-  const all=S.essen.dishes.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')),list=all.filter(d=>d.meals.includes(f.meal)),other=all.filter(d=>!d.meals.includes(f.meal));
+  const all=S.essen.dishes.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')),list=all.filter(d=>dishFits(d,f.meal)),other=all.filter(d=>!dishFits(d,f.meal));
   const off=isOff(f.ds,f.meal),multi=activeMeals().length>1;
   const row=d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" data-q="${esc(essNorm(d.name+' '+d.ingr.join(' ')))}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`;
   return`<h3>${m.em} ${m.l} · ${day}</h3>
@@ -1469,8 +1472,10 @@ function essPickSet(id){const f=UI.form;if(id&&!dishById(id))return;setSlot(f.ds
 function admEssen(){
   return`<div style="font-size:.8rem;color:var(--muted);font-weight:700;margin-bottom:13px;line-height:1.65">Welche Mahlzeiten plant ihr? Ausgeblendete Mahlzeiten behalten ihre Gerichte.</div>
   <div class="tog-row"><div><div class="tog-l">👪 Wir kochen für</div><div class="tog-s">Rezepte und Einkaufsliste rechnen die Mengen um</div></div><div class="rc-persons" style="margin:0"><button class="rc-step" aria-label="Weniger" onclick="setPersons(-1)">−</button><strong>${S.essen.persons}</strong><button class="rc-step" aria-label="Mehr" onclick="setPersons(1)">＋</button></div></div>
-  ${MEALS.map(m=>`<div class="tog-row"><div><div class="tog-l">${m.em} ${m.l}</div></div><button type="button" role="switch" aria-checked="${S.essen.meals[m.id]?'true':'false'}" class="tog${S.essen.meals[m.id]?' on':''}" onclick="togMeal('${m.id}')"></button></div>`).join('')}`;
+  <div class="tog-row"><div><div class="tog-l">${WARM.em} Ein warmes Essen am Tag</div><div class="tog-s">Mittags oder abends, je nach Tag: eine Zeile pro Tag, passend sind Gerichte für Mittag und Abend. Brot &amp; Co. am besten auf die Standard-Einkaufsliste.</div></div><button type="button" role="switch" aria-checked="${S.essen.oneWarm?'true':'false'}" class="tog${S.essen.oneWarm?' on':''}" onclick="togOneWarm()"></button></div>
+  ${S.essen.oneWarm?'':MEALS.map(m=>`<div class="tog-row"><div><div class="tog-l">${m.em} ${m.l}</div></div><button type="button" role="switch" aria-checked="${S.essen.meals[m.id]?'true':'false'}" class="tog${S.essen.meals[m.id]?' on':''}" onclick="togMeal('${m.id}')"></button></div>`).join('')}`;
 }
+function togOneWarm(){S.essen.oneWarm=!S.essen.oneWarm;UI.swap=null;saveCfg();renderAdmin();render();}
 function togMeal(id){const M=S.essen.meals;if(M[id]&&activeMeals().length<=1){toast('Mindestens eine Mahlzeit muss aktiv bleiben!');return;}M[id]=!M[id];saveCfg();renderAdmin();}
 
 // ═══ EINKAUF ══════════════════════════════════

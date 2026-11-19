@@ -2324,3 +2324,48 @@ test('Essen: Suche in der Gericht-Auswahl findet nach Name und Zutat, ohne Groß
   a.run(`openDishModal(null);UI.form.name='"><img src=x>';UI.form.meals=['abend'];saveDish();openEssPick(addDays(today(),2),'abend')`);
   assert.doesNotMatch(a.els.mc.innerHTML, /<img src=x>/);
 });
+
+test('Essen: „Ein warmes Essen am Tag“ – eine Zeile pro Tag, Gerichte für Mittag und Abend passen', () => {
+  const a = household();
+  a.run(`S.essen.plan={};openDishModal(null);UI.form.name='Nur-Mittag-Eintopf';UI.form.meals=['mittag'];saveDish();
+    openDishModal(null);UI.form.name='Nur-Frühstück-Brei';UI.form.meals=['fruehstueck'];saveDish();
+    S.essen.meals={fruehstueck:false,mittag:true,abend:true};setView('essen');setEssTab('plan')`);
+  const mittag = a.get(`S.essen.dishes.find(d=>d.name==='Nur-Mittag-Eintopf').id`);
+  // vorher: zwei Mahlzeiten, Mittag-Gericht passt nicht zu Abend
+  assert.equal(a.get('activeMeals().length'), 2);
+  a.run(`openAdmin();UI.aTab='essen';renderAdmin()`);
+  assert.match(a.adm(), /🍲 Ein warmes Essen am Tag[\s\S]*onclick="togOneWarm\(\)"/);
+  assert.match(a.adm(), /togMeal\('mittag'\)/);
+  a.run('togOneWarm()');
+  assert.equal(a.get('S.essen.oneWarm'), true);
+  assert.doesNotMatch(a.adm(), /togMeal\(/); // einzelne Mahlzeiten ausgeblendet
+  assert.deepEqual(a.get('activeMeals()'), [{ id: 'abend', em: '🍲', l: 'Warmes Essen' }]);
+  // Auswahl: Mittag-Gericht steht oben unter „Passt zu Warmes Essen“, Frühstück unter „Weitere“
+  a.run(`closeAdmin();openEssPick(addDays(today(),1),'abend')`);
+  const html = a.els.mc.innerHTML;
+  assert.match(html, /<h3>🍲 Warmes Essen · /);
+  assert.match(html, /Passt zu Warmes Essen[\s\S]*Nur-Mittag-Eintopf[\s\S]*Weitere Gerichte[\s\S]*Nur-Frühstück-Brei/);
+  // Würfeln nimmt auch Mittag-Gerichte, nie Frühstück
+  a.run('closeModal()');
+  assert.ok(a.get(`dishWeight(dishById('${mittag}'),'abend',addDays(today(),9),null)`) > 0);
+  assert.equal(a.get(`dishWeight(S.essen.dishes.find(d=>d.name==='Nur-Frühstück-Brei'),'abend',addDays(today(),9),null)`), 0);
+  a.run('rollWeek()');
+  const days = a.get(`weekDates(0).filter(d=>d>=today())`);
+  for (const d of days) {
+    assert.deepEqual(Object.keys(a.get(`S.essen.plan['${d}']||{}`)).filter(k => k !== 'abend'), [], d); // nur eine Zeile
+    const id = a.get(`S.essen.plan['${d}']?.abend?.id||''`);
+    if (id) assert.ok(a.get(`dishFits(dishById('${id}'),'abend')`), d);
+  }
+  // Anzeige: keine Mahlzeit-Symbole pro Zeile, Startseite nennt „Warmes Essen“
+  assert.doesNotMatch(a.app(), /ess-mi/);
+  a.run(`setView('heute')`);
+  assert.match(a.app(), /Essen heute[\s\S]*Warmes Essen/);
+  // bleibt nach Neustart, und wieder ausschalten stellt die Mahlzeiten her
+  const b = load(VORLAGE, { storage: a.store });
+  assert.equal(b.get('S.essen.oneWarm'), true);
+  b.run('togOneWarm()');
+  assert.equal(b.get('activeMeals().map(m=>m.id).join()'), 'mittag,abend');
+  assert.equal(b.get(`dishFits(dishById('${mittag}'),'abend')`), false);
+  // Bereinigung: nur echtes true zählt
+  assert.equal(b.get(`sanitizeEssen({...S.essen,oneWarm:'ja'},S.kids,[]).oneWarm`), false);
+});
