@@ -73,6 +73,7 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 ## Navigation und Startseite
 
 - Unten: **Heute · Kinder · Aufgaben · Kalender · Essen · Einkauf**. „Kinder“ bündelt Routine, Stundenplan, Taschengeld, Wünsche (nur wenn es Kinder gibt). Die App merkt sich pro Gerät die letzte Ansicht; Android-Zurück schließt erst Offenes.
+- **Zusatzgerichte pro Tag:** „＋“ in jeder Wochenzeile bzw. „＋ Zusätzlich“ in der Heute-Karte fügt ein weiteres Gericht hinzu (Nachtisch, Beilage, Kuchen; höchstens 5). Es bleibt am Datum (Reste und Tauschen bewegen es nicht), Würfeln lässt es stehen, der Einkauf aus dem Plan nimmt es mit, und die Startseite zeigt es unter „Essen heute“.
 - **Einkauf aus dem Plan:** Woche wählen, dann Gerichte an- oder abwählen. Übernommene Gerichte merkt sich der Plan als „schon eingekauft“ (auch nach Verschieben, Reste oder Tauschen) und wählt sie beim nächsten Mal vorab ab.
 - **Ein warmes Essen am Tag** (Einstellungen → Essen): eine Zeile „🍲 Warmes Essen“ pro Tag statt einzelner Mahlzeiten; Würfeln und Auswahl nehmen Gerichte für Mittag und Abend. Gespeichert wird unter `abend`, Ausschalten stellt die einzelnen Mahlzeiten wieder her.
 - **Gericht-Auswahl im Plan:** oben ein Suchfeld (Name oder Zutat, ohne Groß-/Kleinschreibung und Umlaute); zuerst die Gerichte, die zur Mahlzeit passen, darunter „Weitere Gerichte“ für alle übrigen.

@@ -433,6 +433,10 @@ button{font-size:inherit;color:inherit}
 .ess-dlbl span{display:block;font-size:.75rem;color:var(--muted);font-weight:600;text-transform:none}
 .ess-slots{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .ess-slot{display:flex;align-items:center;gap:4px}
+.ess-extras{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ess-xchip{display:inline-flex;align-items:center;gap:4px;border:1.5px solid var(--border);background:var(--bg);border-radius:99px;padding:2px 4px 2px 10px;font-weight:700;font-size:.8rem;min-height:34px}
+.ess-xchip button{background:none;border:none;color:var(--muted);font-weight:800;min-width:30px;min-height:30px;border-radius:99px}
+.ess-xadd{border:1.5px dashed var(--border);background:none;border-radius:99px;padding:4px 12px;font-weight:800;font-size:.8rem;color:var(--muted);min-height:34px}
 .ess-swapbar{display:flex;align-items:center;gap:10px;background:var(--pri);color:var(--on);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;font-weight:700;font-size:.88rem;line-height:1.4}
 .ess-swapbar span{flex:1}
 .ess-swapbar button{background:var(--card);color:var(--text);border:none;border-radius:10px;padding:8px 12px;font-weight:800;min-height:40px}
@@ -794,6 +798,8 @@ function sanitizeEssen(e,kids,adults){
   const plan={};
   Object.keys(sObj(e.plan)).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-120).forEach(ds=>{const p={};
     mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(OFFS[sl.off])p[m]={off:sl.off};else if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin,...(sl.bought===true?{bought:true}:{})};});
+    const ex=[],seen=new Set();sArr(sObj(e.plan[ds]).extra,50).forEach(x=>{const id=sId(x?.id);if(id&&ids.has(id)&&!seen.has(id)&&ex.length<5){seen.add(id);ex.push({id,...(x.bought===true?{bought:true}:{})});}});
+    if(ex.length)p.extra=ex;
     if(Object.keys(p).length)plan[ds]=p;});
   return{meals,oneWarm:e.oneWarm===true,persons:Math.round(sNum(e.persons,1,20))||4,dishes,plan};
 }
@@ -1300,9 +1306,11 @@ function buildEssPlan(){
   const todayCard=m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
     if(UI.swap)return`<button class="tg-card ess-today ess-pickrow${UI.swap.ds===td&&UI.swap.meal===m.id?' swap-src':''}" style="width:100%;text-align:left;font:inherit" onclick="openEssPick('${td}','${m.id}')"><div class="ess-meal">${m.l} · zum Tauschen antippen</div><div class="ess-dish"><span class="ess-em">${isOff(td,m.id)?OFFS[isOff(td,m.id)].em:d?dishIc(d,64):'–'}</span><span class="ess-name">${isOff(td,m.id)?OFFS[isOff(td,m.id)].l:d?esc(d.name):'Noch nichts geplant'}</span></div></button>`;
     if(isOff(td,m.id))return`<div class="tg-card ess-today"><div class="ess-meal">${m.l}</div><div class="ess-dish"><span class="ess-em">${OFFS[isOff(td,m.id)].em}</span><span class="ess-name">${OFFS[isOff(td,m.id)].l}</span></div>
+    ${m===meals[meals.length-1]?`<div class="ess-extras" style="margin:8px 0 10px">${dayExtras(td).length?'<span class="todo-m">Dazu:</span>':''}${extraChips(td)}<button class="ess-xadd" onclick="openEssExtra('${td}')">＋ Zusätzlich</button></div>`:''}
     <div class="ess-acts"><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Ändern</button></div></div>`;
     return`<div class="tg-card ess-today"><div class="ess-meal">${m.l}</div>
     ${d?`<button class="ess-dish" onclick="openRecipe('${d.id}','${td}','${m.id}')"><span class="ess-em">${dishIc(d,64)}</span><span class="ess-name">${esc(d.name)}</span></button><button class="ess-rc" onclick="openRecipe('${d.id}','${td}','${m.id}')">Rezept ansehen${d.steps.length?` · ${d.steps.length} Schritte`:''} →</button>`:`<div class="ess-none">Noch nichts geplant</div>`}
+    ${m===meals[meals.length-1]?`<div class="ess-extras" style="margin:8px 0 10px">${dayExtras(td).length?'<span class="todo-m">Dazu:</span>':''}${extraChips(td)}<button class="ess-xadd" onclick="openEssExtra('${td}')">＋ Zusätzlich</button></div>`:''}
     <div class="ess-acts"><button class="tg-act ein" onclick="rollToday('${m.id}')" ${sl?.pin?'disabled':''}>${d?'Nochmal würfeln':'Würfeln'}</button><button class="tg-act" onclick="openEssPick('${td}','${m.id}')">Auswählen</button>${d?`<button class="tg-act ess-pinbtn${sl.pin?' pinned':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="${sl.pin?'Festgelegt, tippen zum Lösen':'Festlegen'}" onclick="togPin('${td}','${m.id}')">📌</button>`:''}</div></div>`;};
   const rest=dates.filter(ds=>ds>td||(!showToday&&ds>=td)),sw=UI.swap;
   const swapBar=sw?`<div class="ess-swapbar" role="status"><span>⇅ Mit welchem Tag tauschen? ${DAYS[(pdate(sw.ds).getDay()+6)%7].l}${meals.length>1?' · '+mealOf(sw.meal).l:''} ist ausgewählt – jetzt den anderen Tag antippen.</span><button onclick="essSwapCancel()">Abbrechen</button></div>`:'';
@@ -1310,7 +1318,7 @@ function buildEssPlan(){
   <div class="ess-weekhead"><div class="rt-pills" style="margin:0"><button class="rt-pill${UI.essWeek===0?' on':''}" onclick="setEssWeek(0)">Diese Woche</button><button class="rt-pill${UI.essWeek===1?' on':''}" onclick="setEssWeek(1)">Nächste</button></div><button class="ess-roll" onclick="rollWeek()">Woche würfeln</button></div>
   ${rest.length?rest.map(ds=>{const i=DAYS.findIndex(d=>d.id===['so','mo','di','mi','do','fr','sa'][pdate(ds).getDay()]);
     return`<div class="ess-day"><div class="ess-dlbl">${DAYS[i].s}<span>${ds.slice(8,10)}.${ds.slice(5,7)}.</span></div><div class="ess-slots">${meals.map(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);
-    return`<div class="ess-slot"><button class="ess-pick${sw&&sw.ds===ds&&sw.meal===m.id?' swap-src':''}" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${isOff(ds,m.id)?`${OFFS[isOff(ds,m.id)].em} <span class="ess-empty">${OFFS[isOff(ds,m.id)].l}</span>`:d?`${dishIc(d,28)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
+    return`<div class="ess-slot"><button class="ess-pick${sw&&sw.ds===ds&&sw.meal===m.id?' swap-src':''}" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${isOff(ds,m.id)?`${OFFS[isOff(ds,m.id)].em} <span class="ess-empty">${OFFS[isOff(ds,m.id)].l}</span>`:d?`${dishIc(d,28)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}${sw?'':`<div class="ess-extras">${extraChips(ds)}<button class="ess-xadd" aria-label="Zusätzliches Gericht, ${DAYS[i].l}" onclick="openEssExtra('${ds}')">＋</button></div>`}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
   <div class="ess-hint">📌 = festgelegt, bleibt beim Würfeln stehen.</div>`;
 }
 function buildEssBook(){
@@ -1406,13 +1414,21 @@ function saveDish(){
 }
 function delDish(){const id=UI.form.id;if(!confirm('Gericht löschen?'))return;
   S.essen.dishes=S.essen.dishes.filter(d=>d.id!==id);if(IMG.t[id])dishImgDel(id);
-  Object.keys(S.essen.plan).forEach(ds=>Object.keys(S.essen.plan[ds]).forEach(m=>{if(S.essen.plan[ds][m].id===id)setSlot(ds,m,null);}));
+  Object.keys(S.essen.plan).forEach(ds=>{Object.keys(S.essen.plan[ds]).forEach(m=>{if(S.essen.plan[ds][m].id===id)setSlot(ds,m,null);});
+    if(S.essen.plan[ds]?.extra?.some(x=>x.id===id)){S.essen.plan[ds].extra=S.essen.plan[ds].extra.filter(x=>x.id!==id);if(!S.essen.plan[ds].extra.length)delete S.essen.plan[ds].extra;if(!Object.keys(S.essen.plan[ds]).length)delete S.essen.plan[ds];}});
   saveCfg();closeModal();render();}
 
 // Gericht für einen Platz von Hand wählen (wird automatisch festgelegt)
 function openEssPick(ds,meal){if(UI.swap){essSwapTo(ds,meal);return;}UI.form={mode:'essPick',ds,meal};openModal();}
-function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f.ds).getDay()+6)%7].l,cur=planSlot(f.ds,f.meal);
+function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f.ds).getDay()+6)%7].l,cur=f.extra?null:planSlot(f.ds,f.meal);
   const all=S.essen.dishes.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')),list=all.filter(d=>dishFits(d,f.meal)),other=all.filter(d=>!dishFits(d,f.meal));
+  if(f.extra){const have=new Set(dayExtras(f.ds).map(x=>x.id)),r=d=>`<button class="ai ess-pickrow" data-q="${esc(essNorm(d.name+' '+d.ingr.join(' ')))}" onclick="essPickSet('${d.id}')" ${have.has(d.id)?'disabled':''}><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}${have.has(d.id)?' · schon dabei':''}</span></button>`;
+    return`<h3>＋ Zusätzlich · ${day}</h3>
+  <div class="ins-why">Ein weiteres Gericht für diesen Tag, z. B. Nachtisch, Beilage oder Kuchen für Besuch. Die Zutaten kommen beim Einkauf aus dem Plan mit.</div>
+  ${all.length?`<div class="ek-add" style="margin-bottom:10px"><label for="essPickQ" class="sr">Gericht suchen</label><input id="essPickQ" type="search" placeholder="Gericht oder Zutat suchen" autocomplete="off" enterkeyhint="search" oninput="essPickFilter(this.value)"></div>`:''}
+  ${all.length?`<div class="as-lbl" data-sec="1">Alle Gerichte</div><div class="al" data-sec-list="1">${all.map(r).join('')}</div>`:'<div class="sp-empty">Das Kochbuch ist noch leer.</div>'}
+  <div class="sp-empty" id="essPickNone" style="display:none">Nichts gefunden.</div>
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
   const off=isOff(f.ds,f.meal),multi=activeMeals().length>1;
   const row=d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" data-q="${esc(essNorm(d.name+' '+d.ingr.join(' ')))}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`;
   return`<h3>${m.em} ${m.l} · ${day}</h3>
@@ -1468,7 +1484,16 @@ function essPickFilter(q){const mc=document.getElementById('mc'),has=!!String(q|
   const top=document.getElementById('essPickTop');if(top)top.style.display=has?'none':'';
   const none=document.getElementById('essPickNone');if(none)none.style.display=has&&!n?'':'none';}
 function essPickOff(kind,day){const f=UI.form;if(!OFFS[kind])return;(day?activeMeals().map(m=>m.id):[f.meal]).forEach(m=>setOff(f.ds,m,kind));pruneEssen();saveCfg();closeModal();render();}
-function essPickSet(id){const f=UI.form;if(id&&!dishById(id))return;setSlot(f.ds,f.meal,id,true);pruneEssen();saveCfg();closeModal();render();}
+// Zusatzgerichte je Tag (Nachtisch, Beilage, Kuchen für Besuch): bleiben am Datum, zählen für den Einkauf, Würfeln und Reste lassen sie in Ruhe
+function dayExtras(ds){return(S.essen.plan[ds]?.extra||[]).map(x=>({...x,d:dishById(x.id)})).filter(x=>x.d);}
+function openEssExtra(ds){UI.swap=null;UI.form={mode:'essPick',ds,meal:activeMeals()[0]?.id||'abend',extra:true};openModal();}
+function addExtra(ds,id){if(!dishById(id))return false;const P=S.essen.plan;if(!P[ds])P[ds]={};const ex=P[ds].extra||(P[ds].extra=[]);
+  if(ex.some(x=>x.id===id)){toast('Steht an dem Tag schon dabei.');return false;}if(ex.length>=5){toast('Höchstens 5 Zusatzgerichte pro Tag.');return false;}
+  ex.push({id});return true;}
+function delExtra(ds,id){const P=S.essen.plan;if(!P[ds]?.extra)return;P[ds].extra=P[ds].extra.filter(x=>x.id!==id);if(!P[ds].extra.length)delete P[ds].extra;if(!Object.keys(P[ds]).length)delete P[ds];saveCfg();render();}
+function extraChips(ds){return dayExtras(ds).map(x=>`<span class="ess-xchip"><button type="button" style="all:unset;cursor:pointer" onclick="openRecipe('${x.id}')">${dishIc(x.d,28)} ${esc(x.d.name)}</button><button type="button" aria-label="${esc(x.d.name)} entfernen" onclick="delExtra('${ds}','${x.id}')">✕</button></span>`).join('');}
+function essPickSet(id){const f=UI.form;if(id&&!dishById(id))return;
+  if(f.extra){if(id&&addExtra(f.ds,id)){pruneEssen();saveCfg();toast(`Zusätzlich: ${dishById(id).name}`);}closeModal();render();return;}setSlot(f.ds,f.meal,id,true);pruneEssen();saveCfg();closeModal();render();}
 
 // Einstellungen: welche Mahlzeiten geplant werden
 function admEssen(){
@@ -1549,7 +1574,8 @@ function ekClearDone(){const done=S.einkauf.items.filter(x=>x.done);if(!done.len
 // Zutaten aus dem Wochenplan; diese Woche erst ab heute
 // Gerichte einer Woche (ab heute) für den Einkauf; skip: Schlüssel „Tag|Mahlzeit“, die nicht mitgezählt werden
 function ekPlanSlots(off){const td=today(),out=[];
-  weekDates(off).filter(ds=>ds>=td).forEach(ds=>activeMeals().forEach(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);if(d)out.push({key:ds+'|'+m.id,ds,meal:m.id,d,bought:!!sl.bought});}));
+  weekDates(off).filter(ds=>ds>=td).forEach(ds=>{activeMeals().forEach(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);if(d)out.push({key:ds+'|'+m.id,ds,meal:m.id,d,bought:!!sl.bought,ref:sl});});
+    (S.essen.plan[ds]?.extra||[]).forEach(x=>{const d=dishById(x.id);if(d)out.push({key:ds+'|x|'+x.id,ds,meal:'',extra:true,d,bought:!!x.bought,ref:x});});});
   return out;}
 function ekPlanLines(off,skip){
   const lines=new Map(),dishes=new Set(),sk=new Set(skip||[]);
@@ -1574,7 +1600,7 @@ function renderEkPlanModal(){const f=UI.form;
   const sl=ekPlanSlots(f.off),r=ekPlanLines(f.off,f.skip),multi=activeMeals().length>1;
   return`<h3>${f.off?'Nächste Woche':'Diese Woche'}: welche Gerichte?</h3>
   <div style="font-size:.85rem;color:var(--muted);font-weight:700;line-height:1.5;margin-bottom:12px">Abgewählte Gerichte kommen nicht auf die Liste, z. B. weil ihr dafür schon eingekauft habt. Bereits übernommene sind vorab abgewählt.</div>
-  <div class="al">${sl.map(x=>{const on=!f.skip.includes(x.key);return`<button class="ai ess-pickrow${on?' sel':''}" role="checkbox" aria-checked="${on}" onclick="ekPlanTog('${x.key}')"><span class="ai-em">${on?'☑️':'⬜'}</span><span class="ai-info" style="display:block;text-align:left"><span class="ai-main" style="display:block">${esc(x.d.name)}</span><span class="ai-sub" style="display:block">${esc(fmtCalDay(x.ds))}${multi?' · '+esc(mealOf(x.meal).l):''}${x.bought?' · schon eingekauft':''}</span></span></button>`;}).join('')}</div>
+  <div class="al">${sl.map(x=>{const on=!f.skip.includes(x.key);return`<button class="ai ess-pickrow${on?' sel':''}" role="checkbox" aria-checked="${on}" onclick="ekPlanTog('${x.key}')"><span class="ai-em">${on?'☑️':'⬜'}</span><span class="ai-info" style="display:block;text-align:left"><span class="ai-main" style="display:block">${esc(x.d.name)}</span><span class="ai-sub" style="display:block">${esc(fmtCalDay(x.ds))}${x.extra?' · zusätzlich':multi?' · '+esc(mealOf(x.meal).l):''}${x.bought?' · schon eingekauft':''}</span></span></button>`;}).join('')}</div>
   <div class="m-btns"><button class="m-cancel" onclick="UI.form.off=null;openModal()">Zurück</button><button class="m-save" onclick="ekFromPlan()" ${r.lines.length?'':'disabled'}>${r.lines.length?`${r.lines.length} Zutaten übernehmen`:'Nichts gewählt'}</button></div>`;
 }
 function ekFromPlan(off){
@@ -1582,7 +1608,7 @@ function ekFromPlan(off){
   const r=ekPlanLines(f.off,f.skip);let added=0,had=0;
   r.lines.forEach(l=>{if(ekFind(l.name)){had++;return;}if(S.einkauf.items.length>=300)return;const it={id:uid(),name:l.name.slice(0,80),n:Math.min(99,l.n),done:false};S.einkauf.items.push(it);ekOp('up',it);added++;});
   // gewählte Gerichte als eingekauft merken
-  ekPlanSlots(f.off).forEach(x=>{if(!f.skip.includes(x.key))S.essen.plan[x.ds][x.meal].bought=true;});
+  ekPlanSlots(f.off).forEach(x=>{if(!f.skip.includes(x.key))x.ref.bought=true;});
   saveCfg();closeModal();render();
   toast(added?`${added} ${added===1?'Zutat':'Zutaten'} übernommen${had?`, ${had} standen schon drauf`:''}`:'Alles stand schon auf der Liste.');
 }
@@ -1990,7 +2016,7 @@ function buildHeute(){
   // Essen heute
   if(modOn('essen')&&S.essen.dishes.length){cards.essen=homeCard('essen','Essen heute',activeMeals().map(m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
     if(isOff(td,m.id))return`<div class="home-kid"><span class="wish-em">${OFFS[isOff(td,m.id)].em}</span><span class="todo-t"><span class="todo-m">${m.l}</span><span class="ek-name">${OFFS[isOff(td,m.id)].l}</span></span></div>`;
-    return`<div class="home-kid"><span class="wish-em">${d?dishIc(d,40):m.em}</span><span class="todo-t"><span class="todo-m">${m.l}</span>${d?`<button class="home-link" onclick="openRecipe('${d.id}','${td}','${m.id}')">${esc(d.name)}</button>`:'<span class="ek-name">noch offen</span>'}</span>${d?'':`<button class="tg-act" onclick="rollToday('${m.id}')">Würfeln</button>`}</div>`;}).join(''),"setView('essen')");}
+    return`<div class="home-kid"><span class="wish-em">${d?dishIc(d,40):m.em}</span><span class="todo-t"><span class="todo-m">${m.l}</span>${d?`<button class="home-link" onclick="openRecipe('${d.id}','${td}','${m.id}')">${esc(d.name)}</button>`:'<span class="ek-name">noch offen</span>'}</span>${d?'':`<button class="tg-act" onclick="rollToday('${m.id}')">Würfeln</button>`}</div>`;}).join('')+dayExtras(td).map(x=>`<div class="home-kid"><span class="wish-em">${dishIc(x.d,40)}</span><span class="todo-t"><span class="todo-m">Zusätzlich</span><button class="home-link" onclick="openRecipe('${x.id}')">${esc(x.d.name)}</button></span></div>`).join(''),"setView('essen')");}
   // Einkauf
   if(modOn('einkauf')){const n=ekOpen().length;
     cards.einkauf=homeCard('einkauf',`Einkauf${n?` · ${n} ${n===1?'Ding':'Dinge'}`:''}`,`<div class="ek-add" style="margin:0"><label for="homeEk" class="sr">Auf die Einkaufsliste</label><input id="homeEk" maxlength="80" placeholder="Auf die Liste: Was fehlt?" autocomplete="off" enterkeyhint="done" onkeydown="if(event.key==='Enter'){event.preventDefault();homeEkAdd()}"><button class="m-save ek-plus" aria-label="Hinzufügen" onclick="homeEkAdd()">＋</button></div>`,"setView('einkauf')");}
