@@ -2438,7 +2438,7 @@ test('Essen: Zusatzgerichte pro Tag – hinzufügen, anzeigen, Startseite, Einka
   assert.match(html, /Dazu:[\s\S]*ess-xchip[\s\S]*delExtra/);
   // Startseite
   a.run(`setView('heute')`);
-  assert.match(a.app(), /Essen heute[\s\S]*Zusätzlich<\/span><button class="home-link" onclick="openRecipe\('g2'\)">/);
+  assert.match(a.app(), /Essen heute[\s\S]*Zusätzlich<\/span><button class="home-link" onclick="openRecipe\('g2','[\d-]+','x'\)">/);
   // Wochenzeile nächste Woche: ＋ je Tag, Zusatz an Mo
   a.run(`setView('essen');setEssWeek(1);openEssExtra('${w[0]}');essPickSet('g4')`);
   html = a.app();
@@ -2475,4 +2475,58 @@ test('Essen: Zusatzgerichte pro Tag – hinzufügen, anzeigen, Startseite, Einka
   b.run(`openDishModal('g2');delDish()`);
   assert.equal(b.get(`S.essen.plan['${td}']?.extra`), undefined);
   assert.equal(b.get(`S.essen.plan['${td}'].abend.id`), 'g1');
+});
+
+test('Essen: Personen je Tag im Rezept einstellen – Einkaufsliste rechnet damit; „Immer ganzes Rezept“ für Kuchen', () => {
+  const a = ekApp();
+  // Kuchen für 12, Standard: 4 Personen
+  a.run(`openDishModal(null);UI.form.name='Apfelkuchen';UI.form.meals=['mittag'];UI.form.portions=12;UI.form.ingr='300 g Mehl\\n6 Äpfel';saveDish()`);
+  const k = a.get(`S.essen.dishes.find(d=>d.name==='Apfelkuchen').id`);
+  const w = a.get('weekDates(1)');
+  const mehl = () => a.get(`ekPlanLines(1).lines.find(l=>/Mehl/.test(l.name))?.name||''`);
+  a.run(`S.essen.plan={};addExtra('${w[5]}','${k}');saveCfg()`);
+  assert.equal(mehl(), '100 g Mehl'); // bisher: auf 4 Personen umgerechnet
+  // im Rezept (aus dem Plan geöffnet) auf 12 stellen → gilt für den Tag
+  a.run(`openRecipe('${k}','${w[5]}','x')`);
+  assert.equal(a.get('UI.form.p'), 4);
+  assert.match(a.els.mc.innerHTML, /Gilt für [^<]*, die Einkaufsliste rechnet damit/);
+  for (let i = 0; i < 8; i++) a.run('recipePersons(1)');
+  assert.equal(a.get(`S.essen.plan['${w[5]}'].extra[0].p`), 12);
+  assert.equal(mehl(), '300 g Mehl');
+  // springt beim erneuten Öffnen nicht zurück, auch nach Neustart nicht
+  a.run(`closeModal();openRecipe('${k}','${w[5]}','x')`);
+  assert.equal(a.get('UI.form.p'), 12);
+  const b = load(VORLAGE, { storage: a.store });
+  b.run(`openRecipe('${k}','${w[5]}','x')`);
+  assert.equal(b.get('UI.form.p'), 12);
+  // zurück auf Standard entfernt die Angabe
+  for (let i = 0; i < 8; i++) a.run('recipePersons(-1)');
+  assert.equal(a.get(`S.essen.plan['${w[5]}'].extra[0].p`), undefined);
+  // ohne Tag geöffnet: nur Ansicht, nichts gespeichert
+  a.run(`closeModal();openRecipe('${k}');recipePersons(1)`);
+  assert.match(a.els.mc.innerHTML, /Nur zum Nachschauen/);
+  assert.equal(a.get(`S.essen.plan['${w[5]}'].extra[0].p`), undefined);
+  // auch für Hauptgerichte: Gäste am Samstag
+  a.run(`closeModal();setSlot('${w[5]}','abend','g1',false);openRecipe('g1','${w[5]}','abend');recipePersons(2)`);
+  assert.equal(a.get(`S.essen.plan['${w[5]}'].abend.p`), 6);
+  assert.equal(a.get(`ekPlanLines(1).lines.find(l=>/Spaghetti/.test(l.name)).name`), '750 g Spaghetti');
+  // Reste rücken die Personenangabe mit, Tauschen auch
+  a.run(`closeModal();openEssPick('${w[5]}','abend');essPickRest();closeModal()`);
+  assert.equal(a.get(`S.essen.plan['${w[6]}'].abend.p`), 6);
+  // „Immer ganzes Rezept“: ohne Einstellung pro Tag immer 12
+  a.run(`openDishModal('${k}');UI.form.whole=true;saveDish();delExtra('${w[5]}','${k}');addExtra('${w[4]}','${k}')`);
+  assert.equal(a.get(`dishById('${k}').whole`), true);
+  assert.equal(mehl(), '300 g Mehl');
+  a.run(`openRecipe('${k}','${w[4]}','x')`);
+  assert.equal(a.get('UI.form.p'), 12);
+  a.run(`closeModal();openDishModal('${k}')`);
+  assert.match(a.els.mc.innerHTML, /Immer ganzes Rezept[\s\S]*aria-checked="true"/);
+  a.run(`UI.form.whole=false;saveDish()`);
+  assert.equal(a.get(`dishById('${k}').whole`), undefined);
+  // Bereinigung: nur gültige Zahlen 1–40, whole nur bei true
+  const S = a.get(`sanitizeEssen({...S.essen,dishes:S.essen.dishes.map(d=>d.id==='${k}'?{...d,whole:'ja'}:d),plan:{'${w[0]}':{abend:{id:'g1',p:99},extra:[{id:'${k}',p:'12'},{id:'g2',p:12}]}}},S.kids,[])`);
+  assert.equal(S.dishes.find(d => d.id === k).whole, undefined);
+  assert.equal(S.plan[w[0]].abend.p, undefined);
+  assert.equal(S.plan[w[0]].extra[0].p, undefined);
+  assert.equal(S.plan[w[0]].extra[1].p, 12);
 });
