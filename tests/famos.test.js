@@ -678,8 +678,10 @@ test('Essen: Woche würfeln füllt nur aktive Mahlzeiten, 📌 bleibt, Vergangen
 test('Essen: Gericht von Hand wählen legt fest, Leeren entfernt', () => {
   const a = essApp();
   a.run(`openEssPick(today(),'abend')`);
-  assert.match(a.els.mc.innerHTML, /Spaghetti Bolognese/);
-  assert.doesNotMatch(a.els.mc.innerHTML, /Müsli/);
+  const html = a.els.mc.innerHTML;
+  // passende Gerichte oben, Gerichte für andere Mahlzeiten darunter unter „Weitere Gerichte“
+  assert.match(html, /Passt zu Abend[\s\S]*Spaghetti Bolognese[\s\S]*Weitere Gerichte[\s\S]*Müsli/);
+  assert.doesNotMatch(html.split('Weitere Gerichte')[0], /Müsli/);
   a.run(`essPickSet('g2')`);
   assert.deepEqual(a.get(`planSlot(today(),'abend')`), { id: 'g2', pin: true });
   a.run(`openEssPick(today(),'abend');essPickSet('gibtsnicht')`);
@@ -2299,4 +2301,71 @@ test('Essen: nach „Reste“ Hinweis für Wochenendgericht am Werktag und für 
   assert.equal(a.get(`S.essen.plan['${sun}'].abend.id`), pizza);
   assert.notEqual(a.get('UI.form.mode'), 'restCheck');
   assert.equal(a.run("document.getElementById('mb').classList.contains('open')"), false);
+});
+
+test('Essen: Suche in der Gericht-Auswahl findet nach Name und Zutat, ohne Groß-/Kleinschreibung und Umlaute', () => {
+  const a = household();
+  a.run(`openDishModal(null);UI.form.name='Käsespätzle';UI.form.meals=['mittag'];UI.form.ingr='500 g Spätzle\\n200 g Bergkäse';saveDish();setView('essen')`);
+  a.run(`openEssPick(addDays(today(),1),'abend')`);
+  const html = a.els.mc.innerHTML;
+  assert.match(html, /<input id="essPickQ" type="search"[^>]*oninput="essPickFilter\(this.value\)"/);
+  assert.match(html, /data-q="kasespatzle 500 g spatzle 200 g bergkase"/);
+  assert.match(html, /Weitere Gerichte[\s\S]*Käsespätzle/); // nur „Mittag“ markiert, trotzdem wählbar
+  const m = (hay, q) => a.get(`essPickMatch(${JSON.stringify(hay)},${JSON.stringify(q)})`);
+  const hay = a.get(`essNorm('Käsespätzle 500 g Spätzle 200 g Bergkäse')`);
+  for (const q of ['käse', 'KÄSE', 'kase', 'berg', 'spätzle käse', '  ', '']) assert.equal(m(hay, q), true, q);
+  for (const q of ['pizza', 'käse pizza']) assert.equal(m(hay, q), false, q);
+  assert.equal(a.get(`essNorm('Großmutters Soße')`), 'grossmutters sosse');
+  // auswählen aus „Weitere Gerichte“ funktioniert wie sonst
+  const id = a.get(`S.essen.dishes.find(d=>d.name==='Käsespätzle').id`);
+  a.run(`essPickSet('${id}')`);
+  assert.equal(a.get(`planSlot(addDays(today(),1),'abend').id`), id);
+  // Namen werden beim Suchtext maskiert
+  a.run(`openDishModal(null);UI.form.name='"><img src=x>';UI.form.meals=['abend'];saveDish();openEssPick(addDays(today(),2),'abend')`);
+  assert.doesNotMatch(a.els.mc.innerHTML, /<img src=x>/);
+});
+
+test('Essen: „Ein warmes Essen am Tag“ – eine Zeile pro Tag, Gerichte für Mittag und Abend passen', () => {
+  const a = household();
+  a.run(`S.essen.plan={};openDishModal(null);UI.form.name='Nur-Mittag-Eintopf';UI.form.meals=['mittag'];saveDish();
+    openDishModal(null);UI.form.name='Nur-Frühstück-Brei';UI.form.meals=['fruehstueck'];saveDish();
+    S.essen.meals={fruehstueck:false,mittag:true,abend:true};setView('essen');setEssTab('plan')`);
+  const mittag = a.get(`S.essen.dishes.find(d=>d.name==='Nur-Mittag-Eintopf').id`);
+  // vorher: zwei Mahlzeiten, Mittag-Gericht passt nicht zu Abend
+  assert.equal(a.get('activeMeals().length'), 2);
+  a.run(`openAdmin();UI.aTab='essen';renderAdmin()`);
+  assert.match(a.adm(), /🍲 Ein warmes Essen am Tag[\s\S]*onclick="togOneWarm\(\)"/);
+  assert.match(a.adm(), /togMeal\('mittag'\)/);
+  a.run('togOneWarm()');
+  assert.equal(a.get('S.essen.oneWarm'), true);
+  assert.doesNotMatch(a.adm(), /togMeal\(/); // einzelne Mahlzeiten ausgeblendet
+  assert.deepEqual(a.get('activeMeals()'), [{ id: 'abend', em: '🍲', l: 'Warmes Essen' }]);
+  // Auswahl: Mittag-Gericht steht oben unter „Passt zu Warmes Essen“, Frühstück unter „Weitere“
+  a.run(`closeAdmin();openEssPick(addDays(today(),1),'abend')`);
+  const html = a.els.mc.innerHTML;
+  assert.match(html, /<h3>🍲 Warmes Essen · /);
+  assert.match(html, /Passt zu Warmes Essen[\s\S]*Nur-Mittag-Eintopf[\s\S]*Weitere Gerichte[\s\S]*Nur-Frühstück-Brei/);
+  // Würfeln nimmt auch Mittag-Gerichte, nie Frühstück
+  a.run('closeModal()');
+  assert.ok(a.get(`dishWeight(dishById('${mittag}'),'abend',addDays(today(),9),null)`) > 0);
+  assert.equal(a.get(`dishWeight(S.essen.dishes.find(d=>d.name==='Nur-Frühstück-Brei'),'abend',addDays(today(),9),null)`), 0);
+  a.run('rollWeek()');
+  const days = a.get(`weekDates(0).filter(d=>d>=today())`);
+  for (const d of days) {
+    assert.deepEqual(Object.keys(a.get(`S.essen.plan['${d}']||{}`)).filter(k => k !== 'abend'), [], d); // nur eine Zeile
+    const id = a.get(`S.essen.plan['${d}']?.abend?.id||''`);
+    if (id) assert.ok(a.get(`dishFits(dishById('${id}'),'abend')`), d);
+  }
+  // Anzeige: keine Mahlzeit-Symbole pro Zeile, Startseite nennt „Warmes Essen“
+  assert.doesNotMatch(a.app(), /ess-mi/);
+  a.run(`setView('heute')`);
+  assert.match(a.app(), /Essen heute[\s\S]*Warmes Essen/);
+  // bleibt nach Neustart, und wieder ausschalten stellt die Mahlzeiten her
+  const b = load(VORLAGE, { storage: a.store });
+  assert.equal(b.get('S.essen.oneWarm'), true);
+  b.run('togOneWarm()');
+  assert.equal(b.get('activeMeals().map(m=>m.id).join()'), 'mittag,abend');
+  assert.equal(b.get(`dishFits(dishById('${mittag}'),'abend')`), false);
+  // Bereinigung: nur echtes true zählt
+  assert.equal(b.get(`sanitizeEssen({...S.essen,oneWarm:'ja'},S.kids,[]).oneWarm`), false);
 });
