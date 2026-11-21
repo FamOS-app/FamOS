@@ -826,16 +826,18 @@ test('Einkauf: Zutaten aus dem Wochenplan, zusammengefasst, nichts doppelt', () 
   assert.equal(r.dishes, 3);
   assert.equal(r.lines.find(l => l.name === 'Milch').n, 1);
   a.run('openEkPlanModal()');
-  assert.match(a.els.mc.innerHTML, /\d+ Zutaten aus 3 Gerichten/);
-  a.run('ekFromPlan(1)');
+  assert.match(a.els.mc.innerHTML, /onclick="ekPlanPick\(1\)"[\s\S]*3 Gerichte</);
+  a.run('ekPlanPick(1)');
+  assert.match(a.els.mc.innerHTML, /\d+ Zutaten übernehmen/);
+  a.run('ekFromPlan()');
   const items = a.get('S.einkauf.items');
   assert.ok(items.some(x => x.name === '500 g Spaghetti'));
   assert.equal(items.filter(x => ekKeyOf(x.name) === '3 eier').length, 1);
   assert.match(a.toast(), /übernommen, 1 standen schon drauf/);
   a.run('ekFromPlan(1)');
   assert.match(a.toast(), /Alles stand schon auf der Liste/);
-  // gleiche Zutaten mit Menge werden zusammengerechnet, ohne Menge gezählt
-  a.run(`setSlot('${dates[3]}','abend','g1',true);S.einkauf.items=[];ekFromPlan(1)`);
+  // gleiche Zutaten mit Menge werden zusammengerechnet, ohne Menge gezählt (Merker „eingekauft“ dafür zurücksetzen)
+  a.run(`Object.values(S.essen.plan).forEach(d=>Object.values(d).forEach(sl=>delete sl.bought));setSlot('${dates[3]}','abend','g1',true);S.einkauf.items=[];ekFromPlan(1)`);
   const names2 = a.get('S.einkauf.items.map(x=>x.name)');
   assert.ok(names2.includes('2 Zwiebel'), names2);
   assert.ok(names2.includes('1 kg Spaghetti'), names2);
@@ -1859,7 +1861,8 @@ test('Fotos: nur JPEG-Data-URLs mit reinem Base64 werden angenommen', () => {
 test('Fotos: ersetzen das Emoji in Plan, Kochbuch, Auswahl und Startseite; ohne Foto bleibt das Emoji', async () => {
   const a = household();
   const [d0, d1] = a.get('S.essen.dishes.slice(0,2)');
-  a.run(`const td=today();S.essen.plan[td]={abend:{id:'${d0.id}',pin:false}};S.essen.plan[addDays(td,1)]={abend:{id:'${d0.id}',pin:false},mittag:{id:'${d1.id}',pin:false}};S.essen.plan[addDays(td,2)]={abend:{id:'${d1.id}',pin:false}};setView('essen');setEssTab('plan')`);
+  // heute: d0; nächste Woche (an jedem Wochentag sichtbar): Mo d0, Di d1 – unabhängig vom heutigen Wochentag
+  a.run(`const td=today(),w=weekDates(1);S.essen.plan={};S.essen.plan[td]={abend:{id:'${d0.id}',pin:false}};S.essen.plan[w[0]]={abend:{id:'${d0.id}',pin:false}};S.essen.plan[w[1]]={abend:{id:'${d1.id}',pin:false}};setView('essen');setEssTab('plan')`);
   assert.doesNotMatch(a.app(), /class="dimg/);
   assert.equal(a.run(`dishImgSet('${d0.id}',{t:${JSON.stringify(JPG(64))},f:${JSON.stringify(JPG(640))}})`), true);
   await tick();
@@ -1868,6 +1871,8 @@ test('Fotos: ersetzen das Emoji in Plan, Kochbuch, Auswahl und Startseite; ohne 
   assert.equal(a.els.dishCss.textContent, `.di-${d0.id}{background-image:url(${JPG(64)})}`);
   let html = a.app();
   assert.match(html, new RegExp(`<span class="ess-em"><span class="dimg dimg-64 di-${d0.id}"`)); // heute
+  a.run('setEssWeek(1)');
+  html = a.app();
   assert.match(html, new RegExp(`<span class="dimg dimg-28 di-${d0.id}"[^>]*></span> ${d0.name}`)); // Wochenzeile
   assert.doesNotMatch(html, /base64/);
   assert.ok(html.includes(`${d1.em} ${d1.name}`)); // Gericht ohne Foto: Emoji
@@ -2368,4 +2373,43 @@ test('Essen: „Ein warmes Essen am Tag“ – eine Zeile pro Tag, Gerichte für
   assert.equal(b.get(`dishFits(dishById('${mittag}'),'abend')`), false);
   // Bereinigung: nur echtes true zählt
   assert.equal(b.get(`sanitizeEssen({...S.essen,oneWarm:'ja'},S.kids,[]).oneWarm`), false);
+});
+
+test('Einkauf aus dem Plan: Gerichte abwählbar, Übernommene werden gemerkt und wandern beim Verschieben mit', () => {
+  const a = ekApp();
+  const w = a.get('weekDates(1)');
+  a.run(`S.essen.plan={};setSlot('${w[0]}','abend','g1',false);setSlot('${w[1]}','abend','g2',false);setSlot('${w[2]}','abend','g4',false);S.einkauf.items=[]`);
+  // Schritt 1 → 2: alle drei vorab gewählt
+  a.run('openEkPlanModal();ekPlanPick(1)');
+  let html = a.els.mc.innerHTML;
+  assert.equal((html.match(/role="checkbox" aria-checked="true"/g) || []).length, 3);
+  // g2 abwählen (z. B. schon eingekauft) und übernehmen
+  a.run(`ekPlanTog('${w[1]}|abend')`);
+  assert.equal((a.els.mc.innerHTML.match(/aria-checked="false"/g) || []).length, 1);
+  a.run('ekFromPlan()');
+  // unabhängig geprüft: Zutaten nur aus g2 (Mehl, Eier) fehlen, die von g1 (Spaghetti) und g4 (Kartoffeln) sind da
+  const list = a.get('S.einkauf.items.map(x=>x.name)').join('|');
+  assert.doesNotMatch(list, /Mehl|Eier/, list);
+  assert.match(list, /Spaghetti/);
+  assert.match(list, /Kartoffeln/);
+  assert.deepEqual([0, 1, 2].map(i => a.get(`!!S.essen.plan['${w[i]}'].abend.bought`)), [true, false, true]);
+  // nächstes Mal: Übernommene vorab abgewählt und markiert, g2 gewählt
+  a.run('openEkPlanModal()');
+  assert.match(a.els.mc.innerHTML, /3 Gerichte, davon 2 schon eingekauft/);
+  a.run('ekPlanPick(1)');
+  html = a.els.mc.innerHTML;
+  assert.equal((html.match(/aria-checked="true"/g) || []).length, 1);
+  assert.equal((html.match(/ · schon eingekauft/g) || []).length, 2);
+  // Merker wandert bei Reste mit und bleibt beim Tauschen am Gericht
+  a.run(`closeModal();openEssPick('${w[0]}','abend');essPickRest();closeModal()`);
+  assert.deepEqual(a.get(`S.essen.plan['${w[1]}'].abend`), { id: 'g1', pin: false, bought: true });
+  a.run(`openEssPick('${w[1]}','abend');essSwapStart();openEssPick('${w[5]}','abend')`);
+  assert.equal(a.get(`S.essen.plan['${w[5]}'].abend.bought`), true);
+  // neu gewähltes oder gewürfeltes Gericht ist nicht eingekauft
+  a.run(`openEssPick('${w[5]}','abend');essPickSet('g2')`);
+  assert.equal(a.get(`S.essen.plan['${w[5]}'].abend.bought`), undefined);
+  // bleibt nach Neustart, nur echtes true zählt
+  const b = load(VORLAGE, { storage: a.store });
+  assert.equal(b.get(`S.essen.plan['${w[3]}'].abend.bought`), true);
+  assert.equal(b.get(`sanitizeEssen({...S.essen,plan:{'${w[0]}':{abend:{id:'g1',bought:'ja'}}}},S.kids,[]).plan['${w[0]}'].abend.bought`), undefined);
 });

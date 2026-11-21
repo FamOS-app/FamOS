@@ -793,7 +793,7 @@ function sanitizeEssen(e,kids,adults){
       portions:Math.round(sNum(d.portions,1,20))||4,steps:sArr(d.steps,100).map(x=>sStr(x,300).trim()).filter(Boolean).slice(0,30)};}).filter(Boolean);
   const plan={};
   Object.keys(sObj(e.plan)).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-120).forEach(ds=>{const p={};
-    mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(OFFS[sl.off])p[m]={off:sl.off};else if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin};});
+    mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(OFFS[sl.off])p[m]={off:sl.off};else if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin,...(sl.bought===true?{bought:true}:{})};});
     if(Object.keys(p).length)plan[ds]=p;});
   return{meals,oneWarm:e.oneWarm===true,persons:Math.round(sNum(e.persons,1,20))||4,dishes,plan};
 }
@@ -1233,7 +1233,8 @@ function planSlot(ds,meal){const sl=S.essen.plan[ds]?.[meal];return sl&&dishById
 // Mahlzeit ohne Kochen (unterwegs, bestellt, eingeladen): bleibt beim Würfeln frei und zählt nicht für den Einkauf
 function isOff(ds,meal){const o=S.essen.plan[ds]?.[meal]?.off;return OFFS[o]?o:'';}
 function setOff(ds,meal,kind){if(!OFFS[kind])return;const P=S.essen.plan;if(!P[ds])P[ds]={};P[ds][meal]={off:kind};}
-function setSlot(ds,meal,id,pin){const P=S.essen.plan;if(id){if(!P[ds])P[ds]={};P[ds][meal]={id,pin:!!pin};}else if(P[ds]){delete P[ds][meal];if(!Object.keys(P[ds]).length)delete P[ds];}}
+// bought: Zutaten wurden schon über „Aus dem Wochenplan“ auf die Einkaufsliste übernommen (wandert beim Verschieben mit)
+function setSlot(ds,meal,id,pin,bought){const P=S.essen.plan;if(id){if(!P[ds])P[ds]={};P[ds][meal]={id,pin:!!pin,...(bought?{bought:true}:{})};}else if(P[ds]){delete P[ds][meal];if(!Object.keys(P[ds]).length)delete P[ds];}}
 function pruneEssen(){const min=addDays(today(),-35);Object.keys(S.essen.plan).forEach(k=>{if(k<min)delete S.essen.plan[k];});}
 function lastPlanned(id,before){let best=null;for(const ds in S.essen.plan){if(ds>=before)continue;if(Object.values(S.essen.plan[ds]).some(sl=>sl.id===id)&&(!best||ds>best))best=ds;}return best;}
 function weekIds(dates,skipDs,skipMeal){const ids=new Set();dates.forEach(ds=>Object.entries(S.essen.plan[ds]||{}).forEach(([m,sl])=>{if(!(ds===skipDs&&m===skipMeal))ids.add(sl.id);}));return ids;}
@@ -1434,7 +1435,7 @@ function essRest(ds,meal){const P=S.essen.plan;let carry=planSlot(ds,meal)?{...P
   for(let d=addDays(ds,1),i=0;carry&&i<120;d=addDays(d,1),i++){
     if(slotFixed(d,meal))continue;
     const next=planSlot(d,meal)?{...P[d][meal]}:null;
-    setSlot(d,meal,carry.id,carry.pin);moves.push({id:carry.id,to:d});carry=next;}
+    setSlot(d,meal,carry.id,carry.pin,carry.bought);moves.push({id:carry.id,to:d});carry=next;}
   return moves;}
 // Nach dem Weiterrücken prüfen: Wochenendgericht jetzt an einem Werktag, Fleisch oder Fisch jetzt später (Haltbarkeit)
 function restIssues(moves){return moves.map(m=>{const d=dishById(m.id);if(!d)return null;const why=[];
@@ -1450,7 +1451,8 @@ function renderRestCheckModal(){const f=UI.form;
   <div class="al">${f.issues.map((x,i)=>{const d=dishById(x.id);if(!d)return'';return`<div class="ai"><span class="ai-em">${dishIc(d,40)}</span><div class="ai-info"><div class="ai-main">${esc(d.name)}</div><div class="ai-sub"><strong>jetzt ${esc(fmtCalDay(x.to))}</strong></div>${x.why.map(w=>`<div class="ai-sub">${esc(w)}</div>`).join('')}</div><button class="tg-act" style="flex:0 0 auto;padding:8px 12px;min-height:40px" onclick="essRestSwap(${i})">⇅ Tauschen</button></div>`;}).join('')}</div>
   <div class="m-btns"><button class="m-save" onclick="closeModal()">Passt so</button></div>`;}
 function essRestSwap(i){const f=UI.form,x=f.issues?.[i];if(!x)return closeModal();UI.swap={ds:x.to,meal:f.meal};
-  if(!weekDates(UI.essWeek).includes(x.to))UI.essWeek=weekDates(0).includes(x.to)?0:1;closeModal();render();}
+  // in die Woche springen, in der das Gericht jetzt liegt (kann auch übernächste sein)
+  if(!weekDates(UI.essWeek).includes(x.to))UI.essWeek=Math.max(0,Math.floor(daysBetween(weekDates(0)[0],x.to)/7));closeModal();render();}
 // Zwei Tage tauschen: im Dialog „Tauschen“, dann den anderen Tag antippen
 function essSwapStart(){const f=UI.form;UI.swap={ds:f.ds,meal:f.meal};closeModal();render();}
 function essSwapCancel(){UI.swap=null;render();}
@@ -1545,26 +1547,42 @@ function ekClearDone(){const done=S.einkauf.items.filter(x=>x.done);if(!done.len
   done.slice().reverse().forEach(x=>ekRemember(x.name));
   done.forEach(x=>ekOp('del',x));S.einkauf.items=ekOpen();saveCfg();render();toast(`${done.length} erledigt und entfernt`);}
 // Zutaten aus dem Wochenplan; diese Woche erst ab heute
-function ekPlanLines(off){
-  const td=today(),lines=new Map(),dishes=new Set();
-  weekDates(off).filter(ds=>ds>=td).forEach(ds=>activeMeals().forEach(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);if(!d)return;dishes.add(d.id);
+// Gerichte einer Woche (ab heute) für den Einkauf; skip: Schlüssel „Tag|Mahlzeit“, die nicht mitgezählt werden
+function ekPlanSlots(off){const td=today(),out=[];
+  weekDates(off).filter(ds=>ds>=td).forEach(ds=>activeMeals().forEach(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);if(d)out.push({key:ds+'|'+m.id,ds,meal:m.id,d,bought:!!sl.bought});}));
+  return out;}
+function ekPlanLines(off,skip){
+  const lines=new Map(),dishes=new Set(),sk=new Set(skip||[]);
+  ekPlanSlots(off).forEach(({key,d})=>{if(sk.has(key))return;dishes.add(d.id);
     const fac=dishFactor(d);
     d.ingr.forEach(g=>{const p=parseIngr(g);
       if(p.q==null){const k=ekKey(p.name),cur=lines.get(k);if(cur)cur.n++;else lines.set(k,{p,n:1});return;}
-      const k=ekKey(p.name)+'|'+p.u,cur=lines.get(k),q=p.q*fac;if(cur)cur.p.q+=q;else lines.set(k,{p:{...p,q},n:1});});}));
+      const k=ekKey(p.name)+'|'+p.u,cur=lines.get(k),q=p.q*fac;if(cur)cur.p.q+=q;else lines.set(k,{p:{...p,q},n:1});});});
   return{lines:[...lines.values()].map(l=>({name:fmtIngr(scaleIngr(l.p,1,true)),n:l.n})),dishes:dishes.size};
 }
-function openEkPlanModal(){UI.form={mode:'ekPlan'};openModal();}
-function renderEkPlanModal(){
-  const opt=(off,l)=>{const r=ekPlanLines(off);return`<button class="ai ess-pickrow" onclick="ekFromPlan(${off})" ${r.lines.length?'':'disabled'}><span class="ai-em">${off?'⏭️':'📅'}</span><span class="ai-info"><span class="ai-main">${l}</span><span class="ai-sub">${r.lines.length?`${r.lines.length} Zutaten aus ${r.dishes} ${r.dishes===1?'Gericht':'Gerichten'}`:'Noch nichts geplant'}</span></span></button>`;};
-  return`<h3>Aus dem Wochenplan</h3>
+function openEkPlanModal(){UI.form={mode:'ekPlan',off:null,skip:[]};openModal();}
+// Schritt 2: Woche gewählt, Gerichte abwählbar. Schon eingekaufte sind vorab abgewählt.
+function ekPlanPick(off){UI.form={mode:'ekPlan',off,skip:ekPlanSlots(off).filter(x=>x.bought).map(x=>x.key)};openModal();}
+function ekPlanTog(key){const k=UI.form.skip,i=k.indexOf(key);if(i>=0)k.splice(i,1);else k.push(key);openModal();}
+function renderEkPlanModal(){const f=UI.form;
+  if(f.off===null){
+    const opt=(off,l)=>{const sl=ekPlanSlots(off),b=sl.filter(x=>x.bought).length;return`<button class="ai ess-pickrow" onclick="ekPlanPick(${off})" ${sl.length?'':'disabled'}><span class="ai-em">${off?'⏭️':'📅'}</span><span class="ai-info"><span class="ai-main">${l}</span><span class="ai-sub">${sl.length?`${sl.length} ${sl.length===1?'Gericht':'Gerichte'}${b?`, davon ${b} schon eingekauft`:''}`:'Noch nichts geplant'}</span></span></button>`;};
+    return`<h3>Aus dem Wochenplan</h3>
   <div style="font-size:.85rem;color:var(--muted);font-weight:700;line-height:1.5;margin-bottom:12px">Zutaten der geplanten Gerichte kommen auf die Liste. Was schon draufsteht, wird nicht doppelt eingetragen.</div>
   <div class="al">${opt(0,'Diese Woche, ab heute')}${opt(1,'Nächste Woche')}</div>
-  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;
+  <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
+  const sl=ekPlanSlots(f.off),r=ekPlanLines(f.off,f.skip),multi=activeMeals().length>1;
+  return`<h3>${f.off?'Nächste Woche':'Diese Woche'}: welche Gerichte?</h3>
+  <div style="font-size:.85rem;color:var(--muted);font-weight:700;line-height:1.5;margin-bottom:12px">Abgewählte Gerichte kommen nicht auf die Liste, z. B. weil ihr dafür schon eingekauft habt. Bereits übernommene sind vorab abgewählt.</div>
+  <div class="al">${sl.map(x=>{const on=!f.skip.includes(x.key);return`<button class="ai ess-pickrow${on?' sel':''}" role="checkbox" aria-checked="${on}" onclick="ekPlanTog('${x.key}')"><span class="ai-em">${on?'☑️':'⬜'}</span><span class="ai-info" style="display:block;text-align:left"><span class="ai-main" style="display:block">${esc(x.d.name)}</span><span class="ai-sub" style="display:block">${esc(fmtCalDay(x.ds))}${multi?' · '+esc(mealOf(x.meal).l):''}${x.bought?' · schon eingekauft':''}</span></span></button>`;}).join('')}</div>
+  <div class="m-btns"><button class="m-cancel" onclick="UI.form.off=null;openModal()">Zurück</button><button class="m-save" onclick="ekFromPlan()" ${r.lines.length?'':'disabled'}>${r.lines.length?`${r.lines.length} Zutaten übernehmen`:'Nichts gewählt'}</button></div>`;
 }
 function ekFromPlan(off){
-  const r=ekPlanLines(off);let added=0,had=0;
+  const f=UI.form?.mode==='ekPlan'&&UI.form.off!==null?UI.form:{off:off||0,skip:ekPlanSlots(off||0).filter(x=>x.bought).map(x=>x.key)};
+  const r=ekPlanLines(f.off,f.skip);let added=0,had=0;
   r.lines.forEach(l=>{if(ekFind(l.name)){had++;return;}if(S.einkauf.items.length>=300)return;const it={id:uid(),name:l.name.slice(0,80),n:Math.min(99,l.n),done:false};S.einkauf.items.push(it);ekOp('up',it);added++;});
+  // gewählte Gerichte als eingekauft merken
+  ekPlanSlots(f.off).forEach(x=>{if(!f.skip.includes(x.key))S.essen.plan[x.ds][x.meal].bought=true;});
   saveCfg();closeModal();render();
   toast(added?`${added} ${added===1?'Zutat':'Zutaten'} übernommen${had?`, ${had} standen schon drauf`:''}`:'Alles stand schon auf der Liste.');
 }
