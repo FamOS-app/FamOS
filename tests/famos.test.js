@@ -2413,3 +2413,66 @@ test('Einkauf aus dem Plan: Gerichte abwählbar, Übernommene werden gemerkt und
   assert.equal(b.get(`S.essen.plan['${w[3]}'].abend.bought`), true);
   assert.equal(b.get(`sanitizeEssen({...S.essen,plan:{'${w[0]}':{abend:{id:'g1',bought:'ja'}}}},S.kids,[]).plan['${w[0]}'].abend.bought`), undefined);
 });
+
+test('Essen: Zusatzgerichte pro Tag – hinzufügen, anzeigen, Startseite, Einkauf, bleiben am Datum', () => {
+  const a = ekApp();
+  const w = a.get('weekDates(1)'), td = a.get('today()');
+  a.run(`S.essen.plan={};setSlot('${td}','abend','g1',false);setSlot('${w[0]}','abend','g1',false);setSlot('${w[1]}','abend','g4',false);setView('essen');setEssTab('plan')`);
+  // heute: Knopf in der Heute-Karte, Auswahl zeigt alle Gerichte ohne Reste/Markierungen
+  assert.match(a.app(), new RegExp(`onclick="openEssExtra\\('${td}'\\)">＋ Zusätzlich`));
+  a.run(`openEssExtra('${td}')`);
+  let html = a.els.mc.innerHTML;
+  assert.match(html, /<h3>＋ Zusätzlich · /);
+  assert.match(html, /Alle Gerichte/);
+  assert.doesNotMatch(html, /essPickRest|essSwapStart|Passt zu/);
+  a.run(`essPickSet('g2')`);
+  assert.deepEqual(a.get(`S.essen.plan['${td}']`), { abend: { id: 'g1', pin: false }, extra: [{ id: 'g2' }] });
+  assert.match(a.toast(), /Zusätzlich: /);
+  // Hauptgericht bleibt unberührt; doppelt nicht, höchstens 5
+  a.run(`openEssExtra('${td}')`);
+  assert.match(a.els.mc.innerHTML, /schon dabei/);
+  a.run(`essPickSet('g2')`);
+  assert.equal(a.get(`S.essen.plan['${td}'].extra.length`), 1);
+  assert.equal(a.get(`S.essen.plan['${td}'].abend.id`), 'g1');
+  html = a.app();
+  assert.match(html, /Dazu:[\s\S]*ess-xchip[\s\S]*delExtra/);
+  // Startseite
+  a.run(`setView('heute')`);
+  assert.match(a.app(), /Essen heute[\s\S]*Zusätzlich<\/span><button class="home-link" onclick="openRecipe\('g2'\)">/);
+  // Wochenzeile nächste Woche: ＋ je Tag, Zusatz an Mo
+  a.run(`setView('essen');setEssWeek(1);openEssExtra('${w[0]}');essPickSet('g4')`);
+  html = a.app();
+  assert.match(html, new RegExp(`openEssExtra\\('${w[0]}'\\)`));
+  assert.match(html, /ess-xchip/);
+  // Einkauf aus dem Plan: Zusatz als eigene Zeile, abwählbar, Merker am Zusatz
+  a.run('openEkPlanModal();ekPlanPick(1)');
+  html = a.els.mc.innerHTML;
+  assert.match(html, / · zusätzlich/);
+  assert.equal((html.match(/role="checkbox"/g) || []).length, 3);
+  a.run('ekFromPlan()');
+  assert.equal(a.get(`S.essen.plan['${w[0]}'].extra[0].bought`), true);
+  assert.equal(a.get(`S.essen.plan['${w[0]}'].abend.bought`), true);
+  // Reste am Mo: Hauptgericht rückt weiter, Zusatz bleibt am Mo
+  a.run(`openEssPick('${w[0]}','abend');essPickRest();closeModal()`);
+  assert.deepEqual(a.get(`S.essen.plan['${w[0]}'].extra`), [{ id: 'g4', bought: true }]);
+  assert.equal(a.get(`S.essen.plan['${w[0]}'].abend.off`), 'rest');
+  // Tauschen Mo↔Di: Zusatz bleibt am Datum
+  a.run(`openEssPick('${w[1]}','abend');essSwapStart();openEssPick('${w[2]}','abend')`);
+  assert.equal(a.get(`S.essen.plan['${w[0]}'].extra[0].id`), 'g4');
+  // Würfeln lässt Zusatz stehen
+  a.run('rollWeek()');
+  assert.equal(a.get(`S.essen.plan['${w[0]}'].extra[0].id`), 'g4');
+  // entfernen
+  a.run(`delExtra('${w[0]}','g4')`);
+  assert.equal(a.get(`S.essen.plan['${w[0]}'].extra`), undefined);
+  // Neustart und Bereinigung
+  const b = load(VORLAGE, { storage: a.store });
+  assert.deepEqual(b.get(`S.essen.plan['${td}'].extra`), [{ id: 'g2' }]);
+  const san = b.get(`sanitizeEssen({...S.essen,plan:{'${td}':{extra:[{id:'g2'},{id:'g2'},{id:'gibtsnicht'},{id:'g4',bought:'ja'},{id:'<b>'},1,{id:'g1'},{id:'g5'},{id:'g6'},{id:'g3'}]}}},S.kids,[]).plan['${td}'].extra`);
+  assert.deepEqual(san.map(x => x.id), ['g2', 'g4', 'g1', 'g5', 'g6', 'g3'].filter(id => b.get(`!!dishById('${id}')`)).slice(0, 5));
+  assert.equal(san.find(x => x.id === 'g4')?.bought, undefined);
+  // Gericht löschen räumt den Zusatz auf
+  b.run(`openDishModal('g2');delDish()`);
+  assert.equal(b.get(`S.essen.plan['${td}']?.extra`), undefined);
+  assert.equal(b.get(`S.essen.plan['${td}'].abend.id`), 'g1');
+});
