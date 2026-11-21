@@ -783,6 +783,8 @@ function sanitizeCfg(c){
   const tgPay=Number.isInteger(c.tgPay)&&c.tgPay>=0&&c.tgPay<=6?c.tgPay:-1,tgPaySince=tgPay>=0&&/^\d{4}-\d{2}-\d{2}$/.test(c.tgPaySince||'')?c.tgPaySince:'';
   return{household,kids,routines,wahlPool,stundenplan,taschengeld,tgPay,tgPaySince,modules,essen,einkauf,aufgaben,kalender,wuensche,pin,installHintDone:!!c.installHintDone,_mv:sNum(c._mv,0,999)||0};
 }
+// Personen für einen einzelnen Plan-Eintrag (überschreibt die Standardzahl für diesen Tag)
+function sPers(v){return Number.isInteger(v)&&v>=1&&v<=40?{p:v}:{};}
 function sanitizeEssen(e,kids,adults){
   if(!e||typeof e!=='object'||Array.isArray(e))e=clone(DEF.essen); // ältere Stände: Beispielgerichte
   const kidIds=new Set([...kids,...(adults||[])].map(k=>k.id)),mealIds=MEALS.map(m=>m.id),tagIds=TAGS.map(t=>t.id);
@@ -794,11 +796,11 @@ function sanitizeEssen(e,kids,adults){
     const ratings={};Object.keys(sObj(d.ratings)).forEach(k=>{if(kidIds.has(k)&&(d.ratings[k]===1||d.ratings[k]===-1))ratings[k]=d.ratings[k];});
     return{id,em:sEm(d.em,'🍽️'),name,meals:ms.length?ms:['abend'],tags:tagIds.filter(t=>sArr(d.tags,10).includes(t)),
       ingr:sArr(d.ingr,100).map(x=>sStr(x,80).trim()).filter(Boolean).slice(0,60),ratings,
-      portions:Math.round(sNum(d.portions,1,20))||4,steps:sArr(d.steps,100).map(x=>sStr(x,300).trim()).filter(Boolean).slice(0,30)};}).filter(Boolean);
+      portions:Math.round(sNum(d.portions,1,20))||4,steps:sArr(d.steps,100).map(x=>sStr(x,300).trim()).filter(Boolean).slice(0,30),...(d.whole===true?{whole:true}:{})};}).filter(Boolean);
   const plan={};
   Object.keys(sObj(e.plan)).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-120).forEach(ds=>{const p={};
-    mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(OFFS[sl.off])p[m]={off:sl.off};else if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin,...(sl.bought===true?{bought:true}:{})};});
-    const ex=[],seen=new Set();sArr(sObj(e.plan[ds]).extra,50).forEach(x=>{const id=sId(x?.id);if(id&&ids.has(id)&&!seen.has(id)&&ex.length<5){seen.add(id);ex.push({id,...(x.bought===true?{bought:true}:{})});}});
+    mealIds.forEach(m=>{const sl=sObj(sObj(e.plan[ds])[m]);if(OFFS[sl.off])p[m]={off:sl.off};else if(ids.has(sl.id))p[m]={id:sl.id,pin:!!sl.pin,...(sl.bought===true?{bought:true}:{}),...sPers(sl.p)};});
+    const ex=[],seen=new Set();sArr(sObj(e.plan[ds]).extra,50).forEach(x=>{const id=sId(x?.id);if(id&&ids.has(id)&&!seen.has(id)&&ex.length<5){seen.add(id);ex.push({id,...(x.bought===true?{bought:true}:{}),...sPers(x.p)});}});
     if(ex.length)p.extra=ex;
     if(Object.keys(p).length)plan[ds]=p;});
   return{meals,oneWarm:e.oneWarm===true,persons:Math.round(sNum(e.persons,1,20))||4,dishes,plan};
@@ -1360,13 +1362,23 @@ function scaleIngr(p,f,shop){if(p.q==null)return p;let q=p.q*f;
   if(shop&&COUNTABLE.has(p.u))q=Math.ceil(q-1e-9);else if(shop&&(p.u==='g'||p.u==='ml'))q=q>=50?Math.round(q/5)*5:Math.round(q);
   return{...p,q};}
 function dishFactor(d,persons){return(persons||S.essen.persons||4)/(d.portions||4);}
+// Personenzahl für einen Plan-Eintrag: am Tag eingestellt, sonst ganzes Rezept (wenn so markiert), sonst Standard
+function entryPersons(d,entry){return entry?.p||(d.whole?d.portions:(S.essen.persons||4));}
+function planEntry(ds,meal,id){const P=S.essen.plan[ds];if(!P)return null;
+  if(meal==='x')return(P.extra||[]).find(x=>x.id===id)||null;const sl=P[meal];return sl&&sl.id===id?sl:null;}
 
 // Rezept ansehen: Zutaten für die eingestellte Personenzahl, Schritte nummeriert
-function openRecipe(id,ds,meal){const d=dishById(id);if(!d)return;UI.form={mode:'recipe',id,ds:ds||'',meal:meal||'',p:S.essen.persons||4};openModal();imgFull(id);}
-function recipePersons(delta){UI.form.p=Math.min(20,Math.max(1,UI.form.p+delta));openModal();}
+function openRecipe(id,ds,meal){const d=dishById(id);if(!d)return;const e=ds?planEntry(ds,meal,id):null;
+  UI.form={mode:'recipe',id,ds:ds||'',meal:meal||'',p:entryPersons(d,e)};openModal();imgFull(id);}
+// Personen ändern: aus dem Plan geöffnet gilt es für diesen Tag (und die Einkaufsliste), sonst nur zum Nachschauen
+function recipePersons(delta){const f=UI.form,d=dishById(f.id);f.p=Math.min(40,Math.max(1,f.p+delta));
+  const e=f.ds?planEntry(f.ds,f.meal,f.id):null;
+  if(e&&d){if(f.p===entryPersons(d,null))delete e.p;else e.p=f.p;saveCfg();}
+  openModal();}
 function renderRecipeModal(){const f=UI.form,d=dishById(f.id);if(!d)return'';const fac=dishFactor(d,f.p);
   return`${IMG.t[d.id]?`<div class="rc-photo di-${d.id}">${IMG.full?.id===d.id?`<img src="${IMG.full.f}" alt="Foto von ${esc(d.name)}">`:''}</div>`:''}<h3>${esc(d.em)} ${esc(d.name)}</h3>
   <div class="rc-persons"><span>Für</span><button class="rc-step" aria-label="Weniger Personen" onclick="recipePersons(-1)">−</button><strong>${f.p}</strong><button class="rc-step" aria-label="Mehr Personen" onclick="recipePersons(1)">＋</button><span>${f.p===1?'Person':'Personen'}</span><span class="rc-base">Rezept für ${d.portions}</span></div>
+  <div class="field-hint" style="margin:-4px 0 12px">${f.ds&&planEntry(f.ds,f.meal,f.id)?`Gilt für ${esc(fmtCalDay(f.ds))}, die Einkaufsliste rechnet damit.`:d.whole?'Immer ganzes Rezept.':'Nur zum Nachschauen. Für einen bestimmten Tag im Plan öffnen.'}</div>
   ${rateRow(d)}
   <div class="as-lbl">Zutaten</div>
   ${d.ingr.length?`<ul class="rc-ingr">${d.ingr.map(x=>`<li>${esc(fmtIngr(scaleIngr(parseIngr(x),fac)))}</li>`).join('')}</ul>`:'<div class="ins-why">Noch keine Zutaten eingetragen.</div>'}
@@ -1387,7 +1399,7 @@ function dishPortions(v){const f=UI.form;f.portions=v;const n=Math.round(Number(
   const el=document.getElementById('dIngr');if(el)el.value=f.ingr;}
 
 // Gericht anlegen / bearbeiten
-function openDishModal(id){const ex=id?dishById(id):null;UI.form={mode:'dish',id:ex?id:null,em:ex?.em||'🍽️',name:ex?.name||'',meals:ex?ex.meals.slice():[activeMeals()[0]?.id||'abend'],tags:ex?ex.tags.slice():[],ingr:ex?ex.ingr.join('\n'):'',portions:ex?.portions||4,steps:ex?ex.steps.join('\n'):''};dishIngrBase();openModal();}
+function openDishModal(id){const ex=id?dishById(id):null;UI.form={mode:'dish',id:ex?id:null,em:ex?.em||'🍽️',name:ex?.name||'',meals:ex?ex.meals.slice():[activeMeals()[0]?.id||'abend'],tags:ex?ex.tags.slice():[],ingr:ex?ex.ingr.join('\n'):'',portions:ex?.portions||4,whole:!!ex?.whole,steps:ex?ex.steps.join('\n'):''};dishIngrBase();openModal();}
 function renderDishModal(){const f=UI.form,has=!!(f.id&&IMG.t[f.id]&&!f.imgDel),chip=(key,x)=>`<button class="ap${f[key].includes(x.id)?' on':''}" aria-pressed="${f[key].includes(x.id)}" onclick="dishTog('${key}','${x.id}',this)">${x.em} ${x.l}</button>`;
   return`<h3>${f.id?'Gericht bearbeiten':'Neues Gericht'}</h3>
   <div class="field"><label>Emoji</label><button class="em-btn" id="emD" onclick="epOpen(e=>{UI.form.em=e;document.getElementById('emD').textContent=e;})">${esc(f.em)}</button></div>
@@ -1397,6 +1409,7 @@ function renderDishModal(){const f=UI.form,has=!!(f.id&&IMG.t[f.id]&&!f.imgDel),
   <div class="field"><label>Eigenschaften</label><div class="ap-wrap">${TAGS.map(t=>chip('tags',t)).join('')}</div></div>
   <div class="field"><label for="dIngr">Zutaten (eine pro Zeile)</label><textarea id="dIngr" rows="5" placeholder="500 g Nudeln&#10;1 Dose Tomaten" oninput="UI.form.ingr=this.value;dishIngrBase()">${esc(f.ingr)}</textarea></div>
   <div class="field"><label for="dPort">Rezept ergibt Portionen</label><input id="dPort" type="number" inputmode="numeric" min="1" max="20" value="${esc(f.portions)}" oninput="dishPortions(this.value)" style="max-width:110px"><div class="field-hint">Ändern rechnet die Mengen bei den Zutaten mit um.</div></div>
+  <div class="tog-row" style="margin:-4px 0 14px"><div><div class="tog-l">Immer ganzes Rezept</div><div class="tog-s">Nicht auf die Personenzahl umrechnen, z. B. Kuchen oder Brot</div></div><button type="button" role="switch" aria-checked="${f.whole?'true':'false'}" class="tog${f.whole?' on':''}" onclick="UI.form.whole=!UI.form.whole;openModal()"></button></div>
   <div class="field"><label>Zubereitung (ein Schritt pro Zeile, optional)</label><textarea rows="5" placeholder="Nudeln kochen&#10;Zwiebel anbraten&#10;Tomaten dazu, 15 Minuten köcheln" oninput="UI.form.steps=this.value">${esc(f.steps||'')}</textarea></div>
   <div class="m-btns">${f.id?`<button class="m-cancel" onclick="delDish()">Löschen</button>`:''}<button class="m-cancel" onclick="closeModal()">Abbrechen</button><button class="m-save" onclick="saveDish()">Speichern</button></div>`;}
 function dishTog(key,id,btn){const a=UI.form[key],i=a.indexOf(id);if(i>=0)a.splice(i,1);else a.push(id);if(btn){btn.classList.toggle('on');btn.setAttribute?.('aria-pressed',String(i<0));}}
@@ -1408,7 +1421,8 @@ function saveDish(){
   const d={id:ex?ex.id:uid(),em:f.em,name:name.slice(0,60),meals:MEALS.map(m=>m.id).filter(id=>f.meals.includes(id)),tags:TAGS.map(t=>t.id).filter(id=>f.tags.includes(id)),
     ingr:String(f.ingr||'').split('\n').map(x=>x.trim().slice(0,80)).filter(Boolean).slice(0,60),ratings:ex?ex.ratings:{},
     portions:Math.min(20,Math.max(1,Math.round(Number(f.portions))||4)),steps:String(f.steps||'').split('\n').map(x=>x.trim().slice(0,300)).filter(Boolean).slice(0,30)};
-  if(ex)Object.assign(ex,d);else S.essen.dishes.push(d);
+  if(f.whole)d.whole=true;
+  if(ex){delete ex.whole;Object.assign(ex,d);}else S.essen.dishes.push(d);
   if(f.img)dishImgSet(d.id,f.img);else if(f.imgDel&&IMG.t[d.id])dishImgDel(d.id);
   saveCfg();closeModal();render();
 }
@@ -1451,7 +1465,7 @@ function essRest(ds,meal){const P=S.essen.plan;let carry=planSlot(ds,meal)?{...P
   for(let d=addDays(ds,1),i=0;carry&&i<120;d=addDays(d,1),i++){
     if(slotFixed(d,meal))continue;
     const next=planSlot(d,meal)?{...P[d][meal]}:null;
-    setSlot(d,meal,carry.id,carry.pin,carry.bought);moves.push({id:carry.id,to:d});carry=next;}
+    setSlot(d,meal,carry.id,carry.pin,carry.bought);if(carry.p)P[d][meal].p=carry.p;moves.push({id:carry.id,to:d});carry=next;}
   return moves;}
 // Nach dem Weiterrücken prüfen: Wochenendgericht jetzt an einem Werktag, Fleisch oder Fisch jetzt später (Haltbarkeit)
 function restIssues(moves){return moves.map(m=>{const d=dishById(m.id);if(!d)return null;const why=[];
@@ -1491,7 +1505,7 @@ function addExtra(ds,id){if(!dishById(id))return false;const P=S.essen.plan;if(!
   if(ex.some(x=>x.id===id)){toast('Steht an dem Tag schon dabei.');return false;}if(ex.length>=5){toast('Höchstens 5 Zusatzgerichte pro Tag.');return false;}
   ex.push({id});return true;}
 function delExtra(ds,id){const P=S.essen.plan;if(!P[ds]?.extra)return;P[ds].extra=P[ds].extra.filter(x=>x.id!==id);if(!P[ds].extra.length)delete P[ds].extra;if(!Object.keys(P[ds]).length)delete P[ds];saveCfg();render();}
-function extraChips(ds){return dayExtras(ds).map(x=>`<span class="ess-xchip"><button type="button" style="all:unset;cursor:pointer" onclick="openRecipe('${x.id}')">${dishIc(x.d,28)} ${esc(x.d.name)}</button><button type="button" aria-label="${esc(x.d.name)} entfernen" onclick="delExtra('${ds}','${x.id}')">✕</button></span>`).join('');}
+function extraChips(ds){return dayExtras(ds).map(x=>`<span class="ess-xchip"><button type="button" style="all:unset;cursor:pointer" onclick="openRecipe('${x.id}','${ds}','x')">${dishIc(x.d,28)} ${esc(x.d.name)}</button><button type="button" aria-label="${esc(x.d.name)} entfernen" onclick="delExtra('${ds}','${x.id}')">✕</button></span>`).join('');}
 function essPickSet(id){const f=UI.form;if(id&&!dishById(id))return;
   if(f.extra){if(id&&addExtra(f.ds,id)){pruneEssen();saveCfg();toast(`Zusätzlich: ${dishById(id).name}`);}closeModal();render();return;}setSlot(f.ds,f.meal,id,true);pruneEssen();saveCfg();closeModal();render();}
 
@@ -1579,8 +1593,8 @@ function ekPlanSlots(off){const td=today(),out=[];
   return out;}
 function ekPlanLines(off,skip){
   const lines=new Map(),dishes=new Set(),sk=new Set(skip||[]);
-  ekPlanSlots(off).forEach(({key,d})=>{if(sk.has(key))return;dishes.add(d.id);
-    const fac=dishFactor(d);
+  ekPlanSlots(off).forEach(({key,d,ref})=>{if(sk.has(key))return;dishes.add(d.id);
+    const fac=dishFactor(d,entryPersons(d,ref));
     d.ingr.forEach(g=>{const p=parseIngr(g);
       if(p.q==null){const k=ekKey(p.name),cur=lines.get(k);if(cur)cur.n++;else lines.set(k,{p,n:1});return;}
       const k=ekKey(p.name)+'|'+p.u,cur=lines.get(k),q=p.q*fac;if(cur)cur.p.q+=q;else lines.set(k,{p:{...p,q},n:1});});});
@@ -2016,7 +2030,7 @@ function buildHeute(){
   // Essen heute
   if(modOn('essen')&&S.essen.dishes.length){cards.essen=homeCard('essen','Essen heute',activeMeals().map(m=>{const sl=planSlot(td,m.id),d=sl&&dishById(sl.id);
     if(isOff(td,m.id))return`<div class="home-kid"><span class="wish-em">${OFFS[isOff(td,m.id)].em}</span><span class="todo-t"><span class="todo-m">${m.l}</span><span class="ek-name">${OFFS[isOff(td,m.id)].l}</span></span></div>`;
-    return`<div class="home-kid"><span class="wish-em">${d?dishIc(d,40):m.em}</span><span class="todo-t"><span class="todo-m">${m.l}</span>${d?`<button class="home-link" onclick="openRecipe('${d.id}','${td}','${m.id}')">${esc(d.name)}</button>`:'<span class="ek-name">noch offen</span>'}</span>${d?'':`<button class="tg-act" onclick="rollToday('${m.id}')">Würfeln</button>`}</div>`;}).join('')+dayExtras(td).map(x=>`<div class="home-kid"><span class="wish-em">${dishIc(x.d,40)}</span><span class="todo-t"><span class="todo-m">Zusätzlich</span><button class="home-link" onclick="openRecipe('${x.id}')">${esc(x.d.name)}</button></span></div>`).join(''),"setView('essen')");}
+    return`<div class="home-kid"><span class="wish-em">${d?dishIc(d,40):m.em}</span><span class="todo-t"><span class="todo-m">${m.l}</span>${d?`<button class="home-link" onclick="openRecipe('${d.id}','${td}','${m.id}')">${esc(d.name)}</button>`:'<span class="ek-name">noch offen</span>'}</span>${d?'':`<button class="tg-act" onclick="rollToday('${m.id}')">Würfeln</button>`}</div>`;}).join('')+dayExtras(td).map(x=>`<div class="home-kid"><span class="wish-em">${dishIc(x.d,40)}</span><span class="todo-t"><span class="todo-m">Zusätzlich</span><button class="home-link" onclick="openRecipe('${x.id}','${td}','x')">${esc(x.d.name)}</button></span></div>`).join(''),"setView('essen')");}
   // Einkauf
   if(modOn('einkauf')){const n=ekOpen().length;
     cards.einkauf=homeCard('einkauf',`Einkauf${n?` · ${n} ${n===1?'Ding':'Dinge'}`:''}`,`<div class="ek-add" style="margin:0"><label for="homeEk" class="sr">Auf die Einkaufsliste</label><input id="homeEk" maxlength="80" placeholder="Auf die Liste: Was fehlt?" autocomplete="off" enterkeyhint="done" onkeydown="if(event.key==='Enter'){event.preventDefault();homeEkAdd()}"><button class="m-save ek-plus" aria-label="Hinzufügen" onclick="homeEkAdd()">＋</button></div>`,"setView('einkauf')");}
