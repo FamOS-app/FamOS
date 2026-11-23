@@ -73,6 +73,7 @@ Treffer brechen den Build ab. Das Log nennt nur die Anzahl, nicht die Namen.
 ## Navigation und Startseite
 
 - Unten: **Heute · Kinder · Aufgaben · Kalender · Essen · Einkauf**. „Kinder“ bündelt Routine, Stundenplan, Taschengeld, Wünsche (nur wenn es Kinder gibt). Die App merkt sich pro Gerät die letzte Ansicht; Android-Zurück schließt erst Offenes.
+- **Vergangene Tage:** unter dem Wochenplan aufklappbar (letzte 14 Tage mit Einträgen, neueste zuerst). Gericht antippen öffnet das Rezept zum Bewerten oder für „Anderes Gericht“; Reste und Tauschen gibt es rückwirkend nicht.
 - **Personen je Tag:** Ein Rezept aus dem Plan geöffnet (auch ein Zusatzgericht) – die dort eingestellte Personenzahl gilt für diesen Tag und für die Einkaufsliste; sie wandert bei Reste und Tauschen mit. Ohne Tag geöffnet ist die Zahl nur zum Nachschauen. Gerichte mit „Immer ganzes Rezept“ (z. B. Kuchen) werden nie umgerechnet.
 - **Zusatzgerichte pro Tag:** „＋“ in jeder Wochenzeile bzw. „＋ Zusätzlich“ in der Heute-Karte fügt ein weiteres Gericht hinzu (Nachtisch, Beilage, Kuchen; höchstens 5). Es bleibt am Datum (Reste und Tauschen bewegen es nicht), Würfeln lässt es stehen, der Einkauf aus dem Plan nimmt es mit, und die Startseite zeigt es unter „Essen heute“.
 - **Einkauf aus dem Plan:** Woche wählen, dann Gerichte an- oder abwählen. Übernommene Gerichte merkt sich der Plan als „schon eingekauft“ (auch nach Verschieben, Reste oder Tauschen) und wählt sie beim nächsten Mal vorab ab.

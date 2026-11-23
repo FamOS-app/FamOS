@@ -2530,3 +2530,46 @@ test('Essen: Personen je Tag im Rezept einstellen – Einkaufsliste rechnet dami
   assert.equal(S.plan[w[0]].extra[0].p, undefined);
   assert.equal(S.plan[w[0]].extra[1].p, 12);
 });
+
+test('Essen: vergangene Tage aufklappen, bewerten und nachträglich ändern', () => {
+  const a = household();
+  const ids = a.get('S.essen.dishes.filter(d=>d.meals.includes("abend")).map(d=>d.id)');
+  const ago = n => a.get(`addDays(today(),-${n})`);
+  a.run(`S.essen.plan={};setSlot('${ago(1)}','abend','${ids[0]}',false);setOff('${ago(2)}','abend','order');setSlot('${ago(5)}','abend','${ids[1]}',false);addExtra('${ago(5)}','${ids[2]}');setSlot('${ago(20)}','abend','${ids[3]}',false);setView('essen');setEssTab('plan')`);
+  // zugeklappt: nur der Knopf mit Anzahl (letzte 14 Tage mit Einträgen)
+  let html = a.app();
+  assert.match(html, /aria-expanded="false" onclick="togEssPast\(\)">▸ Vergangene Tage \(3\)/);
+  assert.doesNotMatch(html, /ess-past/);
+  a.run('togEssPast()');
+  html = a.app();
+  assert.match(html, /▾ Vergangene Tage/);
+  assert.equal((html.match(/class="ess-day ess-past"/g) || []).length, 3);
+  assert.ok(html.indexOf(ago(1).slice(8, 10) + '.') < html.indexOf(ago(5).slice(8, 10) + '.')); // neueste zuerst
+  assert.match(html, new RegExp(`openRecipe\\('${ids[0]}','${ago(1)}','abend'\\)`));
+  assert.match(html, /🥡 <span class="ess-empty">Wird bestellt/);
+  assert.match(html, /ess-past[\s\S]*ess-xchip/); // Zusatzgericht sichtbar
+  // bewerten über das Rezept: danach „bewertet“
+  const kid = a.get('S.kids[0].id');
+  a.run(`openRecipe('${ids[0]}','${ago(1)}','abend')`);
+  assert.match(a.els.mc.innerHTML, /Anderes Gericht/);
+  a.run(`dishById('${ids[0]}').ratings['${kid}']=1;saveCfg();closeModal();render()`);
+  assert.match(a.app(), /· bewertet/);
+  // nachträglich anderes Gericht: Auswahl ohne Reste und Tauschen
+  a.run(`openEssPick('${ago(1)}','abend')`);
+  html = a.els.mc.innerHTML;
+  assert.doesNotMatch(html, /essPickRest\(\)|essSwapStart\(\)/);
+  assert.match(html, /Nicht zu Hause/);
+  a.run(`essPickSet('${ids[4]}')`);
+  assert.equal(a.get(`S.essen.plan['${ago(1)}'].abend.id`), ids[4]);
+  // Reste rückwirkend geht auch über den Aufruf nicht
+  a.run(`openEssPick('${ago(5)}','abend');essPickRest()`);
+  assert.equal(a.get(`S.essen.plan['${ago(5)}'].abend.id`), ids[1]);
+  // heute/Zukunft: Reste und Tauschen weiterhin da
+  a.run(`setSlot(addDays(today(),1),'abend','${ids[0]}',false);openEssPick(addDays(today(),1),'abend')`);
+  assert.match(a.els.mc.innerHTML, /essPickRest\(\)[\s\S]*|essSwapStart\(\)/);
+  assert.match(a.els.mc.innerHTML, /essSwapStart\(\)/);
+  assert.match(a.els.mc.innerHTML, /essPickRest\(\)/);
+  // im Tauschmodus keine vergangenen Tage
+  a.run(`closeModal();essSwapStart();render()`);
+  assert.doesNotMatch(a.app(), /Vergangene Tage/);
+});

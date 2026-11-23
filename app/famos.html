@@ -433,6 +433,7 @@ button{font-size:inherit;color:inherit}
 .ess-dlbl span{display:block;font-size:.75rem;color:var(--muted);font-weight:600;text-transform:none}
 .ess-slots{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .ess-slot{display:flex;align-items:center;gap:4px}
+.ess-past{opacity:.85}
 .ess-extras{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .ess-xchip{display:inline-flex;align-items:center;gap:4px;border:1.5px solid var(--border);background:var(--bg);border-radius:99px;padding:2px 4px 2px 10px;font-weight:700;font-size:.8rem;min-height:34px}
 .ess-xchip button{background:none;border:none;color:var(--muted);font-weight:800;min-width:30px;min-height:30px;border-radius:99px}
@@ -1278,6 +1279,16 @@ function rollWeek(){
   pruneEssen();saveCfg();render();
   toast(n?`${n} ${n===1?'Mahlzeit':'Mahlzeiten'} gewürfelt`:'Nichts zu würfeln: alles festgelegt oder keine passenden Gerichte.');
 }
+// Vergangene Tage (letzte 14 mit Einträgen): zum Nachsehen, Bewerten (über das Rezept) und Korrigieren
+function essPastDays(td){const out=[];for(let i=1;i<=14;i++){const ds=addDays(td,-i),P=S.essen.plan[ds];if(P&&(activeMeals().some(m=>P[m.id])||dayExtras(ds).length))out.push(ds);}return out;}
+function togEssPast(){UI.essPast=!UI.essPast;render();}
+function essPastBlock(meals,td){const days=essPastDays(td);if(!days.length)return'';
+  return`<button class="reset-btn" aria-expanded="${!!UI.essPast}" onclick="togEssPast()">${UI.essPast?'▾':'▸'} Vergangene Tage (${days.length})</button>
+  ${UI.essPast?`<div class="ess-hint" style="margin-top:10px">Gericht antippen: bewerten oder ändern, falls es doch etwas anderes gab.</div>${days.map(ds=>{const i=(pdate(ds).getDay()+6)%7;
+    return`<div class="ess-day ess-past"><div class="ess-dlbl">${DAYS[i].s}<span>${ds.slice(8,10)}.${ds.slice(5,7)}.</span></div><div class="ess-slots">${meals.map(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id),o=isOff(ds,m.id);
+      return`<div class="ess-slot"><button class="ess-pick" aria-label="${m.l}, ${DAYS[i].l} ${ds.slice(8,10)}.${ds.slice(5,7)}." onclick="${d?`openRecipe('${d.id}','${ds}','${m.id}')`:`openEssPick('${ds}','${m.id}')`}">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${o?`${OFFS[o].em} <span class="ess-empty">${OFFS[o].l}</span>`:d?`${dishIc(d,28)} ${esc(d.name)}${essRated(d)?' <span class="ess-empty">· bewertet</span>':''}`:'<span class="ess-empty">–</span>'}</button></div>`;}).join('')}
+      ${dayExtras(ds).length?`<div class="ess-extras">${extraChips(ds)}</div>`:''}</div></div>`;}).join('')}`:''}`;}
+function essRated(d){return Object.keys(d.ratings||{}).length>0;}
 function togPin(ds,meal){const sl=planSlot(ds,meal);if(!sl)return;sl.pin=!sl.pin;saveCfg();render();}
 // Alle, die bewerten dürfen: Kinder und Erwachsene des Haushalts
 function raters(){return[...S.kids.map(k=>({id:k.id,icon:k.icon,name:k.name})),...(S.household?.adults||[]).map(a=>({id:a.id,icon:a.icon,name:a.name}))];}
@@ -1321,7 +1332,8 @@ function buildEssPlan(){
   ${rest.length?rest.map(ds=>{const i=DAYS.findIndex(d=>d.id===['so','mo','di','mi','do','fr','sa'][pdate(ds).getDay()]);
     return`<div class="ess-day"><div class="ess-dlbl">${DAYS[i].s}<span>${ds.slice(8,10)}.${ds.slice(5,7)}.</span></div><div class="ess-slots">${meals.map(m=>{const sl=planSlot(ds,m.id),d=sl&&dishById(sl.id);
     return`<div class="ess-slot"><button class="ess-pick${sw&&sw.ds===ds&&sw.meal===m.id?' swap-src':''}" aria-label="${m.l}, ${DAYS[i].l}" onclick="openEssPick('${ds}','${m.id}')">${meals.length>1?`<span class="ess-mi">${m.em}</span>`:''}${isOff(ds,m.id)?`${OFFS[isOff(ds,m.id)].em} <span class="ess-empty">${OFFS[isOff(ds,m.id)].l}</span>`:d?`${dishIc(d,28)} ${esc(d.name)}`:'<span class="ess-empty">–</span>'}</button>${d?`<button class="ess-pin${sl.pin?' on':''}" aria-pressed="${sl.pin?'true':'false'}" aria-label="Festlegen" onclick="togPin('${ds}','${m.id}')">📌</button>`:''}</div>`;}).join('')}${sw?'':`<div class="ess-extras">${extraChips(ds)}<button class="ess-xadd" aria-label="Zusätzliches Gericht, ${DAYS[i].l}" onclick="openEssExtra('${ds}')">＋</button></div>`}</div></div>`;}).join(''):'<div class="sp-empty">Die Woche ist geschafft. Weiter mit „Nächste“.</div>'}
-  <div class="ess-hint">📌 = festgelegt, bleibt beim Würfeln stehen.</div>`;
+  <div class="ess-hint">📌 = festgelegt, bleibt beim Würfeln stehen.</div>
+  ${sw?'':essPastBlock(meals,td)}`;
 }
 function buildEssBook(){
   const q=String(UI.essQ||'').toLowerCase().trim();
@@ -1443,13 +1455,13 @@ function renderEssPickModal(){const f=UI.form,m=mealOf(f.meal),day=DAYS[(pdate(f
   ${all.length?`<div class="as-lbl" data-sec="1">Alle Gerichte</div><div class="al" data-sec-list="1">${all.map(r).join('')}</div>`:'<div class="sp-empty">Das Kochbuch ist noch leer.</div>'}
   <div class="sp-empty" id="essPickNone" style="display:none">Nichts gefunden.</div>
   <div class="m-btns"><button class="m-cancel" onclick="closeModal()">Abbrechen</button></div>`;}
-  const off=isOff(f.ds,f.meal),multi=activeMeals().length>1;
+  const off=isOff(f.ds,f.meal),multi=activeMeals().length>1,past=f.ds<today();
   const row=d=>`<button class="ai ess-pickrow${cur?.id===d.id?' sel':''}" data-q="${esc(essNorm(d.name+' '+d.ingr.join(' ')))}" onclick="essPickSet('${d.id}')"><span class="ai-em">${dishIc(d,40)}</span><span class="ai-main">${esc(d.name)}</span></button>`;
   return`<h3>${m.em} ${m.l} · ${day}</h3>
   ${all.length?`<div class="ek-add" style="margin-bottom:10px"><label for="essPickQ" class="sr">Gericht suchen</label><input id="essPickQ" type="search" placeholder="Gericht oder Zutat suchen" autocomplete="off" enterkeyhint="search" oninput="essPickFilter(this.value)"></div>`:''}
   <div id="essPickTop">
-  ${cur||off?`<div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow" onclick="essSwapStart()"><span class="ai-em">⇅</span><span class="ai-main">Mit anderem Tag tauschen<span class="ai-sub" style="display:block">Danach den anderen Tag im Plan antippen</span></span></button></div>`:''}
-  <div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow${off==='rest'?' sel':''}" aria-pressed="${off==='rest'}" onclick="essPickRest()"><span class="ai-em">${OFFS.rest.em}</span><span class="ai-main">Reste<span class="ai-sub" style="display:block">${cur?'Der Plan ab hier rückt einen Tag weiter':'Folgende Gerichte bleiben, wo sie sind'}</span></span></button>
+  ${(cur||off)&&!past?`<div class="al" style="margin-bottom:10px"><button class="ai ess-pickrow" onclick="essSwapStart()"><span class="ai-em">⇅</span><span class="ai-main">Mit anderem Tag tauschen<span class="ai-sub" style="display:block">Danach den anderen Tag im Plan antippen</span></span></button></div>`:''}
+  <div class="al" style="margin-bottom:10px">${past?'':`<button class="ai ess-pickrow${off==='rest'?' sel':''}" aria-pressed="${off==='rest'}" onclick="essPickRest()"><span class="ai-em">${OFFS.rest.em}</span><span class="ai-main">Reste<span class="ai-sub" style="display:block">${cur?'Der Plan ab hier rückt einen Tag weiter':'Folgende Gerichte bleiben, wo sie sind'}</span></span></button>`}
   ${['away','order'].map(k=>`<button class="ai ess-pickrow${off===k?' sel':''}" aria-pressed="${off===k}" onclick="essPickOff('${k}')"><span class="ai-em">${OFFS[k].em}</span><span class="ai-main">${OFFS[k].l}</span></button>`).join('')}
   ${multi?`<button class="ai ess-pickrow" onclick="essPickOff('away',true)"><span class="ai-em">${OFFS.away.em}</span><span class="ai-main">Ganzer ${day}: nicht zu Hause</span></button>`:''}</div></div>
   ${list.length?`<div class="as-lbl" data-sec="1">Passt zu ${m.l}</div><div class="al" data-sec-list="1">${list.map(row).join('')}</div>`:`<div class="sp-empty" data-sec="1">Noch kein Gericht für ${m.l} markiert.</div>`}
@@ -1472,7 +1484,7 @@ function restIssues(moves){return moves.map(m=>{const d=dishById(m.id);if(!d)ret
     const wd=pdate(m.to).getDay();if(d.tags.includes('we')&&wd>=1&&wd<=5)why.push('Wochenendgericht, jetzt an einem Werktag');
     if(d.tags.includes('fleisch')||d.tags.includes('fisch'))why.push(`${d.tags.includes('fisch')?'Fisch':'Fleisch'}: einen Tag später, Haltbarkeit prüfen`);
     return why.length?{id:m.id,to:m.to,why}:null;}).filter(Boolean);}
-function essPickRest(){const f=UI.form,moves=essRest(f.ds,f.meal),n=moves.length,issues=restIssues(moves);pruneEssen();saveCfg();closeModal();render();
+function essPickRest(){if(UI.form.ds<today())return closeModal();const f=UI.form,moves=essRest(f.ds,f.meal),n=moves.length,issues=restIssues(moves);pruneEssen();saveCfg();closeModal();render();
   if(issues.length){UI.form={mode:'restCheck',meal:f.meal,issues,n};openModal();return;} // Dialog statt Toast, sonst verdeckt der Toast ihn
   toast(n?`Reste eingetragen. ${n===1?'Ein Gericht rückt':n+' Gerichte rücken'} einen Tag weiter.`:'Reste eingetragen.');}
 function renderRestCheckModal(){const f=UI.form;
